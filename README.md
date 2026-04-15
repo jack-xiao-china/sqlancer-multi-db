@@ -4,33 +4,10 @@
 **参考源码**: [SQLancer GitHub](https://github.com/sqlancer/sqlancer)  
 **近期更新（2026-04）**：已对齐 `--help` 输出（见 `sqlancer_help_0413.md`），补充 `--log-dir`/`--validate-result-size-only` 等全局选项说明与日志目录结构；PostgreSQL 新增/补齐 Oracle（`DQP/DQE/EET/CODDTEST/DISTINCT/GROUP_BY/TLP_WHERE` 等）并补充 Postgres 新类型开关（`--enable-time-types/--enable-json/...`）与 `--coverage-policy`；修正快速参考表中 MySQL/PostgreSQL Oracle 列表漏项（如 `EET/CODDTEST`）。
 
+本版本扩展了sqlancer对MySQL、Postgresql、GaussDB-M兼容模式的支持，包括但不限于扩展了多个test Oracle，以及默认支持的数据类型，具体用法和支持范围可参考用户指导docs/USER_GUIDE.md
+
 ---
-
-## 一、环境与快速开始
-
-### 1.1 环境要求
-
-- **Java**: 11 及以上
-- **Maven**: 用于构建
-
-### 1.2 构建与运行
-
-```bash
-# 若使用本仓库代码：
-# 进入本项目目录（示例路径按你的实际位置调整）
-cd sqlancer-main/sqlancer-main
-mvn package -DskipTests
-
-# 运行（Jar 位于 target/ 下）
-java -jar target/sqlancer-*.jar --num-threads 4 <DBMS名称> --oracle <Oracle名称>
-```
-
-### 1.3 参数顺序
-
-- **全局选项**（如 `--num-threads`、`--timeout-seconds`）必须在 **DBMS 名称之前**
-- **DBMS 专属选项**（如 `--oracle`）必须在 **DBMS 名称之后**
-
-### 1.4 常用选项
+###一、 常用选项
 
 | 选项 | 说明 |
 |------|------|
@@ -48,32 +25,13 @@ java -jar target/sqlancer-*.jar --num-threads 4 <DBMS名称> --oracle <Oracle名
 
 ---
 
-## 二、各 Test Oracle 作用与引入日期
 
-以下按时间顺序列出 SQLancer 中各类 Test Oracle 的作用、引入年份与论文来源。
-
-| Oracle 名称 | 全称 | 引入 | 作用 | 论文/链接 |
-|-------------|------|------|------|-----------|
-| **PQS** | Pivoted Query Synthesis | 2020 | 随机选取“轴心行”，生成保证能选中该行的查询；若结果不包含该行则判定逻辑错误。当前未维护。 | [OSDI 2020](https://www.usenix.org/system/files/osdi20-rigger.pdf) |
-| **NoREC** | Non-optimizing Reference Engine Construction | 2020 | 将可被优化的查询改写为几乎不被优化的等价查询，比较两者结果；不一致则表明优化器逻辑错误。主要针对带过滤谓词的简单查询。 | [ESEC/FSE 2020](https://arxiv.org/abs/2007.08292) |
-| **TLP (WHERE/HAVING/AGGREGATE/DISTINCT/GROUP_BY)** | Ternary Logic Partitioning | 2020 | 将查询按三值逻辑拆成三个分区查询，组合结果与原查询比较；不一致则判定逻辑错误。可覆盖聚合、DISTINCT、GROUP BY、HAVING 等高级特性。 | [OOPSLA 2020](https://dl.acm.org/doi/pdf/10.1145/3428279) |
-| **DQE** | Differential Query Execution | 2023 | 对同一谓词 φ 分别执行 SELECT、UPDATE、DELETE，检查结果是否一致（如被 UPDATE 的行应出现在同谓词 SELECT 中）。仅支持 MySQL。 | [ICSE 2023](https://ieeexplore.ieee.org/document/10172736)、[PR #1251](https://github.com/sqlancer/sqlancer/pull/1251) |
-| **QPG** | Query Plan Guidance | 2023 | 非独立 Oracle，而是测试**输入生成策略**。以查询计划覆盖为反馈，长时间无新计划时变异数据库状态。需配合 TLP/NoREC 使用。启用：`--qpg-enable`。 | [ICSE 2023](https://arxiv.org/pdf/2312.17510)、[Issue #641](https://github.com/sqlancer/sqlancer/issues/641) |
-| **CERT** | Cardinality Estimation Restriction Testing | 2024 | 通过基数估计不一致发现**性能问题**。从给定查询派生更严格查询，其估计基数应 ≤ 原查询；违反则视为潜在性能缺陷。 | [ICSE 2024](https://arxiv.org/pdf/2306.00355)、[Issue #822](https://github.com/sqlancer/sqlancer/issues/822) |
-| **DQP** | Differential Query Plans | 2024 | 控制同一查询的**不同执行计划**，比较各计划下的结果是否一致；不一致则判定逻辑错误。 | [SIGMOD 2024](https://dl.acm.org/doi/pdf/10.1145/3654991)、[Issue #918](https://github.com/sqlancer/sqlancer/issues/918) |
-| **CODDTest** | Constant Optimization Driven Database System Testing | 2025 | 利用常量折叠/常量传播等价替换部分查询，比较替换前后结果；可覆盖子查询等高级特性中的逻辑错误。 | [SIGMOD 2025](https://github.com/sqlancer/sqlancer/pull/1054) |
-| **EET** | Equivalent Expression Transformation | 2024 | 对表达式做语义保持变换后比较原查询与变换查询结果（multiset）；**本仓库 MySQL 扩展**，上游主线未必包含。 | [OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/jiang) |
-| **FUZZER** | Random Fuzzer | — | 随机生成 SQL 并执行，不进行等价性校验；用于发现崩溃、内部错误等。 | 内置 |
-| **CATALOG** | Catalog Oracle | — | YugabyteDB YSQL 专用，用于验证系统目录一致性。 | 内置 |
-
----
-
-## 三、各数据库支持的 Test Oracle
+## 二、各数据库支持的 Test Oracle
 
 以下为按 DBMS 整理的 Oracle 列表与简要说明。命令行使用 `--oracle <名称>` 指定。  
 说明：表中 Oracle 名称与大小写按源码枚举保持一致；“默认”以对应 `*Options` 中默认值为准。
 
-### 3.1 MySQL
+### 2.1 MySQL
 
 | Oracle | 说明 |
 |--------|------|
@@ -112,7 +70,118 @@ java -jar sqlancer-*.jar mysql --oracle DQP --oracle DQE
 - `--engines=...` 是 **MySQL 子命令参数**，需写在 `mysql` 之后；指定后仅生成对应 `ENGINE=xxx` 的建表语句，可用于官方或自定义引擎测试。
 - 修改源码后需执行 `mvn clean package -DskipTests` 重新构建后再运行。
 
-#### 3.1.1 EET Oracle（本仓库扩展）— 功能、用法与七条规则
+
+### 2.2 PostgreSQL
+
+| Oracle | 说明 |
+|--------|------|
+| `NOREC` | NoREC 优化器检测 |
+| `PQS` | 轴心行存在性检查（更严格，通常要求表非空） |
+| `WHERE` / `TLP_WHERE` | TLP WHERE 子句分区（`TLP_WHERE` 为 `WHERE` 的别名入口） |
+| `HAVING` | TLP HAVING 子句分区 |
+| `AGGREGATE` | TLP 聚合分区 |
+| `DISTINCT` | TLP DISTINCT 分区 |
+| `GROUP_BY` | TLP GROUP BY 分区 |
+| `QUERY_PARTITIONING` | `TLP_WHERE` + `HAVING` + `AGGREGATE` 组合（默认） |
+| `CERT` | 基数估计性能检测 |
+| `DQP` | 不同执行计划结果一致性 |
+| `DQE` | SELECT/UPDATE/DELETE 一致性 |
+| `EET` | 等价表达式变换（结果 multiset 比较） |
+| `CODDTEST` | 常量驱动等价变换检测 |
+| `FUZZER` | 随机 Fuzzer |
+
+**Postgres 新类型开关（2026-04 起）**：用于控制生成器引入更多数据类型（默认关闭，便于灰度降噪）。
+- `--enable-time-types=true`：时间类型组（TIME/DATE/TIMESTAMP/INTERVAL）
+- `--enable-json=true`：JSON/JSONB
+- `--enable-uuid=true`：UUID
+- `--enable-bytea=true`：BYTEA
+- `--enable-arrays=true`：数组（受限子集）
+- `--enable-enum=true`：Enum（会在建表前预创建 enum 对象）
+- `--coverage-policy=BALANCED|CONSERVATIVE|AGGRESSIVE`：覆盖策略（默认 BALANCED）
+- `--enable-newtypes-in-dqe-dqp-eet=true`：允许新类型进入 DQE/DQP/EET 相关路径（best-effort；PQS strict 路径仍会忽略）
+
+### 2.3 GaussDB-M（M-Compatibility）
+
+| Oracle | 说明 |
+|--------|------|
+| `TLP_WHERE` | TLP WHERE 子句分区 |
+| `HAVING` | TLP HAVING 子句分区 |
+| `GROUP_BY` | TLP GROUP BY 分区 |
+| `AGGREGATE` | TLP 聚合函数分区 |
+| `DISTINCT` | TLP DISTINCT 分区 |
+| `NOREC` | NoREC 优化器检测 |
+| `QUERY_PARTITIONING` | TLP_WHERE + HAVING + GROUP_BY + AGGREGATE + DISTINCT + NOREC 组合（默认） |
+| `PQS` | 轴心行存在性检查 |
+| `CERT` | 基数估计性能检测 |
+| `DQP` | 不同执行计划结果一致性 |
+| `DQE` | SELECT/UPDATE/DELETE 一致性 |
+| `EET` | 等价表达式变换（结果 multiset 比较） |
+| `CODDTEST` | 常量驱动等价变换检测 |
+| `FUZZER` | 随机 Fuzzer |
+
+**示例**：
+
+```bash
+java -jar sqlancer-*.jar gaussdb-m --oracle QUERY_PARTITIONING
+java -jar sqlancer-*.jar gaussdb-m --oracle NOREC
+java -jar sqlancer-*.jar gaussdb-m --oracle TLP_WHERE
+java -jar sqlancer-*.jar gaussdb-m --oracle EET
+java -jar sqlancer-*.jar gaussdb-m --oracle DQP --oracle DQE
+```
+
+---
+
+## 三、Oracle 快速参考表
+
+| DBMS | 可用 Oracle 列表 |
+|------|------------------|
+| MySQL | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, CODDTEST, EET, FUZZER |
+| TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
+| PostgreSQL | NOREC, PQS, WHERE, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, FUZZER |
+| SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTest, FUZZER |
+| MariaDB | NOREC, DQP |
+| CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, EXTENDED_WHERE, QUERY_PARTITIONING, CERT |
+| DuckDB | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING |
+| Databend | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING, PQS |
+| Doris | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING, PQS, ALL |
+| OceanBase | TLP_WHERE, NoREC, PQS |
+| Materialize | NOREC, WHERE, HAVING, QUERY_PARTITIONING, PQS |
+| H2 | TLP_WHERE |
+| Hive | TLPWhere |
+| HSQLDB | WHERE, NOREC |
+| ClickHouse | TLPWhere, TLPDistinct, TLPGroupBy, TLPAggregate, TLPHaving, NoREC |
+| CnosDB | NOREC, HAVING, QUERY_PARTITIONING |
+| Citus | NOREC, WHERE, HAVING, QUERY_PARTITIONING, PQS |
+| DataFusion | NOREC, QUERY_PARTITIONING_WHERE |
+| Presto | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING |
+| QuestDB | WHERE |
+| YugabyteDB YSQL | NOREC, HAVING, QUERY_PARTITIONING, PQS, FUZZER, CATALOG |
+| YugabyteDB YCQL | FUZZER |
+
+---
+
+
+## 四、各 Test Oracle 作用与引入日期
+
+以下按时间顺序列出 SQLancer 中各类 Test Oracle 的作用、引入年份与论文来源。
+
+| Oracle 名称 | 全称 | 引入 | 作用 | 论文/链接 |
+|-------------|------|------|------|-----------|
+| **PQS** | Pivoted Query Synthesis | 2020 | 随机选取“轴心行”，生成保证能选中该行的查询；若结果不包含该行则判定逻辑错误。当前未维护。 | [OSDI 2020](https://www.usenix.org/system/files/osdi20-rigger.pdf) |
+| **NoREC** | Non-optimizing Reference Engine Construction | 2020 | 将可被优化的查询改写为几乎不被优化的等价查询，比较两者结果；不一致则表明优化器逻辑错误。主要针对带过滤谓词的简单查询。 | [ESEC/FSE 2020](https://arxiv.org/abs/2007.08292) |
+| **TLP (WHERE/HAVING/AGGREGATE/DISTINCT/GROUP_BY)** | Ternary Logic Partitioning | 2020 | 将查询按三值逻辑拆成三个分区查询，组合结果与原查询比较；不一致则判定逻辑错误。可覆盖聚合、DISTINCT、GROUP BY、HAVING 等高级特性。 | [OOPSLA 2020](https://dl.acm.org/doi/pdf/10.1145/3428279) |
+| **DQE** | Differential Query Execution | 2023 | 对同一谓词 φ 分别执行 SELECT、UPDATE、DELETE，检查结果是否一致（如被 UPDATE 的行应出现在同谓词 SELECT 中）。仅支持 MySQL。 | [ICSE 2023](https://ieeexplore.ieee.org/document/10172736)、[PR #1251](https://github.com/sqlancer/sqlancer/pull/1251) |
+| **QPG** | Query Plan Guidance | 2023 | 非独立 Oracle，而是测试**输入生成策略**。以查询计划覆盖为反馈，长时间无新计划时变异数据库状态。需配合 TLP/NoREC 使用。启用：`--qpg-enable`。 | [ICSE 2023](https://arxiv.org/pdf/2312.17510)、[Issue #641](https://github.com/sqlancer/sqlancer/issues/641) |
+| **CERT** | Cardinality Estimation Restriction Testing | 2024 | 通过基数估计不一致发现**性能问题**。从给定查询派生更严格查询，其估计基数应 ≤ 原查询；违反则视为潜在性能缺陷。 | [ICSE 2024](https://arxiv.org/pdf/2306.00355)、[Issue #822](https://github.com/sqlancer/sqlancer/issues/822) |
+| **DQP** | Differential Query Plans | 2024 | 控制同一查询的**不同执行计划**，比较各计划下的结果是否一致；不一致则判定逻辑错误。 | [SIGMOD 2024](https://dl.acm.org/doi/pdf/10.1145/3654991)、[Issue #918](https://github.com/sqlancer/sqlancer/issues/918) |
+| **CODDTest** | Constant Optimization Driven Database System Testing | 2025 | 利用常量折叠/常量传播等价替换部分查询，比较替换前后结果；可覆盖子查询等高级特性中的逻辑错误。 | [SIGMOD 2025](https://github.com/sqlancer/sqlancer/pull/1054) |
+| **EET** | Equivalent Expression Transformation | 2024 | 对表达式做语义保持变换后比较原查询与变换查询结果（multiset）；**本仓库 MySQL 扩展**，上游主线未必包含。 | [OSDI 2024](https://www.usenix.org/conference/osdi24/presentation/jiang) |
+| **FUZZER** | Random Fuzzer | — | 随机生成 SQL 并执行，不进行等价性校验；用于发现崩溃、内部错误等。 | 内置 |
+| **CATALOG** | Catalog Oracle | — | YugabyteDB YSQL 专用，用于验证系统目录一致性。 | 内置 |
+
+---
+
+#### 4.1.1 EET Oracle（本仓库扩展）— 功能、用法与七条规则
 
 **论文**：Jiang et al., OSDI 2024 — *Detecting Logic Bugs in Database Engines via Equivalent Expression Transformation*。EET 通过 **语义等价** 的表达式改写生成查询 \(Q'\)，与原始查询 \(Q\) 在同一数据库状态下执行，若 **结果 multiset** 不一致则怀疑引擎逻辑错误（形式化见设计文档 §1.4）。
 
@@ -184,95 +253,6 @@ java -jar sqlancer-*.jar mysql --oracle DQP --oracle DQE
 
 - 设计实现对照与模块清单：[sqlancer_eet_design_0319.md](sqlancer_eet_design_0319.md)  
 - 论文与 EET-main 分析：[eet_analyze.md](eet_analyze.md)（若仓库中存在）
-
-### 3.2 PostgreSQL
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `PQS` | 轴心行存在性检查（更严格，通常要求表非空） |
-| `WHERE` / `TLP_WHERE` | TLP WHERE 子句分区（`TLP_WHERE` 为 `WHERE` 的别名入口） |
-| `HAVING` | TLP HAVING 子句分区 |
-| `AGGREGATE` | TLP 聚合分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `QUERY_PARTITIONING` | `TLP_WHERE` + `HAVING` + `AGGREGATE` 组合（默认） |
-| `CERT` | 基数估计性能检测 |
-| `DQP` | 不同执行计划结果一致性 |
-| `DQE` | SELECT/UPDATE/DELETE 一致性 |
-| `EET` | 等价表达式变换（结果 multiset 比较） |
-| `CODDTEST` | 常量驱动等价变换检测 |
-| `FUZZER` | 随机 Fuzzer |
-
-**Postgres 新类型开关（2026-04 起）**：用于控制生成器引入更多数据类型（默认关闭，便于灰度降噪）。
-- `--enable-time-types=true`：时间类型组（TIME/DATE/TIMESTAMP/INTERVAL）
-- `--enable-json=true`：JSON/JSONB
-- `--enable-uuid=true`：UUID
-- `--enable-bytea=true`：BYTEA
-- `--enable-arrays=true`：数组（受限子集）
-- `--enable-enum=true`：Enum（会在建表前预创建 enum 对象）
-- `--coverage-policy=BALANCED|CONSERVATIVE|AGGRESSIVE`：覆盖策略（默认 BALANCED）
-- `--enable-newtypes-in-dqe-dqp-eet=true`：允许新类型进入 DQE/DQP/EET 相关路径（best-effort；PQS strict 路径仍会忽略）
-
-### 3.3 GaussDB-M（M-Compatibility）
-
-| Oracle | 说明 |
-|--------|------|
-| `TLP_WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `NOREC` | NoREC 优化器检测 |
-| `QUERY_PARTITIONING` | TLP_WHERE + HAVING + GROUP_BY + AGGREGATE + DISTINCT + NOREC 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-| `CERT` | 基数估计性能检测 |
-| `DQP` | 不同执行计划结果一致性 |
-| `DQE` | SELECT/UPDATE/DELETE 一致性 |
-| `EET` | 等价表达式变换（结果 multiset 比较） |
-| `CODDTEST` | 常量驱动等价变换检测 |
-| `FUZZER` | 随机 Fuzzer |
-
-**示例**：
-
-```bash
-java -jar sqlancer-*.jar gaussdb-m --oracle QUERY_PARTITIONING
-java -jar sqlancer-*.jar gaussdb-m --oracle NOREC
-java -jar sqlancer-*.jar gaussdb-m --oracle TLP_WHERE
-java -jar sqlancer-*.jar gaussdb-m --oracle EET
-java -jar sqlancer-*.jar gaussdb-m --oracle DQP --oracle DQE
-```
-
----
-
-## 四、Oracle 快速参考表
-
-| DBMS | 可用 Oracle 列表 |
-|------|------------------|
-| MySQL | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, CODDTEST, EET, FUZZER |
-| TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
-| PostgreSQL | NOREC, PQS, WHERE, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, FUZZER |
-| SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTest, FUZZER |
-| MariaDB | NOREC, DQP |
-| CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, EXTENDED_WHERE, QUERY_PARTITIONING, CERT |
-| DuckDB | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING |
-| Databend | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING, PQS |
-| Doris | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING, PQS, ALL |
-| OceanBase | TLP_WHERE, NoREC, PQS |
-| Materialize | NOREC, WHERE, HAVING, QUERY_PARTITIONING, PQS |
-| H2 | TLP_WHERE |
-| Hive | TLPWhere |
-| HSQLDB | WHERE, NOREC |
-| ClickHouse | TLPWhere, TLPDistinct, TLPGroupBy, TLPAggregate, TLPHaving, NoREC |
-| CnosDB | NOREC, HAVING, QUERY_PARTITIONING |
-| Citus | NOREC, WHERE, HAVING, QUERY_PARTITIONING, PQS |
-| DataFusion | NOREC, QUERY_PARTITIONING_WHERE |
-| Presto | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING |
-| QuestDB | WHERE |
-| YugabyteDB YSQL | NOREC, HAVING, QUERY_PARTITIONING, PQS, FUZZER, CATALOG |
-| YugabyteDB YCQL | FUZZER |
-
----
 
 ## 五、QPG 支持范围
 
