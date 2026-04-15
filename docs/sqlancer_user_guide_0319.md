@@ -185,23 +185,7 @@ java -jar sqlancer-*.jar mysql --oracle DQP --oracle DQE
 - 设计实现对照与模块清单：[sqlancer_eet_design_0319.md](sqlancer_eet_design_0319.md)  
 - 论文与 EET-main 分析：[eet_analyze.md](eet_analyze.md)（若仓库中存在）
 
-### 3.2 TiDB
-
-| Oracle | 说明 |
-|--------|------|
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING 组合（默认） |
-| `CERT` | 基数估计性能检测 |
-| `DQP` | 不同执行计划结果一致性 |
-
-**示例**：
-```bash
-java -jar sqlancer-*.jar tidb --oracle QUERY_PARTITIONING
-java -jar sqlancer-*.jar tidb --oracle DQP --qpg-enable
-```
-
-### 3.3 PostgreSQL
+### 3.2 PostgreSQL
 
 | Oracle | 说明 |
 |--------|------|
@@ -230,194 +214,34 @@ java -jar sqlancer-*.jar tidb --oracle DQP --qpg-enable
 - `--coverage-policy=BALANCED|CONSERVATIVE|AGGRESSIVE`：覆盖策略（默认 BALANCED）
 - `--enable-newtypes-in-dqe-dqp-eet=true`：允许新类型进入 DQE/DQP/EET 相关路径（best-effort；PQS strict 路径仍会忽略）
 
-### 3.4 SQLite3
+### 3.3 GaussDB-M（M-Compatibility）
 
 | Oracle | 说明 |
 |--------|------|
-| `NoREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
+| `TLP_WHERE` | TLP WHERE 子句分区 |
 | `HAVING` | TLP HAVING 子句分区 |
+| `GROUP_BY` | TLP GROUP BY 分区 |
 | `AGGREGATE` | TLP 聚合函数分区 |
 | `DISTINCT` | TLP DISTINCT 分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `QUERY_PARTITIONING` | WHERE + DISTINCT + GROUP_BY + HAVING + AGGREGATE 组合 |
+| `NOREC` | NoREC 优化器检测 |
+| `QUERY_PARTITIONING` | TLP_WHERE + HAVING + GROUP_BY + AGGREGATE + DISTINCT + NOREC 组合（默认） |
 | `PQS` | 轴心行存在性检查 |
-| `CODDTest` | 常量折叠/传播检测 |
-| `FUZZER` | 随机 Fuzzer |
-
-**QPG 支持**：可用 `--qpg-enable` 与 TLP/NoREC 配合。
-
-### 3.5 MariaDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `DQP` | 不同执行计划结果一致性 |
-
-### 3.6 CockroachDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `EXTENDED_WHERE` | TLP 扩展 WHERE 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合 |
 | `CERT` | 基数估计性能检测 |
-
-**QPG 支持**：可用 `--qpg-enable`。
-
-### 3.7 DuckDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合（默认） |
-
-### 3.8 Databend
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-
-### 3.9 Apache Doris
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合 |
-| `PQS` | 轴心行存在性检查 |
-| `ALL` | 全部 Oracle 组合 |
-
-### 3.10 OceanBase
-
-| Oracle | 说明 |
-|--------|------|
-| `TLP_WHERE` | TLP WHERE 子句分区（默认） |
-| `NoREC` | NoREC 优化器检测 |
-| `PQS` | 轴心行存在性检查 |
-
-### 3.11 Materialize
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-
-**QPG 支持**：可用 `--qpg-enable`。
-
-### 3.12 H2
-
-| Oracle | 说明 |
-|--------|------|
-| `TLP_WHERE` | TLP WHERE 子句分区（默认） |
-
-### 3.13 Hive
-
-| Oracle | 说明 |
-|--------|------|
-| `TLPWhere` | TLP WHERE 子句分区（默认） |
-
-### 3.14 HSQLDB
-
-| Oracle | 说明 |
-|--------|------|
-| `WHERE` | TLP WHERE 子句分区（默认） |
-| `NOREC` | NoREC 优化器检测（默认） |
-
-### 3.15 ClickHouse
-
-| Oracle | 说明 |
-|--------|------|
-| `TLPWhere` | TLP WHERE 子句分区（默认） |
-| `TLPDistinct` | TLP DISTINCT 分区 |
-| `TLPGroupBy` | TLP GROUP BY 分区 |
-| `TLPAggregate` | TLP 聚合函数分区 |
-| `TLPHaving` | TLP HAVING 子句分区 |
-| `NoREC` | NoREC 优化器检测 |
-
-### 3.16 CnosDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-
-### 3.17 Citus (PostgreSQL 扩展)
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-
-### 3.18 Apache DataFusion
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `QUERY_PARTITIONING_WHERE` | TLP WHERE 子句分区（默认） |
-
-### 3.19 Presto
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合 |
-
-### 3.20 QuestDB
-
-| Oracle | 说明 |
-|--------|------|
-| `WHERE` | TLP WHERE 子句分区（默认） |
-
-### 3.21 YugabyteDB (YSQL)
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
+| `DQP` | 不同执行计划结果一致性 |
+| `DQE` | SELECT/UPDATE/DELETE 一致性 |
+| `EET` | 等价表达式变换（结果 multiset 比较） |
+| `CODDTEST` | 常量驱动等价变换检测 |
 | `FUZZER` | 随机 Fuzzer |
-| `CATALOG` | 系统目录一致性 |
 
-### 3.22 YugabyteDB (YCQL)
+**示例**：
 
-| Oracle | 说明 |
-|--------|------|
-| `FUZZER` | 随机 Fuzzer（默认） |
+```bash
+java -jar sqlancer-*.jar gaussdb-m --oracle QUERY_PARTITIONING
+java -jar sqlancer-*.jar gaussdb-m --oracle NOREC
+java -jar sqlancer-*.jar gaussdb-m --oracle TLP_WHERE
+java -jar sqlancer-*.jar gaussdb-m --oracle EET
+java -jar sqlancer-*.jar gaussdb-m --oracle DQP --oracle DQE
+```
 
 ---
 

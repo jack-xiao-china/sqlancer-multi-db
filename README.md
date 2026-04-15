@@ -1,8 +1,8 @@
 # SQLancer 用户使用指导
 
-**文档版本**: 2026-03-21  
+**文档版本**: 2026-04-15  
 **参考源码**: [SQLancer GitHub](https://github.com/sqlancer/sqlancer)  
-**近期更新（2026-03）**：已按当前源码同步各 DBMS 的可选 Oracle 与默认 Oracle（以 `*OracleFactory` 与 `*Options` 为准）；MySQL QUERY_PARTITIONING 增加误报兜底（counts/size mismatch -> IgnoreMe）；兼容 MySQL 8.4（含 show_old_temporals 等变量处理）；**本仓库扩展**：MySQL 增加 **`EET`** Oracle（等价表达式变换）；用户指南 **§3.1.1** 补充 EET **功能清单、命令行用法、七条等价变换规则说明与团队使用建议**（设计细节见 [sqlancer_eet_design_0319.md](sqlancer_eet_design_0319.md)）
+**近期更新（2026-04）**：已对齐 `--help` 输出（见 `sqlancer_help_0413.md`），补充 `--log-dir`/`--validate-result-size-only` 等全局选项说明与日志目录结构；PostgreSQL 新增/补齐 Oracle（`DQP/DQE/EET/CODDTEST/DISTINCT/GROUP_BY/TLP_WHERE` 等）并补充 Postgres 新类型开关（`--enable-time-types/--enable-json/...`）与 `--coverage-policy`；修正快速参考表中 MySQL/PostgreSQL Oracle 列表漏项（如 `EET/CODDTEST`）。
 
 ---
 
@@ -16,11 +16,13 @@
 ### 1.2 构建与运行
 
 ```bash
-git clone https://github.com/sqlancer/sqlancer
-cd sqlancer
+# 若使用本仓库代码：
+# 进入本项目目录（示例路径按你的实际位置调整）
+cd sqlancer-main/sqlancer-main
 mvn package -DskipTests
-cd target
-java -jar sqlancer-*.jar --num-threads 4 <DBMS名称> --oracle <Oracle名称>
+
+# 运行（Jar 位于 target/ 下）
+java -jar target/sqlancer-*.jar --num-threads 4 <DBMS名称> --oracle <Oracle名称>
 ```
 
 ### 1.3 参数顺序
@@ -36,6 +38,10 @@ java -jar sqlancer-*.jar --num-threads 4 <DBMS名称> --oracle <Oracle名称>
 | `--oracle <名称>` | 指定 Test Oracle（可多次使用组合多个） |
 | `--num-tries N` | 发现 N 个缺陷后退出 |
 | `--timeout-seconds N` | 最大运行时间（秒） |
+| `--log-dir <目录>` | 日志基目录；未指定时默认写入 `logs/<dbms>/<oracle>_YYYY_MMDD_HHMM/` |
+| `--log-each-select=true/false` | 是否记录每条执行语句（默认 true） |
+| `--log-execution-time=true/false` | 记录语句执行耗时（需 `--log-each-select=true`，默认 true） |
+| `--validate-result-size-only=true/false` | 只校验结果行数、跳过内容比较（默认 false；用于降噪/排障） |
 | `--qpg-enable` | 启用 Query Plan Guidance（支持 SQLite、CockroachDB、TiDB、Materialize） |
 | `--use-reducer` | 启用实验性 delta-debugging 用例缩减 |
 | `mysql --engines=E1,E2,...` | MySQL 专属：仅在建表时使用指定引擎名生成 `ENGINE=...`（支持自定义引擎名） |
@@ -179,222 +185,63 @@ java -jar sqlancer-*.jar mysql --oracle DQP --oracle DQE
 - 设计实现对照与模块清单：[sqlancer_eet_design_0319.md](sqlancer_eet_design_0319.md)  
 - 论文与 EET-main 分析：[eet_analyze.md](eet_analyze.md)（若仓库中存在）
 
-### 3.2 TiDB
+### 3.2 PostgreSQL
 
 | Oracle | 说明 |
 |--------|------|
-| `WHERE` | TLP WHERE 子句分区 |
+| `NOREC` | NoREC 优化器检测 |
+| `PQS` | 轴心行存在性检查（更严格，通常要求表非空） |
+| `WHERE` / `TLP_WHERE` | TLP WHERE 子句分区（`TLP_WHERE` 为 `WHERE` 的别名入口） |
 | `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING 组合（默认） |
+| `AGGREGATE` | TLP 聚合分区 |
+| `DISTINCT` | TLP DISTINCT 分区 |
+| `GROUP_BY` | TLP GROUP BY 分区 |
+| `QUERY_PARTITIONING` | `TLP_WHERE` + `HAVING` + `AGGREGATE` 组合（默认） |
 | `CERT` | 基数估计性能检测 |
 | `DQP` | 不同执行计划结果一致性 |
+| `DQE` | SELECT/UPDATE/DELETE 一致性 |
+| `EET` | 等价表达式变换（结果 multiset 比较） |
+| `CODDTEST` | 常量驱动等价变换检测 |
+| `FUZZER` | 随机 Fuzzer |
+
+**Postgres 新类型开关（2026-04 起）**：用于控制生成器引入更多数据类型（默认关闭，便于灰度降噪）。
+- `--enable-time-types=true`：时间类型组（TIME/DATE/TIMESTAMP/INTERVAL）
+- `--enable-json=true`：JSON/JSONB
+- `--enable-uuid=true`：UUID
+- `--enable-bytea=true`：BYTEA
+- `--enable-arrays=true`：数组（受限子集）
+- `--enable-enum=true`：Enum（会在建表前预创建 enum 对象）
+- `--coverage-policy=BALANCED|CONSERVATIVE|AGGRESSIVE`：覆盖策略（默认 BALANCED）
+- `--enable-newtypes-in-dqe-dqp-eet=true`：允许新类型进入 DQE/DQP/EET 相关路径（best-effort；PQS strict 路径仍会忽略）
+
+### 3.3 GaussDB-M（M-Compatibility）
+
+| Oracle | 说明 |
+|--------|------|
+| `TLP_WHERE` | TLP WHERE 子句分区 |
+| `HAVING` | TLP HAVING 子句分区 |
+| `GROUP_BY` | TLP GROUP BY 分区 |
+| `AGGREGATE` | TLP 聚合函数分区 |
+| `DISTINCT` | TLP DISTINCT 分区 |
+| `NOREC` | NoREC 优化器检测 |
+| `QUERY_PARTITIONING` | TLP_WHERE + HAVING + GROUP_BY + AGGREGATE + DISTINCT + NOREC 组合（默认） |
+| `PQS` | 轴心行存在性检查 |
+| `CERT` | 基数估计性能检测 |
+| `DQP` | 不同执行计划结果一致性 |
+| `DQE` | SELECT/UPDATE/DELETE 一致性 |
+| `EET` | 等价表达式变换（结果 multiset 比较） |
+| `CODDTEST` | 常量驱动等价变换检测 |
+| `FUZZER` | 随机 Fuzzer |
 
 **示例**：
+
 ```bash
-java -jar sqlancer-*.jar tidb --oracle QUERY_PARTITIONING
-java -jar sqlancer-*.jar tidb --oracle DQP --qpg-enable
+java -jar sqlancer-*.jar gaussdb-m --oracle QUERY_PARTITIONING
+java -jar sqlancer-*.jar gaussdb-m --oracle NOREC
+java -jar sqlancer-*.jar gaussdb-m --oracle TLP_WHERE
+java -jar sqlancer-*.jar gaussdb-m --oracle EET
+java -jar sqlancer-*.jar gaussdb-m --oracle DQP --oracle DQE
 ```
-
-### 3.3 PostgreSQL
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-| `CERT` | 基数估计性能检测 |
-| `FUZZER` | 随机 Fuzzer |
-
-### 3.4 SQLite3
-
-| Oracle | 说明 |
-|--------|------|
-| `NoREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `QUERY_PARTITIONING` | WHERE + DISTINCT + GROUP_BY + HAVING + AGGREGATE 组合 |
-| `PQS` | 轴心行存在性检查 |
-| `CODDTest` | 常量折叠/传播检测 |
-| `FUZZER` | 随机 Fuzzer |
-
-**QPG 支持**：可用 `--qpg-enable` 与 TLP/NoREC 配合。
-
-### 3.5 MariaDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `DQP` | 不同执行计划结果一致性 |
-
-### 3.6 CockroachDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `EXTENDED_WHERE` | TLP 扩展 WHERE 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合 |
-| `CERT` | 基数估计性能检测 |
-
-**QPG 支持**：可用 `--qpg-enable`。
-
-### 3.7 DuckDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合（默认） |
-
-### 3.8 Databend
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-
-### 3.9 Apache Doris
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合 |
-| `PQS` | 轴心行存在性检查 |
-| `ALL` | 全部 Oracle 组合 |
-
-### 3.10 OceanBase
-
-| Oracle | 说明 |
-|--------|------|
-| `TLP_WHERE` | TLP WHERE 子句分区（默认） |
-| `NoREC` | NoREC 优化器检测 |
-| `PQS` | 轴心行存在性检查 |
-
-### 3.11 Materialize
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-
-**QPG 支持**：可用 `--qpg-enable`。
-
-### 3.12 H2
-
-| Oracle | 说明 |
-|--------|------|
-| `TLP_WHERE` | TLP WHERE 子句分区（默认） |
-
-### 3.13 Hive
-
-| Oracle | 说明 |
-|--------|------|
-| `TLPWhere` | TLP WHERE 子句分区（默认） |
-
-### 3.14 HSQLDB
-
-| Oracle | 说明 |
-|--------|------|
-| `WHERE` | TLP WHERE 子句分区（默认） |
-| `NOREC` | NoREC 优化器检测（默认） |
-
-### 3.15 ClickHouse
-
-| Oracle | 说明 |
-|--------|------|
-| `TLPWhere` | TLP WHERE 子句分区（默认） |
-| `TLPDistinct` | TLP DISTINCT 分区 |
-| `TLPGroupBy` | TLP GROUP BY 分区 |
-| `TLPAggregate` | TLP 聚合函数分区 |
-| `TLPHaving` | TLP HAVING 子句分区 |
-| `NoREC` | NoREC 优化器检测 |
-
-### 3.16 CnosDB
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-
-### 3.17 Citus (PostgreSQL 扩展)
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-
-### 3.18 Apache DataFusion
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `QUERY_PARTITIONING_WHERE` | TLP WHERE 子句分区（默认） |
-
-### 3.19 Presto
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测（默认） |
-| `WHERE` | TLP WHERE 子句分区 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `GROUP_BY` | TLP GROUP BY 分区 |
-| `AGGREGATE` | TLP 聚合函数分区 |
-| `DISTINCT` | TLP DISTINCT 分区 |
-| `QUERY_PARTITIONING` | 上述 TLP 组合 |
-
-### 3.20 QuestDB
-
-| Oracle | 说明 |
-|--------|------|
-| `WHERE` | TLP WHERE 子句分区（默认） |
-
-### 3.21 YugabyteDB (YSQL)
-
-| Oracle | 说明 |
-|--------|------|
-| `NOREC` | NoREC 优化器检测 |
-| `HAVING` | TLP HAVING 子句分区 |
-| `QUERY_PARTITIONING` | WHERE + HAVING + AGGREGATE 组合（默认） |
-| `PQS` | 轴心行存在性检查 |
-| `FUZZER` | 随机 Fuzzer |
-| `CATALOG` | 系统目录一致性 |
-
-### 3.22 YugabyteDB (YCQL)
-
-| Oracle | 说明 |
-|--------|------|
-| `FUZZER` | 随机 Fuzzer（默认） |
 
 ---
 
@@ -402,9 +249,9 @@ java -jar sqlancer-*.jar tidb --oracle DQP --qpg-enable
 
 | DBMS | 可用 Oracle 列表 |
 |------|------------------|
-| MySQL | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, FUZZER |
+| MySQL | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, CODDTEST, EET, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
-| PostgreSQL | NOREC, WHERE, HAVING, QUERY_PARTITIONING, PQS, CERT, FUZZER |
+| PostgreSQL | NOREC, PQS, WHERE, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTest, FUZZER |
 | MariaDB | NOREC, DQP |
 | CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, EXTENDED_WHERE, QUERY_PARTITIONING, CERT |
@@ -440,9 +287,15 @@ java -jar sqlancer-*.jar tidb --oracle DQP --qpg-enable
 
 ## 六、日志与复现
 
-- **日志目录**：`target/logs/`
-- **SQL 记录**：默认记录在 `*-cur.log`
-- **逻辑错误复现**：会生成 `.log` 文件，包含复现语句
+- **默认日志目录**：`logs/<dbms>/<oracle>_YYYY_MMDD_HHMM/`
+  - 例：`logs/mysql/eet_2026_0409_1453/`
+  - 可通过 `--log-dir <目录>` 改为自定义基目录（目录结构仍保持 `<base>/<dbms>/<run>/`）
+- **主要文件**：
+  - `<database>.log`：异常栈与可复现状态（发生错误/断言时写入）
+  - `<database>-cur.log`：每条执行 SQL（需 `--log-each-select=true`，默认 true）
+  - `<database>-plan.log`：QPG 计划日志（需 `--qpg-enable` 且 `--qpg-log-query-plan=true`）
+  - `reduce/<database>-reduce.log`：缩减日志（需 `--use-reducer`）
+  - `reproduce/<database>.ser`：序列化复现状态（需 `--serialize-reproduce-state=true`）
 
 ---
 
