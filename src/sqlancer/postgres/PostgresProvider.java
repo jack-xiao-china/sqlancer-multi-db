@@ -293,7 +293,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         password = globalState.getOptions().getPassword();
         host = globalState.getOptions().getHost();
         port = globalState.getOptions().getPort();
-        entryPath = "/test";
+        entryPath = "/postgres"; // use postgres as entry database
         entryURL = globalState.getDbmsSpecificOptions().connectionURL;
         // trim URL to exclude "jdbc:"
         if (entryURL.startsWith("jdbc:")) {
@@ -372,7 +372,8 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             s.execute(createDatabaseCommand);
         }
         con.close();
-        int databaseIndex = entryURL.indexOf(entryDatabaseName);
+        // Use lastIndexOf to find the database name at the end of URL, not in the scheme
+        int databaseIndex = entryURL.lastIndexOf(entryDatabaseName);
         String preDatabaseName = entryURL.substring(0, databaseIndex);
         String postDatabaseName = entryURL.substring(databaseIndex + entryDatabaseName.length());
         testURL = preDatabaseName + databaseName + postDatabaseName;

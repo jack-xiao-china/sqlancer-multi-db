@@ -51,7 +51,19 @@ public enum PostgresFunctionWithUnknownResult {
     // String functions
     ASCII("ascii", PostgresDataType.INT, PostgresDataType.TEXT),
     BTRIM("btrim", PostgresDataType.TEXT, PostgresDataType.TEXT, PostgresDataType.TEXT),
-    CHR("chr", PostgresDataType.TEXT, PostgresDataType.INT),
+    CHR("chr", PostgresDataType.TEXT, PostgresDataType.INT) {
+        @Override
+        public PostgresExpression[] getArguments(PostgresDataType returnType, PostgresExpressionGenerator gen,
+                int depth) {
+            PostgresExpression[] args = super.getArguments(returnType, gen, depth);
+            // PostgreSQL does not allow null character (chr(0)), so generate a non-zero integer constant
+            // to avoid triggering "null character not permitted" error
+            // This is a PostgreSQL design constraint, not a SQLancer bug
+            args[0] = sqlancer.postgres.ast.PostgresConstant.createIntConstant(
+                sqlancer.Randomly.getNotCachedInteger(1, Integer.MAX_VALUE));
+            return args;
+        }
+    },
     CONVERT_FROM("convert_from", PostgresDataType.TEXT, PostgresDataType.TEXT, PostgresDataType.TEXT) {
         @Override
         public PostgresExpression[] getArguments(PostgresDataType returnType, PostgresExpressionGenerator gen,
