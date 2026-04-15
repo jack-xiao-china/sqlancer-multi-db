@@ -25,7 +25,31 @@
       "Bash(grep -E \"\\\\->|\\\\->\\\\>|#\\\\>|#\\\\>\\\\>|@\\\\>|<\\\\@\" logs/postgres/where_2026_0414_2029/*.log)",
       "Bash(grep -E \"json_typeof|jsonb_typeof|json_array_length|jsonb_array_length|jsonb_pretty|json_object_keys|jsonb_object_keys\" logs/postgres/where_2026_0414_2029/*.log)",
       "Bash(grep -E \"jsonb_pretty|json_typeof|jsonb_typeof|jsonb_array_length\" logs/postgres/where_2026_0414_2029/*.log)",
-      "Bash(cat logs/postgres/where_2026_0414_2029/*.log)"
+      "Bash(cat logs/postgres/where_2026_0414_2029/*.log)",
+      "Bash(cat logs/postgres/where_2026_0414_2041/*.log)",
+      "Bash(grep:*)",
+      "Bash(sort -t' ' -k1 -n)",
+      "Bash(sort -t'm' -k1 -n -r)",
+      "Bash(awk -F: '{sum+=$2} END {print sum}')",
+      "Bash(echo \" - VACUUM次数: $\\(grep -c 'VACUUM' logs/postgres/where_2026_0414_2115/*.log)",
+      "Bash(tee /tmp/fix_test.log)",
+      "WebSearch",
+      "Bash(tail -5 logs/postgres/where_2026_0415_0958/*.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/where.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/query_partitioning.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/norec.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/having.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/aggregate.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/distinct.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/group_by.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/cert.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/dqp.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/dqe.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/eet.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/coddtest.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/pqs.log)",
+      "Bash(tee logs/postgres/oracle_verification_2026_0415/fuzzer.log)",
+      "Bash(wc -l docs/*.md)"
     ]
   }
 }

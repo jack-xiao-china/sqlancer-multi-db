@@ -19,20 +19,52 @@ public class SQLQueryAdapter extends Query<SQLConnection> implements Serializabl
      * These states commonly occur during random query generation and are typically filtered via ExpectedErrors.
      */
     private static final Set<String> COMMON_EXPECTED_SQLSTATES = Set.of(
+            // Data exception (general - covers range errors, type mismatches, etc.)
+            "22000",
             // Data exception: numeric value out of range
             "22003",
-            // Invalid text representation
+            // Data exception: division by zero
+            "22012",
+            // Data exception: interval field overflow
+            "22015",
+            // Data exception: invalid argument for various functions
+            "2201E", "2201F", "2201G", "2201H", "2201I", "2201J", "2201K", "2201L", "2201M", "2201N",
+            // Data exception: datetime field overflow / invalid time format
+            "22008", "22009",
+            // Data exception: invalid escape character / escape sequence
+            "22019", "22025",
+            // Data exception: character not in repertoire / invalid character value
+            "22021", "2202B",
+            // Data exception: string data length mismatch / right truncation
+            "22026", "22001",
+            // Data exception: invalid indicator parameter value
+            "22010",
+            // Data exception: null value not allowed in aggregate / set function
+            "22004", "22005",
+            // Data exception: floating point exception
+            "22P01",
+            // Data exception: invalid text representation (type conversion errors)
             "22P02",
+            // Data exception: invalid binary representation
+            "22P03",
+            // Data exception: bad JSON / JSON text
+            "22P04", "22P05",
+            // Data exception: invalid XML / XML comment
+            "2200N", "2200S", "2200T",
             // Undefined function/operator
             "42883",
             // Cannot coerce
             "42846",
+            // Datatype mismatch (ALTER TABLE type conversion, etc.)
+            "42804",
             // Undefined object (e.g., operator class / parameter / type)
             "42704",
             // Syntax error
             "42601",
             // Undefined table
             "42P01",
+            // Invalid column reference / constraint does not exist (ON CONFLICT errors)
+            "42P10",
             // Unique violation
             "23505",
             // Foreign key violation
@@ -40,7 +72,9 @@ public class SQLQueryAdapter extends Query<SQLConnection> implements Serializabl
             // Check violation
             "23514",
             // Feature not supported
-            "0A000");
+            "0A000",
+            // Collation mismatch / ambiguous collation
+            "42P22", "42P09");
 
     private final String query;
     private final ExpectedErrors expectedErrors;
@@ -188,14 +222,13 @@ public class SQLQueryAdapter extends Query<SQLConnection> implements Serializabl
             if (expectedErrors.errorIsExpected(ex.getMessage())) {
                 return;
             }
-            if (ex instanceof SQLException && !expectedErrors.isEmpty()) {
+            if (ex instanceof SQLException) {
                 String state = ((SQLException) ex).getSQLState();
                 if (state != null && COMMON_EXPECTED_SQLSTATES.contains(state)) {
                     return;
                 }
-            } else {
-                ex = ex.getCause();
             }
+            ex = ex.getCause();
         }
 
         throw new AssertionError(query, e);

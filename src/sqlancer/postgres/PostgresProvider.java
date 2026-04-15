@@ -160,11 +160,15 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         int nrPerformed;
         switch (a) {
         case CREATE_INDEX:
-        case CLUSTER:
             nrPerformed = r.getInteger(0, 3);
             break;
+        case CLUSTER:
+            // CLUSTER can be very expensive (reorders entire table)
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
+            break;
         case CREATE_STATISTICS:
-            nrPerformed = r.getInteger(0, 5);
+            // CREATE STATISTICS can be expensive for large tables
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case ALTER_STATISTICS:
             nrPerformed = r.getInteger(0, 2);
@@ -180,6 +184,9 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             nrPerformed = r.getInteger(0, 5);
             break;
         case REINDEX:
+            // REINDEX can be expensive (rebuilds entire index)
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
+            break;
         case RESET:
             nrPerformed = r.getInteger(0, 3);
             break;
@@ -189,9 +196,13 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             nrPerformed = r.getInteger(0, 5);
             break;
         case ANALYZE:
-            nrPerformed = r.getInteger(0, 3);
+            // ANALYZE collects statistics and can be slow
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case VACUUM:
+            // VACUUM (especially FREEZE) can take 18+ seconds
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
+            break;
         case SET_CONSTRAINTS:
         case COMMENT_ON:
         case NOTIFY:
@@ -199,14 +210,18 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         case UNLISTEN:
         case CREATE_SEQUENCE:
         case DROP_STATISTICS:
-        case TRUNCATE:
             nrPerformed = r.getInteger(0, 2);
+            break;
+        case TRUNCATE:
+            // TRUNCATE clears table data, may affect test oracle
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case CREATE_VIEW:
-            nrPerformed = r.getInteger(0, 2);
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case CREATE_TABLESPACE:
-            nrPerformed = r.getInteger(0, 2);
+            // CREATE TABLESPACE involves filesystem operations
+            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case UPDATE:
             nrPerformed = r.getInteger(0, 10);
