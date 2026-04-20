@@ -34,22 +34,28 @@ Four new test oracles have been added to provide more comprehensive database tes
 - **Usage**: `--oracle CODDTEST`
 - **Characteristics**: Focuses on predicate evaluation consistency
 
-### 2. PostgreSQL Extended Data Type Support
+### 2. PostgreSQL Extended Type Coverage
 
-New command-line options to enable additional PostgreSQL data type groups:
+PostgreSQL generators now cover the following type families by default without per-type feature flags:
 
-| Option | Description | Types Included |
-|--------|-------------|----------------|
-| `--enable-time-types` | Time-related types | TIME, DATE, TIMESTAMP, INTERVAL |
-| `--enable-json` | JSON types | JSON, JSONB |
-| `--enable-uuid` | UUID type | UUID |
-| `--enable-bytea` | Binary data type | BYTEA |
-| `--enable-arrays` | Array types | Various array types (INT[], TEXT[], etc.) |
-| `--enable-enum` | Enum types | Custom ENUM types |
+- Temporal types: `DATE`, `TIME`, `TIMETZ`, `TIMESTAMP`, `TIMESTAMPTZ`, `INTERVAL`
+- Semi-structured and binary types: `JSON`, `JSONB`, `BYTEA`
+- Identifier and collection types: `UUID`, `ENUM`, `ARRAY`
+
+The current PostgreSQL-specific tuning options are:
+
+| Option | Description |
+|--------|-------------|
+| `--coverage-policy` | Controls stability vs. coverage (`BALANCED`, `CONSERVATIVE`, `AGGRESSIVE`) |
+| `--pg-table-columns` | Number of columns in generated PostgreSQL tables |
+| `--pg-generate-sql-num` | Number of rows generated per PostgreSQL `INSERT ... VALUES` |
+| `--pg-index-model` | Force a specific PostgreSQL index generation model |
+| `--extensions` | Comma-separated extensions created in each test database |
+| `--connection-url` | PostgreSQL connection URL |
 
 **Example**:
 ```bash
-java -jar sqlancer.jar postgres --enable-json true --enable-time-types true --oracle WHERE
+java -jar sqlancer.jar postgres --coverage-policy AGGRESSIVE --pg-index-model 6 --oracle WHERE
 ```
 
 ### 3. MySQL Extended Feature Flags
@@ -97,7 +103,7 @@ java -jar sqlancer.jar mysql \
 
 ### 4. Coverage Policy (PostgreSQL)
 
-The `--coverage-policy` option controls the balance between type coverage and test stability:
+The `--coverage-policy` option controls the balance between type/expression coverage and test stability:
 
 | Policy | Description | Use Case |
 |--------|-------------|----------|
@@ -129,17 +135,9 @@ Added SQLSTATE-based error handling to support non-English database servers:
 - `--test-tablespaces`: Enable/disable tablespace creation testing
 - `--tablespace-path`: Specify custom tablespace directory
 - OS-dependent defaults:
-  - Linux: `/tmp/postgresql/tablespace` (enabled by default)
+  - Linux: Disabled by default
   - macOS: Disabled by default (different /tmp handling)
   - Windows: Disabled by default (use custom path)
-
-### 7. New Types in Advanced Oracles (PostgreSQL)
-
-The `--enable-newtypes-in-dqe-dqp-eet` option allows new type groups to be used in DQE/DQP/EET oracles:
-
-- These oracles traditionally use conservative type sets for stability
-- This option enables extended types for broader coverage in advanced testing scenarios
-- Note: PQS still uses `generateOnlyKnown` for strict correctness
 
 ## Quick Start
 
@@ -165,11 +163,10 @@ java -jar sqlancer.jar \
     --host localhost --port 5432 \
     --username postgres --password password \
     postgres \
-    --enable-time-types true \
-    --enable-json true \
-    --enable-uuid true \
-    --enable-arrays true \
     --coverage-policy AGGRESSIVE \
+    --pg-table-columns 12 \
+    --pg-generate-sql-num 5 \
+    --pg-index-model 6 \
     --oracle QUERY_PARTITIONING
 ```
 
@@ -221,16 +218,12 @@ All 14 oracles are available for **both PostgreSQL and MySQL**:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--oracle` | QUERY_PARTITIONING | Test oracle(s) to use |
-| `--enable-time-types` | false | Enable TIME/DATE/TIMESTAMP/INTERVAL |
-| `--enable-json` | false | Enable JSON/JSONB |
-| `--enable-uuid` | false | Enable UUID |
-| `--enable-bytea` | false | Enable BYTEA |
-| `--enable-arrays` | false | Enable ARRAY types |
-| `--enable-enum` | false | Enable ENUM types |
 | `--coverage-policy` | BALANCED | Coverage strategy |
-| `--enable-newtypes-in-dqe-dqp-eet` | false | Use new types in advanced oracles |
+| `--pg-table-columns` | 10 | Number of columns in generated tables |
+| `--pg-generate-sql-num` | 3 | Number of rows per generated INSERT |
+| `--pg-index-model` | 0 | PostgreSQL index generation model |
 | `--test-collations` | true | Test different collations |
-| `--test-tablespaces` | OS-dependent | Test tablespace creation |
+| `--test-tablespaces` | false | Test tablespace creation |
 | `--tablespace-path` | OS-dependent | Custom tablespace path |
 | `--extensions` | "" | Extensions to create (comma-separated) |
 

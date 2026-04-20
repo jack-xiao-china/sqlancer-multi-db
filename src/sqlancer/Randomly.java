@@ -109,6 +109,9 @@ public final class Randomly {
     // CACHING END
 
     public static <T> T fromList(List<T> list) {
+        if (list.isEmpty()) {
+            throw new IllegalArgumentException("list must not be empty");
+        }
         return list.get((int) getNextLong(0, list.size()));
     }
 

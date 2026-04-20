@@ -43,7 +43,8 @@ public enum PostgresFunctionWithUnknownResult {
         public PostgresExpression[] getArguments(PostgresDataType returnType, PostgresExpressionGenerator gen,
                 int depth) {
             PostgresExpression[] args = super.getArguments(returnType, gen, depth);
-            args[0] = gen.generateExpression(PostgresDataType.getRandomType());
+            args[0] = gen.generateExpression(PostgresDataType.INT);
+            args[1] = PostgresConstant.createTextConstant(Randomly.fromOptions("FM999999999", "999999999"));
             return args;
         }
     },
@@ -56,11 +57,8 @@ public enum PostgresFunctionWithUnknownResult {
         public PostgresExpression[] getArguments(PostgresDataType returnType, PostgresExpressionGenerator gen,
                 int depth) {
             PostgresExpression[] args = super.getArguments(returnType, gen, depth);
-            // PostgreSQL does not allow null character (chr(0)), so generate a non-zero integer constant
-            // to avoid triggering "null character not permitted" error
-            // This is a PostgreSQL design constraint, not a SQLancer bug
-            args[0] = sqlancer.postgres.ast.PostgresConstant.createIntConstant(
-                sqlancer.Randomly.getNotCachedInteger(1, Integer.MAX_VALUE));
+            args[0] = sqlancer.postgres.ast.PostgresConstant
+                    .createIntConstant(sqlancer.Randomly.getNotCachedInteger(1, Integer.MAX_VALUE));
             return args;
         }
     },
@@ -96,7 +94,7 @@ public enum PostgresFunctionWithUnknownResult {
     STRPOS("strpos", PostgresDataType.INT, PostgresDataType.TEXT, PostgresDataType.TEXT),
     SUBSTR("substr", PostgresDataType.TEXT, PostgresDataType.TEXT, PostgresDataType.INT, PostgresDataType.INT),
     TO_ASCII("to_ascii", PostgresDataType.TEXT, PostgresDataType.TEXT),
-    TO_HEX("to_hex", PostgresDataType.TEXT, PostgresDataType.INT),
+    TO_HEX("to_hex", PostgresDataType.INT, PostgresDataType.TEXT),
     TRANSLATE("translate", PostgresDataType.TEXT, PostgresDataType.TEXT, PostgresDataType.TEXT, PostgresDataType.TEXT),
     // mathematical functions
     // https://www.postgresql.org/docs/13/functions-math.html

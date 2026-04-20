@@ -51,7 +51,7 @@ public class MainOptions {
     @Parameter(names = "--print-failed", description = "Logs failed insert, create and other statements without results", arity = 1)
     private boolean loggerPrintFailed = true; // NOPMD
 
-    @Parameter(names = "--log-dir", description = "Base directory to write logs to. If unset, logs are written to logs/<dbms>/<oracle>_YYYY_MMDD_HHMM/.")
+    @Parameter(names = "--log-dir", description = "Base directory to write logs to. If unset, logs are written once per SQLancer run under logs/<dbms>/<oracle>_YYYY_MMDD_HHMM/ and all databases from that run share the same directory.")
     private String logDir; // NOPMD
 
     @Parameter(names = "--qpg-enable", description = "Enable the experimental feature Query Plan Guidance (QPG)", arity = 1)
@@ -200,7 +200,7 @@ public class MainOptions {
     }
 
     public boolean logExecutionTime() {
-        if (!logEachSelect) {
+        if (logExecutionTime && !logEachSelect) {
             throw new AssertionError();
         }
         return logExecutionTime;

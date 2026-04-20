@@ -409,17 +409,19 @@ public final class Main {
         private final MainOptions options;
         private final O command;
         private final String databaseName;
+        private final String runDirectoryName;
         private StateLogger logger;
         private StateToReproduce stateToRepro;
         private final Randomly r;
 
         public DBMSExecutor(DatabaseProvider<G, O, C> provider, MainOptions options, O dbmsSpecificOptions,
-                String databaseName, Randomly r) {
+                String databaseName, Randomly r, String runDirectoryName) {
             this.provider = provider;
             this.options = options;
             this.databaseName = databaseName;
             this.command = dbmsSpecificOptions;
             this.r = r;
+            this.runDirectoryName = runDirectoryName;
         }
 
         private G createGlobalState() {
@@ -542,30 +544,7 @@ public final class Main {
 
         private StateLogger createStateLogger(String databaseName) {
             File configured = options.getLogDir() != null ? new File(options.getLogDir()) : null;
-            String runName = null;
-            if (options.getLogDir() == null) {
-                runName = computeRunDirectoryName(command);
-            }
-            return new StateLogger(databaseName, provider, options, configured, runName);
-        }
-
-        private static String computeRunDirectoryName(DBMSSpecificOptions<?> command) {
-            String oracleName = "oracle";
-            try {
-                List<?> oracles = command.getTestOracleFactory();
-                if (oracles != null && !oracles.isEmpty()) {
-                    if (oracles.size() == 1) {
-                        oracleName = String.valueOf(oracles.get(0));
-                    } else {
-                        oracleName = String.valueOf(oracles.get(0)) + "_plus";
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-            oracleName = oracleName.toLowerCase();
-            DateFormat fmt = new SimpleDateFormat("yyyy_MMdd_HHmm");
-            String ts = fmt.format(new Date());
-            return oracleName + "_" + ts;
+            return new StateLogger(databaseName, provider, options, configured, runDirectoryName);
         }
     }
 
@@ -574,6 +553,7 @@ public final class Main {
         private final DatabaseProvider<G, O, C> provider;
         private final MainOptions options;
         private final O command;
+        private String runDirectoryName;
 
         public DBMSExecutorFactory(DatabaseProvider<G, O, C> provider, MainOptions options) {
             this.provider = provider;
@@ -597,10 +577,39 @@ public final class Main {
         public DBMSExecutor<G, O, C> getDBMSExecutor(String databaseName, Randomly r) {
             try {
                 return new DBMSExecutor<G, O, C>(provider.getClass().getDeclaredConstructor().newInstance(), options,
-                        command, databaseName, r);
+                        command, databaseName, r, getRunDirectoryName());
             } catch (Exception e) {
                 throw new AssertionError(e);
             }
+        }
+
+        private synchronized String getRunDirectoryName() {
+            if (options.getLogDir() != null) {
+                return null;
+            }
+            if (runDirectoryName == null) {
+                runDirectoryName = computeRunDirectoryName(command);
+            }
+            return runDirectoryName;
+        }
+
+        static String computeRunDirectoryName(DBMSSpecificOptions<?> command) {
+            String oracleName = "oracle";
+            try {
+                List<?> oracles = command.getTestOracleFactory();
+                if (oracles != null && !oracles.isEmpty()) {
+                    if (oracles.size() == 1) {
+                        oracleName = String.valueOf(oracles.get(0));
+                    } else {
+                        oracleName = String.valueOf(oracles.get(0)) + "_plus";
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+            oracleName = oracleName.toLowerCase();
+            DateFormat fmt = new SimpleDateFormat("yyyy_MMdd_HHmm");
+            String ts = fmt.format(new Date());
+            return oracleName + "_" + ts;
         }
 
         public DatabaseProvider<G, O, C> getProvider() {

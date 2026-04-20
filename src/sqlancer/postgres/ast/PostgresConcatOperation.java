@@ -24,8 +24,13 @@ public class PostgresConcatOperation extends BinaryNode<PostgresExpression> impl
         if (leftExpectedValue.isNull() || rightExpectedValue.isNull()) {
             return PostgresConstant.createNullConstant();
         }
-        String leftStr = leftExpectedValue.cast(PostgresDataType.TEXT).getUnquotedTextRepresentation();
-        String rightStr = rightExpectedValue.cast(PostgresDataType.TEXT).getUnquotedTextRepresentation();
+        PostgresConstant leftText = leftExpectedValue.cast(PostgresDataType.TEXT);
+        PostgresConstant rightText = rightExpectedValue.cast(PostgresDataType.TEXT);
+        if (leftText == null || rightText == null) {
+            return null;
+        }
+        String leftStr = leftText.getUnquotedTextRepresentation();
+        String rightStr = rightText.getUnquotedTextRepresentation();
         return PostgresConstant.createTextConstant(leftStr + rightStr);
     }
 

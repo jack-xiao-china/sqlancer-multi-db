@@ -36,6 +36,8 @@ import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
@@ -58,6 +60,10 @@ public interface PostgresVisitor {
     void visit(PostgresOrderByTerm op);
 
     void visit(PostgresFunction f);
+
+    void visit(PostgresTemporalFunction function);
+
+    void visit(PostgresTemporalBinaryArithmeticOperation op);
 
     void visit(PostgresCastOperation cast);
 
@@ -120,8 +126,12 @@ public interface PostgresVisitor {
             visit((PostgresOrderByTerm) expression);
         } else if (expression instanceof PostgresFunction) {
             visit((PostgresFunction) expression);
+        } else if (expression instanceof PostgresTemporalFunction) {
+            visit((PostgresTemporalFunction) expression);
         } else if (expression instanceof PostgresCastOperation) {
             visit((PostgresCastOperation) expression);
+        } else if (expression instanceof PostgresTemporalBinaryArithmeticOperation) {
+            visit((PostgresTemporalBinaryArithmeticOperation) expression);
         } else if (expression instanceof PostgresBetweenOperation) {
             visit((PostgresBetweenOperation) expression);
         } else if (expression instanceof PostgresInOperation) {

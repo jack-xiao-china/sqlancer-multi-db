@@ -14,6 +14,7 @@ import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
+import sqlancer.postgres.ast.PostgresSelect.LockingClauseContext;
 import sqlancer.postgres.oracle.PostgresFuzzer;
 import sqlancer.postgres.oracle.PostgresPivotedQuerySynthesisOracle;
 import sqlancer.postgres.oracle.ext.PostgresCODDTestOracle;
@@ -29,7 +30,8 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
     NOREC {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
-            PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState);
+            PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState)
+                    .setLockingClauseContext(LockingClauseContext.ORACLE_SCALAR);
             ExpectedErrors errors = ExpectedErrors.newErrors().with(PostgresCommon.getCommonExpressionErrors())
                     .with(PostgresCommon.getCommonFetchErrors())
                     .withRegex(PostgresCommon.getCommonExpressionRegexErrors()).build();
@@ -47,22 +49,14 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
             return true;
         }
     },
-    WHERE {
+    TLP_WHERE {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
             PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState);
             ExpectedErrors expectedErrors = ExpectedErrors.newErrors().with(PostgresCommon.getCommonExpressionErrors())
                     .with(PostgresCommon.getCommonFetchErrors())
                     .withRegex(PostgresCommon.getCommonExpressionRegexErrors()).build();
-
             return new TLPWhereOracle<>(globalState, gen, expectedErrors);
-        }
-
-    },
-    TLP_WHERE {
-        @Override
-        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
-            return WHERE.create(globalState);
         }
     },
     HAVING {
@@ -103,7 +97,8 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
     CERT {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
-            PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState);
+            PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState)
+                    .setLockingClauseContext(LockingClauseContext.EXPLAIN_PLAN);
             ExpectedErrors errors = ExpectedErrors.newErrors().with(PostgresCommon.getCommonExpressionErrors())
                     .withRegex(PostgresCommon.getCommonExpressionRegexErrors())
                     .with(PostgresCommon.getCommonFetchErrors()).with(PostgresCommon.getCommonInsertUpdateErrors())

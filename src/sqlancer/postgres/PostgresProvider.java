@@ -60,19 +60,7 @@ import sqlancer.postgres.gen.PostgresViewGenerator;
 @AutoService(DatabaseProvider.class)
 public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, PostgresOptions> {
 
-    /**
-     * Generate only data types and expressions that are understood by PQS.
-     */
-    public static boolean generateOnlyKnown;
-
-    // Feature flags (default false) to keep backwards-compatible generation unless explicitly enabled.
-    public static boolean enableTimeTypes;
-    public static boolean enableJSON;
-    public static boolean enableUUID;
-    public static boolean enableBYTEA;
-    public static boolean enableArrays;
-    public static boolean enableEnum;
-
+    private static final Object ENUM_TYPES_LOCK = new Object();
     private static final List<String> enumTypeNames = new ArrayList<>();
     private static final Map<String, List<String>> enumTypeLabels = new HashMap<>();
 
@@ -97,8 +85,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
 
     public enum Action implements AbstractAction<PostgresGlobalState> {
         ANALYZE(PostgresAnalyzeGenerator::create), //
-        ALTER_TABLE(g -> PostgresAlterTableGenerator.create(g.getSchema().getRandomTable(t -> !t.isView()), g,
-                generateOnlyKnown)), //
+        ALTER_TABLE(g -> PostgresAlterTableGenerator.create(g.getSchema().getRandomTable(t -> !t.isView()), g)), //
         CLUSTER(PostgresClusterGenerator::create), //
         COMMIT(g -> {
             SQLQueryAdapter query;
@@ -238,9 +225,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
 
     @Override
     public void generateDatabase(PostgresGlobalState globalState) throws Exception {
-        if (enableEnum) {
-            createEnumTypes(globalState);
-        }
+        createEnumTypes(globalState);
         readFunctions(globalState);
         createTables(globalState, Randomly.fromOptions(4, 5, 6));
         prepareTables(globalState);
@@ -263,49 +248,23 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
 
     @Override
     public SQLConnection createDatabase(PostgresGlobalState globalState) throws SQLException {
-        if (globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
-                .anyMatch((o) -> o == PostgresOracleFactory.PQS)) {
-            generateOnlyKnown = true;
-        }
-
-        // Read feature toggles once per database creation (defaults are false in options).
         PostgresOptions opts = globalState.getDbmsSpecificOptions();
-        enableTimeTypes = opts.enableTimeTypes;
-        enableJSON = opts.enableJSON;
-        enableUUID = opts.enableUUID;
-        enableBYTEA = opts.enableBYTEA;
-        enableArrays = opts.enableArrays;
-        enableEnum = opts.enableEnum;
-        // Gate "risky" oracle paths (DQE/DQP/EET) from new types by default.
-        if (!opts.enableNewtypesInDQEDQPEET
-                && opts.getTestOracleFactory().stream().anyMatch(o -> o == PostgresOracleFactory.DQE
-                        || o == PostgresOracleFactory.DQP || o == PostgresOracleFactory.EET
-                        || o == PostgresOracleFactory.CODDTEST)) {
-            enableTimeTypes = false;
-            enableJSON = false;
-            enableUUID = false;
-            enableBYTEA = false;
-            enableArrays = false;
-            enableEnum = false;
-        }
+        opts.validate();
 
         username = globalState.getOptions().getUserName();
         password = globalState.getOptions().getPassword();
         host = globalState.getOptions().getHost();
         port = globalState.getOptions().getPort();
-        entryPath = "/postgres"; // use postgres as entry database
         entryURL = globalState.getDbmsSpecificOptions().connectionURL;
         // trim URL to exclude "jdbc:"
         if (entryURL.startsWith("jdbc:")) {
             entryURL = entryURL.substring(5);
         }
-        String entryDatabaseName = entryPath.substring(1);
         databaseName = globalState.getDatabaseName();
 
         try {
             URI uri = new URI(entryURL);
             String userInfoURI = uri.getUserInfo();
-            String pathURI = uri.getPath();
             if (userInfoURI != null) {
                 // username and password specified in URL take precedence
                 if (userInfoURI.contains(":")) {
@@ -321,79 +280,81 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
                 String postUserInfo = entryURL.substring(userInfoIndex + userInfoURI.length() + 1);
                 entryURL = preUserInfo + postUserInfo;
             }
-            if (pathURI != null) {
-                entryPath = pathURI;
-            }
             if (host == null) {
                 host = uri.getHost();
             }
             if (port == MainOptions.NO_SET_PORT) {
                 port = uri.getPort();
             }
-            entryURL = String.format("%s://%s:%d/%s", uri.getScheme(), host, port, entryDatabaseName);
+
+            String entryDatabaseName = "postgres";
+            URI entryUri = new URI(uri.getScheme(), null, host, port, "/" + entryDatabaseName, uri.getQuery(),
+                    uri.getFragment());
+            entryURL = entryUri.toString();
+            entryPath = entryUri.getPath();
+
+            Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
+            globalState.getState().logStatement(String.format("\\c %s;", entryDatabaseName));
+            try (Statement s = con.createStatement()) {
+                s.execute("SET lc_messages TO 'C'");
+            } catch (SQLException ignored) {
+                // Some installations/users might not be allowed to change lc_messages.
+            }
+
+            String dropCommand = "DROP DATABASE";
+            boolean forceDrop = Randomly.getBoolean();
+            if (forceDrop) {
+                dropCommand += " FORCE";
+            }
+            dropCommand += " IF EXISTS " + databaseName;
+
+            globalState.getState().logStatement(dropCommand + ";");
+            try (Statement s = con.createStatement()) {
+                s.execute(dropCommand);
+            } catch (SQLException e) {
+                // If force fails, fall back to regular drop
+                if (forceDrop) {
+                    String fallbackDrop = "DROP DATABASE IF EXISTS " + databaseName;
+                    globalState.getState().logStatement(fallbackDrop + ";");
+                    try (Statement s = con.createStatement()) {
+                        s.execute(fallbackDrop);
+                    }
+                } else {
+                    throw e;
+                }
+            }
+
+            // Create database section
+            createDatabaseCommand = getCreateDatabaseCommand(globalState);
+            globalState.getState().logStatement(createDatabaseCommand + ";");
+            try (Statement s = con.createStatement()) {
+                s.execute(createDatabaseCommand);
+            }
+            con.close();
+
+            URI testUri = new URI(uri.getScheme(), null, host, port, "/" + databaseName, uri.getQuery(),
+                    uri.getFragment());
+            testURL = testUri.toString();
+            globalState.getState().logStatement(String.format("\\c %s;", databaseName));
+
+            con = DriverManager.getConnection("jdbc:" + testURL, username, password);
+            try (Statement s = con.createStatement()) {
+                s.execute("SET lc_messages TO 'C'");
+            } catch (SQLException ignored) {
+                // Some installations/users might not be allowed to change lc_messages.
+            }
+            // Session determinism settings (best-effort; keep existing lc_messages logic).
+            try (Statement s = con.createStatement()) {
+                s.execute("SET TimeZone='UTC'");
+                s.execute("SET DateStyle='ISO, YMD'");
+                s.execute("SET IntervalStyle='postgres'");
+            } catch (SQLException ignored) {
+                // Some installations/users might not be allowed to change these settings.
+            }
+            return new SQLConnection(con);
         } catch (URISyntaxException e) {
             throw new AssertionError(e);
         }
-        Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
-        globalState.getState().logStatement(String.format("\\c %s;", entryDatabaseName));
-        try (Statement s = con.createStatement()) {
-            s.execute("SET lc_messages TO 'C'");
-        } catch (SQLException ignored) {
-            // Some installations/users might not be allowed to change lc_messages.
-        }
-
-        String dropCommand = "DROP DATABASE";
-        boolean forceDrop = Randomly.getBoolean();
-        if (forceDrop) {
-            dropCommand += " FORCE";
-        }
-        dropCommand += " IF EXISTS " + databaseName;
-
-        globalState.getState().logStatement(dropCommand + ";");
-        try (Statement s = con.createStatement()) {
-            s.execute(dropCommand);
-        } catch (SQLException e) {
-            // If force fails, fall back to regular drop
-            if (forceDrop) {
-                String fallbackDrop = "DROP DATABASE IF EXISTS " + databaseName;
-                globalState.getState().logStatement(fallbackDrop + ";");
-                try (Statement s = con.createStatement()) {
-                    s.execute(fallbackDrop);
-                }
-            } else {
-                throw e;
-            }
-        }
-
-        // Create database section
-        createDatabaseCommand = getCreateDatabaseCommand(globalState);
-        globalState.getState().logStatement(createDatabaseCommand + ";");
-        try (Statement s = con.createStatement()) {
-            s.execute(createDatabaseCommand);
-        }
-        con.close();
-        // Use lastIndexOf to find the database name at the end of URL, not in the scheme
-        int databaseIndex = entryURL.lastIndexOf(entryDatabaseName);
-        String preDatabaseName = entryURL.substring(0, databaseIndex);
-        String postDatabaseName = entryURL.substring(databaseIndex + entryDatabaseName.length());
-        testURL = preDatabaseName + databaseName + postDatabaseName;
-        globalState.getState().logStatement(String.format("\\c %s;", databaseName));
-
-        con = DriverManager.getConnection("jdbc:" + testURL, username, password);
-        try (Statement s = con.createStatement()) {
-            s.execute("SET lc_messages TO 'C'");
-        } catch (SQLException ignored) {
-            // Some installations/users might not be allowed to change lc_messages.
-        }
-        // Session determinism settings (best-effort; keep existing lc_messages logic).
-        try (Statement s = con.createStatement()) {
-            s.execute("SET TimeZone='UTC'");
-            s.execute("SET DateStyle='ISO, YMD'");
-            s.execute("SET IntervalStyle='postgres'");
-        } catch (SQLException ignored) {
-            // Some installations/users might not be allowed to change these settings.
-        }
-        return new SQLConnection(con);
     }
 
     protected void readFunctions(PostgresGlobalState globalState) throws SQLException {
@@ -407,15 +368,19 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
     }
 
     private static void createEnumTypes(PostgresGlobalState globalState) throws Exception {
-        enumTypeNames.clear();
-        enumTypeLabels.clear();
+        synchronized (ENUM_TYPES_LOCK) {
+            enumTypeNames.clear();
+            enumTypeLabels.clear();
+        }
 
         int count = Randomly.fromOptions(1, 2);
         for (int i = 0; i < count; i++) {
             String typeName = "e" + i;
             List<String> labels = Arrays.asList("a", "b", "c", "d");
-            enumTypeNames.add(typeName);
-            enumTypeLabels.put(typeName, labels);
+            synchronized (ENUM_TYPES_LOCK) {
+                enumTypeNames.add(typeName);
+                enumTypeLabels.put(typeName, labels);
+            }
 
             StringBuilder sb = new StringBuilder();
             sb.append("CREATE TYPE ");
@@ -435,26 +400,45 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
     }
 
     public static List<String> getEnumTypeNames() {
-        return enumTypeNames;
+        synchronized (ENUM_TYPES_LOCK) {
+            return new ArrayList<>(enumTypeNames);
+        }
     }
 
     public static String getRandomEnumTypeName() {
-        if (enumTypeNames.isEmpty()) {
-            // Defensive fallback; should not happen when enableEnum=true and createEnumTypes ran.
-            return "text";
+        synchronized (ENUM_TYPES_LOCK) {
+            if (enumTypeNames.isEmpty()) {
+                // Defensive fallback; should not happen after createEnumTypes ran.
+                return "text";
+            }
+            return Randomly.fromList(enumTypeNames);
         }
-        return Randomly.fromList(enumTypeNames);
     }
 
     public static String getRandomEnumLabel(String type, Randomly r) {
         if (type == null) {
             return r.getString();
         }
-        List<String> labels = enumTypeLabels.get(type);
-        if (labels == null || labels.isEmpty()) {
-            return r.getString();
+        synchronized (ENUM_TYPES_LOCK) {
+            List<String> labels = enumTypeLabels.get(type);
+            if (labels == null || labels.isEmpty()) {
+                return r.getString();
+            }
+            return Randomly.fromList(labels);
         }
-        return Randomly.fromList(labels);
+    }
+
+    public static int getEnumLabelIndex(String type, String label) {
+        if (type == null || label == null) {
+            return -1;
+        }
+        synchronized (ENUM_TYPES_LOCK) {
+            List<String> labels = enumTypeLabels.get(type);
+            if (labels == null) {
+                return -1;
+            }
+            return labels.indexOf(label);
+        }
     }
 
     protected void createTables(PostgresGlobalState globalState, int numTables) throws Exception {
@@ -462,7 +446,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             try {
                 String tableName = DBMSCommon.createTableName(globalState.getSchema().getDatabaseTables().size());
                 SQLQueryAdapter createTable = PostgresTableGenerator.generate(tableName, globalState.getSchema(),
-                        generateOnlyKnown, globalState);
+                        globalState);
                 globalState.executeStatement(createTable);
             } catch (IgnoreMeException e) {
 
@@ -483,30 +467,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
     }
 
     private String getCreateDatabaseCommand(PostgresGlobalState state) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("CREATE DATABASE " + databaseName + " ");
-        if (((PostgresOptions) state.getDbmsSpecificOptions()).testCollations) {
-            if (Randomly.getBoolean()) {
-                if (Randomly.getBoolean()) {
-                    sb.append("WITH ENCODING '");
-                    sb.append(Randomly.fromOptions("utf8"));
-                    sb.append("' ");
-                }
-                if (Randomly.getBoolean() && !state.getCollates().isEmpty()) {
-                    sb.append(String.format(" LOCALE = '%s' ", Randomly.fromList(state.getCollates())));
-                } else {
-                    for (String lc : Arrays.asList("LC_COLLATE", "LC_CTYPE")) {
-                        if (!state.getCollates().isEmpty() && Randomly.getBoolean()) {
-                            sb.append(String.format(" %s = '%s'", lc, Randomly.fromList(state.getCollates())));
-                        }
-                    }
-                }
-                sb.append(" TEMPLATE template0");
-            }
-        } else {
-            sb.append("WITH ENCODING 'UTF8' TEMPLATE template0");
-        }
-        return sb.toString();
+        return "CREATE DATABASE " + databaseName;
     }
 
     @Override

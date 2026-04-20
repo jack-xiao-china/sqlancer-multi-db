@@ -15,6 +15,7 @@ import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresSelect;
+import sqlancer.postgres.ast.PostgresSelect.LockingClauseContext;
 import sqlancer.postgres.ast.PostgresText;
 import sqlancer.postgres.ast.PostgresUnionSelect;
 import sqlancer.postgres.ast.PostgresWithSelect;
@@ -82,7 +83,11 @@ public final class PostgresEETQueryGenerator {
     }
 
     public static PostgresSelect buildBaseSelect(PostgresExpressionGenerator gen) {
-        PostgresSelect select = gen.generateSelect();
+        return buildBaseSelect(gen, LockingClauseContext.DIRECT_SELECT);
+    }
+
+    private static PostgresSelect buildBaseSelect(PostgresExpressionGenerator gen, LockingClauseContext lockingContext) {
+        PostgresSelect select = gen.generateSelect(lockingContext);
         List<PostgresExpression> fetch = gen.generateFetchColumns(true);
         // alias fetch columns as ref0..refN for outer query references
         List<PostgresExpression> aliased = new ArrayList<>();
@@ -99,9 +104,9 @@ public final class PostgresEETQueryGenerator {
     }
 
     private static PostgresUnionSelect buildUnionSelect(PostgresExpressionGenerator gen) {
-        PostgresSelect left = buildBaseSelect(gen);
+        PostgresSelect left = buildBaseSelect(gen, LockingClauseContext.STRUCTURAL);
         List<PostgresExpression> sharedCols = new ArrayList<>(left.getFetchColumns());
-        PostgresSelect right = gen.generateSelect();
+        PostgresSelect right = gen.generateSelect(LockingClauseContext.STRUCTURAL);
         right.setFetchColumns(new ArrayList<>(sharedCols));
         right.setJoinClauses(gen.getRandomJoinClauses());
         right.setFromList(gen.getTableRefs());
@@ -115,7 +120,7 @@ public final class PostgresEETQueryGenerator {
         PostgresSelect cteBody = buildBaseSelect(gen);
         PostgresCteDefinition cte = new PostgresCteDefinition(CTE_NAME, cteBody);
 
-        PostgresSelect main = gen.generateSelect();
+        PostgresSelect main = gen.generateSelect(LockingClauseContext.STRUCTURAL);
         List<PostgresExpression> outerFetch = new ArrayList<>();
         for (int i = 0; i < cteBody.getFetchColumns().size(); i++) {
             outerFetch.add(new PostgresText(CTE_NAME + ".ref" + i));
@@ -139,7 +144,7 @@ public final class PostgresEETQueryGenerator {
             outerFetch.add(new PostgresText(DERIVED_ALIAS + ".ref" + i));
         }
 
-        PostgresSelect outer = gen.generateSelect();
+        PostgresSelect outer = gen.generateSelect(LockingClauseContext.STRUCTURAL);
         outer.setFetchColumns(outerFetch);
         outer.setFromList(List.of(derived));
         outer.setJoinClauses(List.of());
@@ -149,4 +154,3 @@ public final class PostgresEETQueryGenerator {
         return outer;
     }
 }
-

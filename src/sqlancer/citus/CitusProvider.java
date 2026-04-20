@@ -65,8 +65,7 @@ public class CitusProvider extends PostgresProvider {
 
     public enum Action implements AbstractAction<PostgresGlobalState> {
         ANALYZE(PostgresAnalyzeGenerator::create), //
-        ALTER_TABLE(g -> CitusAlterTableGenerator.create(g.getSchema().getRandomTable(t -> !t.isView()), g,
-                generateOnlyKnown)), //
+        ALTER_TABLE(g -> CitusAlterTableGenerator.create(g.getSchema().getRandomTable(t -> !t.isView()), g)), //
         CLUSTER(PostgresClusterGenerator::create), //
         COMMIT(g -> {
             SQLQueryAdapter query;
@@ -283,7 +282,7 @@ public class CitusProvider extends PostgresProvider {
             try {
                 String tableName = DBMSCommon.createTableName(globalState.getSchema().getDatabaseTables().size());
                 SQLQueryAdapter createTable = CitusTableGenerator.generate(tableName, globalState.getSchema(),
-                        generateOnlyKnown, globalState);
+                        globalState);
                 globalState.executeStatement(createTable);
             } catch (IgnoreMeException e) {
 
