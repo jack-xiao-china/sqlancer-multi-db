@@ -2,7 +2,7 @@
 
 **文档版本**: 2026-04-15  
 **参考源码**: [SQLancer GitHub](https://github.com/sqlancer/sqlancer)  
-**近期更新（2026-04）**：已对齐 `--help` 输出（见 `sqlancer_help_0413.md`），补充 `--log-dir`/`--validate-result-size-only` 等全局选项说明与日志目录结构；PostgreSQL 新增/补齐 Oracle（`DQP/DQE/EET/CODDTEST/DISTINCT/GROUP_BY/TLP_WHERE` 等）并补充 Postgres 新类型开关（`--enable-time-types/--enable-json/...`）与 `--coverage-policy`；修正快速参考表中 MySQL/PostgreSQL Oracle 列表漏项（如 `EET/CODDTEST`）。
+**近期更新（2026-04）**：已对齐 `--help` 输出（见 `sqlancer_help_0413.md`），补充 `--log-dir`/`--validate-result-size-only` 等全局选项说明与日志目录结构；PostgreSQL 新增/补齐 Oracle（`DQP/DQE/EET/CODDTEST/DISTINCT/GROUP_BY/TLP_WHERE` 等），并将 PostgreSQL usage 更新为当前真实参数集：保留 `--coverage-policy`、新增 `--pg-table-columns`/`--pg-generate-sql-num`/`--pg-index-model`，移除旧的按类型开关说明。
 
 本版本扩展了sqlancer对MySQL、Postgresql、GaussDB-M兼容模式的支持，包括但不限于扩展了多个test Oracle，以及默认支持的数据类型，具体用法和支持范围可参考用户指导docs/USER_GUIDE.md
 
@@ -90,15 +90,15 @@ java -jar sqlancer-*.jar mysql --oracle DQP --oracle DQE
 | `CODDTEST` | 常量驱动等价变换检测 |
 | `FUZZER` | 随机 Fuzzer |
 
-**Postgres 新类型开关（2026-04 起）**：用于控制生成器引入更多数据类型（默认关闭，便于灰度降噪）。
-- `--enable-time-types=true`：时间类型组（TIME/DATE/TIMESTAMP/INTERVAL）
-- `--enable-json=true`：JSON/JSONB
-- `--enable-uuid=true`：UUID
-- `--enable-bytea=true`：BYTEA
-- `--enable-arrays=true`：数组（受限子集）
-- `--enable-enum=true`：Enum（会在建表前预创建 enum 对象）
-- `--coverage-policy=BALANCED|CONSERVATIVE|AGGRESSIVE`：覆盖策略（默认 BALANCED）
-- `--enable-newtypes-in-dqe-dqp-eet=true`：允许新类型进入 DQE/DQP/EET 相关路径（best-effort；PQS strict 路径仍会忽略）
+**Postgres 当前可用参数（2026-04）**：
+- PostgreSQL 生成器默认已覆盖 temporal、JSON/JSONB、UUID、BYTEA、ARRAY、ENUM 等类型能力，不再通过 `--enable-time-types` / `--enable-json` / `--enable-arrays` 等旧开关控制
+- `--coverage-policy=BALANCED|CONSERVATIVE|AGGRESSIVE`：覆盖策略（默认 `BALANCED`）
+- `--pg-table-columns=N`：控制 PostgreSQL `CREATE TABLE` 生成列数（默认 `10`）
+- `--pg-generate-sql-num=N`：控制 PostgreSQL `INSERT ... VALUES` 单次生成行数（默认 `3`）
+- `--pg-index-model=0..6`：控制 PostgreSQL 索引生成模式（`0` 自动，`1` 唯一索引，`2` 主键，`3` 组合索引，`4` 前缀表达式，`5` 后缀表达式，`6` 纯表达式索引）
+- `--connection-url=postgresql://host:port/db`：指定 PostgreSQL 连接 URL；建库入口会统一回落到 `postgres` 库
+- `--extensions=a,b,...`：在每个测试库中创建扩展
+- `--test-tablespaces=true` / `--tablespace-path=...`：显式开启 tablespace 测试并指定目录；当前 Linux/macOS/Windows 默认均关闭
 
 ### 2.3 GaussDB-M（M-Compatibility）
 

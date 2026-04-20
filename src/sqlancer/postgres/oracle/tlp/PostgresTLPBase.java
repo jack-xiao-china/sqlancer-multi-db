@@ -22,7 +22,6 @@ import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresJoin;
 import sqlancer.postgres.ast.PostgresJoin.PostgresJoinType;
 import sqlancer.postgres.ast.PostgresSelect;
-import sqlancer.postgres.ast.PostgresSelect.ForClause;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.gen.PostgresCommon;
@@ -86,9 +85,7 @@ public class PostgresTLPBase extends TernaryLogicPartitioningOracleBase<Postgres
         select.setFromList(tableList);
         select.setWhereClause(null);
         select.setJoinClauses(joins);
-        if (Randomly.getBoolean()) {
-            select.setForClause(ForClause.getRandom());
-        }
+        select.maybeSetRandomForClause(true, PostgresExpressionGenerator.getLockableTableRefs(select));
     }
 
     List<PostgresExpression> generateFetchColumns() {
@@ -131,9 +128,7 @@ public class PostgresTLPBase extends TernaryLogicPartitioningOracleBase<Postgres
                         PostgresConstant.createIntConstant(Randomly.getPositiveOrZeroNonCachedInteger()));
             }
         }
-        if (Randomly.getBooleanWithRatherLowProbability()) {
-            select.setForClause(ForClause.getRandom());
-        }
+        select.maybeSetRandomForClause(true);
         return new PostgresSubquery(select, name);
     }
 

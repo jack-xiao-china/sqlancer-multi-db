@@ -57,6 +57,9 @@ public class PostgresBinaryComparisonOperation
             @Override
             public PostgresConstant getExpectedValue(PostgresConstant leftVal, PostgresConstant rightVal) {
                 PostgresConstant lessThan = leftVal.isLessThan(rightVal);
+                if (lessThan == null) {
+                    return null;
+                }
                 if (lessThan.isBoolean() && !lessThan.asBoolean()) {
                     return leftVal.isEquals(rightVal);
                 } else {
@@ -72,6 +75,9 @@ public class PostgresBinaryComparisonOperation
                     return PostgresConstant.createFalse();
                 } else {
                     PostgresConstant applyLess = leftVal.isLessThan(rightVal);
+                    if (applyLess == null) {
+                        return null;
+                    }
                     if (applyLess.isNull()) {
                         return PostgresConstant.createNullConstant();
                     }
@@ -88,6 +94,9 @@ public class PostgresBinaryComparisonOperation
                     return PostgresConstant.createTrue();
                 } else {
                     PostgresConstant applyLess = leftVal.isLessThan(rightVal);
+                    if (applyLess == null) {
+                        return null;
+                    }
                     if (applyLess.isNull()) {
                         return PostgresConstant.createNullConstant();
                     }

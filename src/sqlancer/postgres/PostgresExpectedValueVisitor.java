@@ -33,6 +33,8 @@ import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 
 public final class PostgresExpectedValueVisitor implements PostgresVisitor {
@@ -159,6 +161,21 @@ public final class PostgresExpectedValueVisitor implements PostgresVisitor {
         for (int i = 0; i < f.getArguments().length; i++) {
             visit(f.getArguments()[i]);
         }
+    }
+
+    @Override
+    public void visit(PostgresTemporalFunction function) {
+        print(function);
+        for (PostgresExpression arg : function.getArguments()) {
+            visit(arg);
+        }
+    }
+
+    @Override
+    public void visit(PostgresTemporalBinaryArithmeticOperation op) {
+        print(op);
+        visit(op.getLeft());
+        visit(op.getRight());
     }
 
     @Override

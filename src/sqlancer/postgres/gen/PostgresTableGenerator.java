@@ -9,6 +9,7 @@ import sqlancer.common.DBMSCommon;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.postgres.PostgresGlobalState;
+import sqlancer.postgres.PostgresCompoundDataType;
 import sqlancer.postgres.PostgresSchema;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
 import sqlancer.postgres.PostgresSchema.PostgresDataType;
@@ -29,14 +30,11 @@ public class PostgresTableGenerator {
     private final List<PostgresColumn> columnsToBeAdded = new ArrayList<>();
     protected final ExpectedErrors errors = new ExpectedErrors();
     private final PostgresTable table;
-    private final boolean generateOnlyKnown;
     private final PostgresGlobalState globalState;
 
-    public PostgresTableGenerator(String tableName, PostgresSchema newSchema, boolean generateOnlyKnown,
-            PostgresGlobalState globalState) {
+    public PostgresTableGenerator(String tableName, PostgresSchema newSchema, PostgresGlobalState globalState) {
         this.tableName = tableName;
         this.newSchema = newSchema;
-        this.generateOnlyKnown = generateOnlyKnown;
         this.globalState = globalState;
         table = new PostgresTable(tableName, columnsToBeAdded, null, null, null, false, false);
         errors.add("invalid input syntax for");
@@ -63,9 +61,8 @@ public class PostgresTableGenerator {
         PostgresCommon.addCommonTableErrors(errors);
     }
 
-    public static SQLQueryAdapter generate(String tableName, PostgresSchema newSchema, boolean generateOnlyKnown,
-            PostgresGlobalState globalState) {
-        return new PostgresTableGenerator(tableName, newSchema, generateOnlyKnown, globalState).generate();
+    public static SQLQueryAdapter generate(String tableName, PostgresSchema newSchema, PostgresGlobalState globalState) {
+        return new PostgresTableGenerator(tableName, newSchema, globalState).generate();
     }
 
     protected SQLQueryAdapter generate() {
@@ -95,7 +92,8 @@ public class PostgresTableGenerator {
 
     private void createStandard() throws AssertionError {
         sb.append("(");
-        for (int i = 0; i < Randomly.smallNumber() + 1; i++) {
+        int columnCount = Math.max(1, globalState.getDbmsSpecificOptions().getPgTableColumns());
+        for (int i = 0; i < columnCount; i++) {
             if (i != 0) {
                 sb.append(", ");
             }
@@ -148,15 +146,22 @@ public class PostgresTableGenerator {
     private void createColumn(String name) throws AssertionError {
         sb.append(name);
         sb.append(" ");
-        PostgresDataType type = PostgresDataType.getRandomType();
-        boolean serial = PostgresCommon.appendDataType(type, sb, true, generateOnlyKnown, globalState.getCollates());
+        PostgresCompoundDataType type = getRandomColumnType();
+        boolean serial = PostgresCommon.appendDataType(type, sb, true, globalState.getCollates());
         PostgresColumn c = new PostgresColumn(name, type);
         c.setTable(table);
         columnsToBeAdded.add(c);
         sb.append(" ");
-        if (Randomly.getBoolean()) {
-            createColumnConstraint(type, serial);
+        if (Randomly.getBoolean() && !type.isArray()) {
+            createColumnConstraint(type.getDataType(), serial);
         }
+    }
+
+    private PostgresCompoundDataType getRandomColumnType() {
+        if (Randomly.getBooleanWithSmallProbability()) {
+            return PostgresExpressionGenerator.getRandomArrayType(Randomly.getBoolean() ? 1 : 2);
+        }
+        return PostgresExpressionGenerator.getCompoundDataType(PostgresDataType.getRandomType());
     }
 
     private void generatePartitionBy() {

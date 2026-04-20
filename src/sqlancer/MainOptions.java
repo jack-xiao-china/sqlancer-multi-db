@@ -200,7 +200,7 @@ public class MainOptions {
     }
 
     public boolean logExecutionTime() {
-        if (!logEachSelect) {
+        if (logExecutionTime && !logEachSelect) {
             throw new AssertionError();
         }
         return logExecutionTime;

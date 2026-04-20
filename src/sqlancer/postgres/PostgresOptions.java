@@ -33,7 +33,7 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     public boolean testCollations = true;
 
     @Parameter(names = "--test-tablespaces", description = "Specifies whether to test tablespace creation (default is OS-dependent)", arity = 1)
-    public boolean testTablespaces;
+    public boolean testTablespaces = false;
 
     @Parameter(names = "--tablespace-path", description = "Base path for tablespace directories (default is OS-dependent)", arity = 1)
     public String tablespacePath = getDefaultTablespacePath();
@@ -45,35 +45,23 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--extensions", description = "Specifies a comma-separated list of extension names to be created in each test database", arity = 1)
     public String extensions = "";
 
-    @Parameter(names = "--enable-time-types", description = "Enable time-related type group in generators (TIME/DATE/TIMESTAMP/INTERVAL)", arity = 1)
-    public boolean enableTimeTypes;
-
-    @Parameter(names = "--enable-json", description = "Enable JSON/JSONB type group in generators", arity = 1)
-    public boolean enableJSON;
-
-    @Parameter(names = "--enable-uuid", description = "Enable UUID type group in generators", arity = 1)
-    public boolean enableUUID;
-
-    @Parameter(names = "--enable-bytea", description = "Enable BYTEA type group in generators", arity = 1)
-    public boolean enableBYTEA;
-
-    @Parameter(names = "--enable-arrays", description = "Enable ARRAY type group in generators", arity = 1)
-    public boolean enableArrays;
-
-    @Parameter(names = "--enable-enum", description = "Enable ENUM type group in generators", arity = 1)
-    public boolean enableEnum;
-
     @Parameter(names = "--coverage-policy", description = "Coverage policy: BALANCED/CONSERVATIVE/AGGRESSIVE", arity = 1)
     public CoveragePolicy coveragePolicy = CoveragePolicy.BALANCED;
 
-    @Parameter(names = "--enable-newtypes-in-dqe-dqp-eet", description = "When enabled, allow new type groups to be used in DQE/DQP/EET-related generation paths (best-effort; ignored for PQS strict generateOnlyKnown)", arity = 1)
-    public boolean enableNewtypesInDQEDQPEET;
+    @Parameter(names = "--pg-table-columns", description = "Specifies the number of columns generated in PostgreSQL CREATE TABLE statements")
+    public int pgTableColumns = 10;
+
+    @Parameter(names = "--pg-generate-sql-num", description = "Specifies the number of rows generated in PostgreSQL INSERT ... VALUES statements")
+    public int pgGenerateSqlNum = 3;
+
+    @Parameter(names = "--pg-index-model", description = "PostgreSQL index generation model: 0=DEFAULT(auto), 1=UNIQUE, 2=PRIMARY_KEY, 3=COMPOSITE, 4=PREFIX_EXPR, 5=SUFFIX_EXPR, 6=EXPRESSION")
+    public int pgIndexModel;
 
     private static boolean determineDefaultTablespaceSupport() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("linux")) {
-            System.out.println("[INFO] Linux detected: Enabling tablespace testing by default");
-            return true;
+            System.out.println("[INFO] Linux detected: Disabling tablespace testing by default");
+            return false;
         } else if (osName.contains("mac") || osName.contains("darwin")) {
             System.out.println(
                     "[INFO] macOS detected: Disabling tablespace testing by default due to different /tmp handling. Override with --test-tablespaces=true and ensure proper directory permissions.");
@@ -144,5 +132,24 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
             defaultTestTablespaces = determineDefaultTablespaceSupport();
         }
         return defaultTestTablespaces;
+    }
+
+    public int getPgTableColumns() {
+        return pgTableColumns;
+    }
+
+    public int getPgGenerateSqlNum() {
+        return pgGenerateSqlNum;
+    }
+
+    public int getPgIndexModel() {
+        return pgIndexModel;
+    }
+
+    public void validate() {
+        if (pgIndexModel < 0 || pgIndexModel > 6) {
+            throw new AssertionError(String.format(
+                    "Invalid --pg-index-model value %d. Expected one of: 0, 1, 2, 3, 4, 5, 6.", pgIndexModel));
+        }
     }
 }

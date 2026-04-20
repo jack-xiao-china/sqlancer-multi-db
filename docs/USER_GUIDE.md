@@ -77,35 +77,27 @@ The `--oracle` parameter selects test oracles. Multiple oracles can be combined 
 | **EET** | Expression transformation (NEW) | Complex expression trees |
 | **CODDTEST** | Expression folding (NEW) | Predicate evaluation |
 
-### Data Type Options
+### Generation and Coverage Options
 
-Enable additional PostgreSQL data types:
-
-```bash
---enable-time-types true \
---enable-json true \
---enable-uuid true \
---enable-bytea true \
---enable-arrays true \
---enable-enum true
-```
-
-| Option | Types Added | Use Case |
-|--------|-------------|----------|
-| `--enable-time-types` | TIME, DATE, TIMESTAMP, INTERVAL | Temporal data testing |
-| `--enable-json` | JSON, JSONB | JSON operator/function bugs |
-| `--enable-uuid` | UUID | UUID handling correctness |
-| `--enable-bytea` | BYTEA | Binary data operations |
-| `--enable-arrays` | INT[], TEXT[], etc. | Array operator bugs |
-| `--enable-enum` | Custom ENUM types | Enum value handling |
-
-### Coverage Policy
+PostgreSQL generators now include temporal, JSON/JSONB, UUID, BYTEA, ARRAY, and ENUM support by default. The current tuning knobs are:
 
 ```bash
 --coverage-policy CONSERVATIVE   # Stable types only (reproduction)
 --coverage-policy BALANCED       # Default (moderate coverage)
 --coverage-policy AGGRESSIVE     # Maximum coverage (edge cases)
+--pg-table-columns 12            # Number of columns in CREATE TABLE
+--pg-generate-sql-num 5          # Number of rows in INSERT ... VALUES
+--pg-index-model 6               # Expression index mode
 ```
+
+| Option | Default | Use Case |
+|--------|---------|----------|
+| `--coverage-policy` | BALANCED | Balance stability vs. type/expression coverage |
+| `--pg-table-columns` | 10 | Increase schema width to stress predicates and joins |
+| `--pg-generate-sql-num` | 3 | Increase rows inserted per statement |
+| `--pg-index-model` | 0 | Force a specific index generation pattern |
+| `--extensions` | empty | Pre-create PostgreSQL extensions in each test database |
+| `--connection-url` | `postgresql://localhost:5432/test` | Override host/port/db entry URL in one option |
 
 ### Tablespace Testing
 
@@ -115,7 +107,7 @@ Enable additional PostgreSQL data types:
 ```
 
 OS-dependent defaults:
-- Linux: `/tmp/postgresql/tablespace` (enabled by default)
+- Linux: Disabled by default
 - macOS: Disabled (different /tmp handling)
 - Windows: Disabled (use custom path)
 
@@ -291,10 +283,10 @@ java -jar sqlancer.jar postgres \
 ```bash
 java -jar sqlancer.jar postgres \
     --oracle QUERY_PARTITIONING,DQE,DQP,EET \
-    --enable-time-types true \
-    --enable-json true \
-    --enable-arrays true \
     --coverage-policy AGGRESSIVE \
+    --pg-table-columns 12 \
+    --pg-generate-sql-num 5 \
+    --pg-index-model 6 \
     --num-tries 100
 ```
 
@@ -303,6 +295,7 @@ java -jar sqlancer.jar postgres \
 java -jar sqlancer.jar postgres \
     --seed 1776222510722 \
     --oracle EET \
+    --coverage-policy CONSERVATIVE \
     --num-tries 1
 ```
 
@@ -540,10 +533,10 @@ java -jar target/sqlancer-2.0.0.jar \
     --timeout-seconds 120 \
     postgres \
     --oracle QUERY_PARTITIONING,DQE,DQP,EET \
-    --enable-time-types true \
-    --enable-json true \
-    --enable-uuid true \
-    --coverage-policy BALANCED
+    --coverage-policy BALANCED \
+    --pg-table-columns 12 \
+    --pg-generate-sql-num 5 \
+    --pg-index-model 6
 ```
 
 ## MySQL Full Example

@@ -1,5 +1,12 @@
 # Release Notes
 
+## v0.1.66 | 2026-04-18
+- 新增 SQLancer PostgreSQL 代码线收敛：将 `sqlancer-pg` 自 `e0d924b6...` 之后的 PostgreSQL 增强按 `sqlancer-multi-db` 架构手工回合，保留本仓库既有 oracle 体系（含 `DISTINCT/GROUP_BY/DQP/DQE/EET/CODDTEST`）不回退，并逐步替代独立的 `sqlancer-pg` 项目作为唯一 PostgreSQL 主线
+- 优化 PostgreSQL 参数归属：将 pg 专属配置从全局层收口到 `PostgresOptions`，新增 `--pg-table-columns`、`--pg-generate-sql-num`、`--pg-index-model`（整型模式值）并接通 `PostgresTableGenerator` / `PostgresInsertGenerator` / `PostgresIndexGenerator`；移除旧的按类型开关式参数（如 `--enable-time-types`、`--enable-json`、`--enable-newtypes-in-dqe-dqp-eet`），改为由当前 PostgreSQL 生成器默认覆盖
+- 新增 PostgreSQL 查询与类型能力：补齐 `FOR UPDATE/NO KEY UPDATE/SHARE/KEY SHARE` 与 `NOWAIT/SKIP LOCKED` 锁子句生成与序列化；引入 temporal AST（`PostgresTemporalFunction`、`PostgresTemporalBinaryArithmeticOperation`、`PostgresTemporalUtil`）并打通 `TIMETZ`、`DATE_TRUNC/DATE_PART/EXTRACT/MAKE_INTERVAL/TIMEZONE` 等时间类型链路；增强 schema 元数据（constraint/index/statistics/compound type）与索引模型生成能力
+- 修复 PostgreSQL 长跑稳定性：修复 `MainOptions.logExecutionTime()` 与 `--log-each-select` 的断言冲突；修复 `PostgresCODDTestOracle` 的空 `ExpectedErrors`、错误 folding 语义与布尔常量上下文不一致问题；修复 `PostgresInOperation` 在 expected-value 比较中的 NPE；调整 PostgreSQL 建库入口统一连接 `postgres` 数据库、简化 `CREATE DATABASE` 语句并将 tablespace 测试默认值收敛为各 OS 默认关闭；补充 `.settings/org.eclipse.jdt.core.prefs` 以恢复标准 `mvn -DskipTests compile/package`
+- 验证 PostgreSQL 真实连库运行：使用 `java -jar target/sqlancer-2.0.0.jar` 直连本地 PostgreSQL 16.4 验证，常规 smoke 下 pg oracle 全量可运行；并完成高并发长跑验证，其中 `QUERY_PARTITIONING`、`DQE`、`CODDTEST` 已在 `--num-threads 10 --num-tries 10 --num-queries 10000` 下通过
+
 ## v0.1.65 | 2026-04-14
 - 修复 SQLancer PostgreSQL：`PostgresExpressionGenerator` 在通用表达式分支对 ENUM/数组类型生成 `CAST(... AS …)` 时调用 `getCompoundDataType` 未覆盖这些类型导致 `AssertionError`（AGGREGATE 等 oracle 可复现）；对上述类型在该分支改为常量生成，与首阶段保守策略一致
 

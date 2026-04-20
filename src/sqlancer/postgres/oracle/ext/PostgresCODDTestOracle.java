@@ -2,17 +2,27 @@ package sqlancer.postgres.oracle.ext;
 
 import java.sql.SQLException;
 import sqlancer.IgnoreMeException;
+import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.oracle.TestOracleUtils;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
+import sqlancer.postgres.PostgresSchema.PostgresDataType;
 import sqlancer.postgres.PostgresSchema.PostgresTable;
 import sqlancer.postgres.PostgresVisitor;
+import sqlancer.postgres.ast.PostgresBinaryComparisonOperation;
+import sqlancer.postgres.ast.PostgresBinaryComparisonOperation.PostgresBinaryComparisonOperator;
+import sqlancer.postgres.ast.PostgresBinaryLogicalOperation;
+import sqlancer.postgres.ast.PostgresBinaryLogicalOperation.BinaryLogicalOperator;
 import sqlancer.postgres.ast.PostgresConstant;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
+import sqlancer.postgres.ast.PostgresPostfixOperation;
+import sqlancer.postgres.ast.PostgresPostfixOperation.PostfixOperator;
+import sqlancer.postgres.ast.PostgresPrefixOperation;
+import sqlancer.postgres.ast.PostgresPrefixOperation.PrefixOperator;
 import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
@@ -36,9 +46,7 @@ public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalSta
     public void check() throws SQLException {
         sqlancer.common.schema.AbstractTables<PostgresTable, PostgresColumn> tables = TestOracleUtils
                 .getRandomTableNonEmptyTables(state.getSchema());
-        PostgresExpressionGenerator gen = new PostgresExpressionGenerator(state).setTablesAndColumns(tables);
-
-        PostgresExpression foldedExpr = gen.generateBooleanExpression();
+        PostgresExpression foldedExpr = generateRowInvariantBooleanExpression(0);
         PostgresOracleExpressionBag bag = new PostgresOracleExpressionBag(foldedExpr);
 
         // Auxiliary query: evaluate the predicate once to get a constant boolean (or NULL).
@@ -81,7 +89,11 @@ public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalSta
     }
 
     private String getSingleString(String sql) throws SQLException {
-        sqlancer.common.query.SQLQueryAdapter q = new sqlancer.common.query.SQLQueryAdapter(sql, (ExpectedErrors) null);
+        ExpectedErrors expectedErrors = new ExpectedErrors();
+        PostgresCommon.addCommonExpressionErrors(expectedErrors);
+        PostgresCommon.addCommonFetchErrors(expectedErrors);
+        expectedErrors.addAll(PostgresCommon.getCommonInsertUpdateErrors());
+        sqlancer.common.query.SQLQueryAdapter q = new sqlancer.common.query.SQLQueryAdapter(sql, expectedErrors);
         try (sqlancer.common.query.SQLancerResultSet rs = q.executeAndGet(state)) {
             if (rs == null) {
                 throw new IgnoreMeException();
@@ -96,5 +108,45 @@ public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalSta
             throw e;
         }
     }
-}
 
+    private PostgresExpression generateRowInvariantBooleanExpression(int depth) {
+        if (depth > 2 || Randomly.getBooleanWithSmallProbability()) {
+            return generateSafeBooleanConstant();
+        }
+        switch (Randomly.fromOptions(0, 1, 2, 3, 4)) {
+        case 0:
+            return new PostgresPrefixOperation(generateRowInvariantBooleanExpression(depth + 1), PrefixOperator.NOT);
+        case 1:
+            return new PostgresPostfixOperation(generateRowInvariantScalarExpression(depth + 1),
+                    Randomly.fromOptions(PostfixOperator.IS_NULL, PostfixOperator.IS_NOT_NULL));
+        case 2:
+            return new PostgresBinaryLogicalOperation(generateRowInvariantBooleanExpression(depth + 1),
+                    generateRowInvariantBooleanExpression(depth + 1), BinaryLogicalOperator.getRandom());
+        case 3:
+            PostgresDataType comparisonType = Randomly.fromOptions(PostgresDataType.INT, PostgresDataType.TEXT,
+                    PostgresDataType.BOOLEAN);
+            return new PostgresBinaryComparisonOperation(generateRowInvariantConstant(comparisonType),
+                    generateRowInvariantConstant(comparisonType), PostgresBinaryComparisonOperator.getRandom());
+        case 4:
+            return generateSafeBooleanConstant();
+        default:
+            throw new AssertionError();
+        }
+    }
+
+    private PostgresExpression generateRowInvariantScalarExpression(int depth) {
+        return generateRowInvariantConstant(Randomly.fromOptions(PostgresDataType.INT, PostgresDataType.TEXT,
+                PostgresDataType.BOOLEAN));
+    }
+
+    private PostgresExpression generateRowInvariantConstant(PostgresDataType type) {
+        return PostgresExpressionGenerator.generateConstant(state.getRandomly(), type);
+    }
+
+    private PostgresExpression generateSafeBooleanConstant() {
+        if (Randomly.getBooleanWithSmallProbability()) {
+            return PostgresConstant.createNullConstant();
+        }
+        return PostgresConstant.createBooleanConstant(Randomly.getBoolean());
+    }
+}

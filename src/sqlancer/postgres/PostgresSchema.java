@@ -1,5 +1,6 @@
 package sqlancer.postgres;
 
+import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -32,81 +33,39 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
     public enum PostgresDataType {
         INT, BOOLEAN, TEXT, DECIMAL, FLOAT, REAL, RANGE, MONEY, BIT, INET, //
-        DATE, TIME, TIMESTAMP, TIMESTAMPTZ, INTERVAL, //
+        DATE, TIME, TIMETZ, TIMESTAMP, TIMESTAMPTZ, INTERVAL, //
         JSON, JSONB, //
         UUID, BYTEA, //
-        INT_ARRAY, TEXT_ARRAY, UUID_ARRAY, TIMESTAMPTZ_ARRAY, //
+        ARRAY, //
         ENUM;
 
         public static PostgresDataType getRandomType() {
             List<PostgresDataType> dataTypes = new ArrayList<>(Arrays.asList(values()));
-            if (!PostgresProvider.enableTimeTypes) {
-                dataTypes.remove(PostgresDataType.DATE);
-                dataTypes.remove(PostgresDataType.TIME);
-                dataTypes.remove(PostgresDataType.TIMESTAMP);
-                dataTypes.remove(PostgresDataType.TIMESTAMPTZ);
-                dataTypes.remove(PostgresDataType.INTERVAL);
-            }
-            if (!PostgresProvider.enableJSON) {
-                dataTypes.remove(PostgresDataType.JSON);
-                dataTypes.remove(PostgresDataType.JSONB);
-            }
-            if (!PostgresProvider.enableUUID) {
-                dataTypes.remove(PostgresDataType.UUID);
-                dataTypes.remove(PostgresDataType.UUID_ARRAY);
-            }
-            if (!PostgresProvider.enableBYTEA) {
-                dataTypes.remove(PostgresDataType.BYTEA);
-            }
-            if (!PostgresProvider.enableArrays) {
-                dataTypes.remove(PostgresDataType.INT_ARRAY);
-                dataTypes.remove(PostgresDataType.TEXT_ARRAY);
-                dataTypes.remove(PostgresDataType.UUID_ARRAY);
-                dataTypes.remove(PostgresDataType.TIMESTAMPTZ_ARRAY);
-            }
-            if (!PostgresProvider.enableEnum) {
-                dataTypes.remove(PostgresDataType.ENUM);
-            }
-            if (PostgresProvider.generateOnlyKnown) {
-                dataTypes.remove(PostgresDataType.DECIMAL);
-                dataTypes.remove(PostgresDataType.FLOAT);
-                dataTypes.remove(PostgresDataType.REAL);
-                dataTypes.remove(PostgresDataType.INET);
-                dataTypes.remove(PostgresDataType.RANGE);
-                dataTypes.remove(PostgresDataType.MONEY);
-                dataTypes.remove(PostgresDataType.BIT);
-                /*
-                 * Balanced 默认策略会覆盖更多类型；但 PQS strict 需要仅生成 PQS “理解”的类型，
-                 * 避免 schema row-value / 期望值推导链路缺失导致的误报或大量 Ignore。
-                 */
-                dataTypes.remove(PostgresDataType.DATE);
-                dataTypes.remove(PostgresDataType.TIME);
-                dataTypes.remove(PostgresDataType.TIMESTAMP);
-                dataTypes.remove(PostgresDataType.TIMESTAMPTZ);
-                dataTypes.remove(PostgresDataType.INTERVAL);
-                dataTypes.remove(PostgresDataType.JSON);
-                dataTypes.remove(PostgresDataType.JSONB);
-                // PQS strict: keep generation within the known subset.
-                dataTypes.remove(PostgresDataType.UUID);
-                dataTypes.remove(PostgresDataType.BYTEA);
-                dataTypes.remove(PostgresDataType.INT_ARRAY);
-                dataTypes.remove(PostgresDataType.TEXT_ARRAY);
-                dataTypes.remove(PostgresDataType.UUID_ARRAY);
-                dataTypes.remove(PostgresDataType.TIMESTAMPTZ_ARRAY);
-                dataTypes.remove(PostgresDataType.ENUM);
-            }
+            dataTypes.remove(PostgresDataType.ARRAY);
             return Randomly.fromList(dataTypes);
         }
     }
 
     public static class PostgresColumn extends AbstractTableColumn<PostgresTable, PostgresDataType> {
 
+        private final PostgresCompoundDataType compoundType;
+
         public PostgresColumn(String name, PostgresDataType columnType) {
             super(name, null, columnType);
+            this.compoundType = PostgresCompoundDataType.create(columnType);
+        }
+
+        public PostgresColumn(String name, PostgresCompoundDataType compoundType) {
+            super(name, null, compoundType.getDataType());
+            this.compoundType = compoundType;
         }
 
         public static PostgresColumn createDummy(String name) {
-            return new PostgresColumn(name, PostgresDataType.INT);
+            return new PostgresColumn(name, PostgresCompoundDataType.create(PostgresDataType.INT));
+        }
+
+        public PostgresCompoundDataType getCompoundType() {
+            return compoundType;
         }
 
     }
@@ -134,23 +93,7 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
                     int columnIndex = randomRowValues.findColumn(column.getTable().getName() + column.getName());
                     assert columnIndex == i + 1;
                     PostgresConstant constant;
-                    if (randomRowValues.getString(columnIndex) == null) {
-                        constant = PostgresConstant.createNullConstant();
-                    } else {
-                        switch (column.getType()) {
-                        case INT:
-                            constant = PostgresConstant.createIntConstant(randomRowValues.getLong(columnIndex));
-                            break;
-                        case BOOLEAN:
-                            constant = PostgresConstant.createBooleanConstant(randomRowValues.getBoolean(columnIndex));
-                            break;
-                        case TEXT:
-                            constant = PostgresConstant.createTextConstant(randomRowValues.getString(columnIndex));
-                            break;
-                        default:
-                            throw new IgnoreMeException();
-                        }
-                    }
+                    constant = getColumnValue(randomRowValues, columnIndex, column.getCompoundType());
                     values.put(column, constant);
                 }
                 assert !randomRowValues.next();
@@ -164,63 +107,131 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     }
 
     public static PostgresDataType getColumnType(String typeString) {
-        switch (typeString) {
+        return getColumnCompoundType(typeString, null).getDataType();
+    }
+
+    public static PostgresCompoundDataType getColumnCompoundType(String typeString, String elementTypeString) {
+        if (typeString == null) {
+            throw new AssertionError("typeString must not be null");
+        }
+        String normalizedType = normalizeTypeName(typeString);
+        if ("array".equals(normalizedType)) {
+            if (elementTypeString == null) {
+                throw new AssertionError(typeString);
+            }
+            PostgresCompoundDataType arrayType = PostgresCompoundDataType
+                    .createArray(getColumnCompoundType(stripArrayUdtPrefix(elementTypeString), null));
+            if (!arrayType.isSupportedArrayType()) {
+                throw new IgnoreMeException();
+            }
+            return arrayType;
+        }
+        if (normalizedType.endsWith("[]")) {
+            PostgresCompoundDataType arrayType = PostgresCompoundDataType
+                    .createArray(getColumnCompoundType(normalizedType.substring(0, normalizedType.length() - 2), null));
+            if (!arrayType.isSupportedArrayType()) {
+                throw new IgnoreMeException();
+            }
+            return arrayType;
+        }
+        switch (normalizedType) {
         case "smallint":
+        case "int2":
         case "integer":
+        case "int4":
         case "bigint":
-            return PostgresDataType.INT;
+        case "int8":
+            return PostgresCompoundDataType.create(PostgresDataType.INT);
         case "boolean":
-            return PostgresDataType.BOOLEAN;
+        case "bool":
+            return PostgresCompoundDataType.create(PostgresDataType.BOOLEAN);
         case "text":
         case "character":
+        case "bpchar":
         case "character varying":
+        case "varchar":
         case "name":
         case "regclass":
-            return PostgresDataType.TEXT;
+            return PostgresCompoundDataType.create(PostgresDataType.TEXT);
         case "numeric":
-            return PostgresDataType.DECIMAL;
+            return PostgresCompoundDataType.create(PostgresDataType.DECIMAL);
         case "double precision":
-            return PostgresDataType.FLOAT;
+            return PostgresCompoundDataType.create(PostgresDataType.FLOAT);
         case "real":
-            return PostgresDataType.REAL;
+            return PostgresCompoundDataType.create(PostgresDataType.REAL);
         case "int4range":
-            return PostgresDataType.RANGE;
+            return PostgresCompoundDataType.create(PostgresDataType.RANGE);
         case "money":
-            return PostgresDataType.MONEY;
+            return PostgresCompoundDataType.create(PostgresDataType.MONEY);
         case "bit":
         case "bit varying":
-            return PostgresDataType.BIT;
+        case "varbit":
+            return PostgresCompoundDataType.create(PostgresDataType.BIT);
         case "inet":
-            return PostgresDataType.INET;
+            return PostgresCompoundDataType.create(PostgresDataType.INET);
         case "date":
-            return PostgresDataType.DATE;
+            return PostgresCompoundDataType.create(PostgresDataType.DATE);
         case "time":
         case "time without time zone":
-            return PostgresDataType.TIME;
+            return PostgresCompoundDataType.create(PostgresDataType.TIME);
+        case "time with time zone":
+        case "timetz":
+            return PostgresCompoundDataType.create(PostgresDataType.TIMETZ);
         case "timestamp":
         case "timestamp without time zone":
-            return PostgresDataType.TIMESTAMP;
+            return PostgresCompoundDataType.create(PostgresDataType.TIMESTAMP);
         case "timestamp with time zone":
-            return PostgresDataType.TIMESTAMPTZ;
+        case "timestamptz":
+            return PostgresCompoundDataType.create(PostgresDataType.TIMESTAMPTZ);
         case "interval":
-            return PostgresDataType.INTERVAL;
+            return PostgresCompoundDataType.create(PostgresDataType.INTERVAL);
         case "json":
-            return PostgresDataType.JSON;
+            return PostgresCompoundDataType.create(PostgresDataType.JSON);
         case "jsonb":
-            return PostgresDataType.JSONB;
+            return PostgresCompoundDataType.create(PostgresDataType.JSONB);
         case "uuid":
-            return PostgresDataType.UUID;
+            return PostgresCompoundDataType.create(PostgresDataType.UUID);
         case "bytea":
-            return PostgresDataType.BYTEA;
+            return PostgresCompoundDataType.create(PostgresDataType.BYTEA);
         case "USER-DEFINED":
-            // First-stage conservative schema handling: treat enums as TEXT to avoid crashes and keep the run going.
-            return PostgresDataType.TEXT;
-        case "ARRAY":
-            // Prefer resolving arrays by udt_name in getTableColumns; keep as TEXT if reached.
-            return PostgresDataType.TEXT;
+        case "user-defined":
+            return PostgresCompoundDataType.create(PostgresDataType.ENUM);
         default:
             throw new AssertionError(typeString);
         }
+    }
+
+    private static String normalizeTypeName(String typeString) {
+        String normalizedType = typeString.trim().toLowerCase();
+        int parenIndex = normalizedType.indexOf('(');
+        if (parenIndex != -1) {
+            normalizedType = normalizedType.substring(0, parenIndex).trim();
+        }
+        return normalizedType;
+    }
+
+    public static boolean isSupportedArrayElementType(PostgresDataType type) {
+        switch (type) {
+        case INT:
+        case BOOLEAN:
+        case TEXT:
+        case DATE:
+        case TIME:
+        case TIMESTAMP:
+        case TIMESTAMPTZ:
+        case INTERVAL:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    private static String stripArrayUdtPrefix(String elementTypeString) {
+        String normalizedType = elementTypeString.trim().toLowerCase();
+        while (normalizedType.startsWith("_")) {
+            normalizedType = normalizedType.substring(1);
+        }
+        return normalizedType;
     }
 
     public static class PostgresRowValue extends AbstractRowValue<PostgresTables, PostgresColumn, PostgresConstant> {
@@ -240,14 +251,30 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
         private final TableType tableType;
         private final List<PostgresStatisticsObject> statistics;
+        private final List<PostgresConstraint> constraints;
         private final boolean isInsertable;
+        private final boolean isPartitioned;
 
         public PostgresTable(String tableName, List<PostgresColumn> columns, List<PostgresIndex> indexes,
                 TableType tableType, List<PostgresStatisticsObject> statistics, boolean isView, boolean isInsertable) {
+            this(tableName, columns, indexes, tableType, statistics, List.of(), isView, isInsertable, false);
+        }
+
+        public PostgresTable(String tableName, List<PostgresColumn> columns, List<PostgresIndex> indexes,
+                TableType tableType, List<PostgresStatisticsObject> statistics, List<PostgresConstraint> constraints,
+                boolean isView, boolean isInsertable) {
+            this(tableName, columns, indexes, tableType, statistics, constraints, isView, isInsertable, false);
+        }
+
+        public PostgresTable(String tableName, List<PostgresColumn> columns, List<PostgresIndex> indexes,
+                TableType tableType, List<PostgresStatisticsObject> statistics, List<PostgresConstraint> constraints,
+                boolean isView, boolean isInsertable, boolean isPartitioned) {
             super(tableName, columns, indexes, isView);
             this.statistics = statistics;
+            this.constraints = constraints;
             this.isInsertable = isInsertable;
             this.tableType = tableType;
+            this.isPartitioned = isPartitioned;
         }
 
         public List<PostgresStatisticsObject> getStatistics() {
@@ -258,10 +285,36 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
             return tableType;
         }
 
+        public List<PostgresConstraint> getConstraints() {
+            return constraints;
+        }
+
         public boolean isInsertable() {
             return isInsertable;
         }
 
+        public boolean isPartitioned() {
+            return isPartitioned;
+        }
+
+    }
+
+    public static final class PostgresConstraint {
+        private final String name;
+        private final boolean validatable;
+
+        public PostgresConstraint(String name, boolean validatable) {
+            this.name = name;
+            this.validatable = validatable;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public boolean isValidatable() {
+            return validatable;
+        }
     }
 
     public static final class PostgresStatisticsObject {
@@ -278,12 +331,29 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
 
     public static final class PostgresIndex extends TableIndex {
 
-        private PostgresIndex(String indexName) {
+        private final boolean unique;
+        private final boolean valid;
+        private final boolean ready;
+        private final boolean partial;
+        private final boolean expression;
+
+        private PostgresIndex(String indexName, boolean unique, boolean valid, boolean ready, boolean partial,
+                boolean expression) {
             super(indexName);
+            this.unique = unique;
+            this.valid = valid;
+            this.ready = ready;
+            this.partial = partial;
+            this.expression = expression;
         }
 
         public static PostgresIndex create(String indexName) {
-            return new PostgresIndex(indexName);
+            return new PostgresIndex(indexName, false, true, true, false, false);
+        }
+
+        public static PostgresIndex create(String indexName, boolean unique, boolean valid, boolean ready,
+                boolean partial, boolean expression) {
+            return new PostgresIndex(indexName, unique, valid, ready, partial, expression);
         }
 
         @Override
@@ -295,6 +365,34 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
             }
         }
 
+        public boolean isUnique() {
+            return unique;
+        }
+
+        public boolean isValid() {
+            return valid;
+        }
+
+        public boolean isReady() {
+            return ready;
+        }
+
+        public boolean isPartial() {
+            return partial;
+        }
+
+        public boolean isExpression() {
+            return expression;
+        }
+
+        public boolean canBeUsedForAddConstraintUsingIndex() {
+            return unique && valid && ready && !partial && !expression;
+        }
+
+        public boolean canBeUsedForReplicaIdentity() {
+            return unique && valid && ready && !partial && !expression;
+        }
+
     }
 
     public static PostgresSchema fromConnection(SQLConnection con, String databaseName) throws SQLException {
@@ -302,22 +400,27 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
             List<PostgresTable> databaseTables = new ArrayList<>();
             try (Statement s = con.createStatement()) {
                 try (ResultSet rs = s.executeQuery(
-                        "SELECT table_name, table_schema, table_type, is_insertable_into FROM information_schema.tables WHERE table_schema='public' OR table_schema LIKE 'pg_temp_%' ORDER BY table_name;")) {
+                        "SELECT t.table_name, t.table_schema, t.table_type, t.is_insertable_into, c.relkind "
+                                + "FROM information_schema.tables t "
+                                + "JOIN pg_class c ON c.relname = t.table_name "
+                                + "JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = t.table_schema "
+                                + "WHERE t.table_schema='public' OR t.table_schema LIKE 'pg_temp_%' ORDER BY t.table_name;")) {
                     while (rs.next()) {
                         String tableName = rs.getString("table_name");
                         String tableTypeSchema = rs.getString("table_schema");
+                        String relationType = rs.getString("table_type");
+                        String relKind = rs.getString("relkind");
                         boolean isInsertable = rs.getBoolean("is_insertable_into");
-                        // TODO: also check insertable
-                        // TODO: insert into view?
-                        boolean isView = tableName.startsWith("v"); // tableTypeStr.contains("VIEW") ||
-                                                                    // tableTypeStr.contains("LOCAL TEMPORARY") &&
-                                                                    // !isInsertable;
+                        boolean isPartitioned = "p".equals(relKind);
+                        boolean isView = "VIEW".equalsIgnoreCase(relationType) || "v".equals(relKind)
+                                || "m".equals(relKind);
                         PostgresTable.TableType tableType = getTableType(tableTypeSchema);
                         List<PostgresColumn> databaseColumns = getTableColumns(con, tableName);
                         List<PostgresIndex> indexes = getIndexes(con, tableName);
-                        List<PostgresStatisticsObject> statistics = getStatistics(con);
+                        List<PostgresStatisticsObject> statistics = getStatistics(con, tableName);
+                        List<PostgresConstraint> constraints = getConstraints(con, tableName);
                         PostgresTable t = new PostgresTable(tableName, databaseColumns, indexes, tableType, statistics,
-                                isView, isInsertable);
+                                constraints, isView, isInsertable, isPartitioned);
                         for (PostgresColumn c : databaseColumns) {
                             c.setTable(t);
                         }
@@ -331,16 +434,44 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         }
     }
 
-    protected static List<PostgresStatisticsObject> getStatistics(SQLConnection con) throws SQLException {
+    protected static List<PostgresStatisticsObject> getStatistics(SQLConnection con, String tableName)
+            throws SQLException {
         List<PostgresStatisticsObject> statistics = new ArrayList<>();
         try (Statement s = con.createStatement()) {
-            try (ResultSet rs = s.executeQuery("SELECT stxname FROM pg_statistic_ext ORDER BY stxname;")) {
+            try (ResultSet rs = s.executeQuery(String.format(
+                    "SELECT stx.stxname FROM pg_statistic_ext stx "
+                            + "JOIN pg_class rel ON rel.oid = stx.stxrelid "
+                            + "JOIN pg_namespace n ON n.oid = rel.relnamespace "
+                            + "WHERE rel.relname = '%s' AND (n.nspname='public' OR n.nspname LIKE 'pg_temp_%%') "
+                            + "ORDER BY stx.stxname;",
+                    tableName))) {
                 while (rs.next()) {
                     statistics.add(new PostgresStatisticsObject(rs.getString("stxname")));
                 }
             }
         }
         return statistics;
+    }
+
+    protected static List<PostgresConstraint> getConstraints(SQLConnection con, String tableName) throws SQLException {
+        List<PostgresConstraint> constraints = new ArrayList<>();
+        try (Statement s = con.createStatement()) {
+            try (ResultSet rs = s.executeQuery(String.format(
+                    "SELECT con.conname, con.contype FROM pg_constraint con "
+                            + "JOIN pg_class rel ON rel.oid = con.conrelid "
+                            + "JOIN pg_namespace n ON n.oid = rel.relnamespace "
+                            + "WHERE rel.relname = '%s' AND (n.nspname='public' OR n.nspname LIKE 'pg_temp_%%') "
+                            + "ORDER BY con.conname;",
+                    tableName))) {
+                while (rs.next()) {
+                    String name = rs.getString("conname");
+                    String type = rs.getString("contype");
+                    boolean validatable = "c".equals(type) || "f".equals(type);
+                    constraints.add(new PostgresConstraint(name, validatable));
+                }
+            }
+        }
+        return constraints;
     }
 
     protected static PostgresTable.TableType getTableType(String tableTypeStr) throws AssertionError {
@@ -359,11 +490,22 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         List<PostgresIndex> indexes = new ArrayList<>();
         try (Statement s = con.createStatement()) {
             try (ResultSet rs = s.executeQuery(String
-                    .format("SELECT indexname FROM pg_indexes WHERE tablename='%s' ORDER BY indexname;", tableName))) {
+                    .format("SELECT i.indexname, ix.indisunique, ix.indisvalid, ix.indisready, "
+                            + "(ix.indpred IS NOT NULL) AS is_partial, (ix.indexprs IS NOT NULL) AS is_expression "
+                            + "FROM pg_indexes i "
+                            + "JOIN pg_class tbl ON tbl.relname = i.tablename "
+                            + "JOIN pg_namespace n ON n.oid = tbl.relnamespace AND n.nspname = i.schemaname "
+                            + "JOIN pg_class idx ON idx.relname = i.indexname AND idx.relnamespace = n.oid "
+                            + "JOIN pg_index ix ON ix.indexrelid = idx.oid "
+                            + "WHERE i.tablename='%s' AND (i.schemaname='public' OR i.schemaname LIKE 'pg_temp_%%') "
+                            + "ORDER BY i.indexname;",
+                            tableName))) {
                 while (rs.next()) {
                     String indexName = rs.getString("indexname");
                     if (DBMSCommon.matchesIndexName(indexName)) {
-                        indexes.add(PostgresIndex.create(indexName));
+                        indexes.add(PostgresIndex.create(indexName, rs.getBoolean("indisunique"),
+                                rs.getBoolean("indisvalid"), rs.getBoolean("indisready"),
+                                rs.getBoolean("is_partial"), rs.getBoolean("is_expression")));
                     }
                 }
             }
@@ -375,25 +517,32 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         List<PostgresColumn> columns = new ArrayList<>();
         try (Statement s = con.createStatement()) {
             try (ResultSet rs = s.executeQuery(
-                    "select column_name, data_type, udt_name from INFORMATION_SCHEMA.COLUMNS where table_name = '"
-                            + tableName + "' ORDER BY column_name")) {
+                    "select c.column_name, c.data_type, c.udt_name, "
+                            + "pg_catalog.format_type(a.atttypid, a.atttypmod) as formatted_type, a.attndims "
+                            + "from INFORMATION_SCHEMA.COLUMNS c "
+                            + "join pg_catalog.pg_namespace n on n.nspname = c.table_schema "
+                            + "join pg_catalog.pg_class cl on cl.relname = c.table_name and cl.relnamespace = n.oid "
+                            + "join pg_catalog.pg_attribute a on a.attrelid = cl.oid and a.attname = c.column_name "
+                            + "where c.table_name = '" + tableName + "' and a.attnum > 0 and not a.attisdropped "
+                            + "ORDER BY c.column_name")) {
                 while (rs.next()) {
                     String columnName = rs.getString("column_name");
                     String dataType = rs.getString("data_type");
                     String udtName = rs.getString("udt_name");
+                    String formattedType = rs.getString("formatted_type");
+                    int arrayDimensions = rs.getInt("attndims");
 
-                    PostgresDataType resolved;
-                    if ("ARRAY".equalsIgnoreCase(dataType)) {
-                        resolved = resolveArrayTypeByUdtName(udtName);
-                        if (resolved == null) {
-                            // Conservative: skip unknown arrays to avoid schema/type mismatches downstream.
-                            continue;
+                    PostgresCompoundDataType resolved;
+                    if ("USER-DEFINED".equalsIgnoreCase(dataType)) {
+                        resolved = PostgresCompoundDataType.create(PostgresDataType.ENUM);
+                    } else if ("ARRAY".equalsIgnoreCase(dataType) && arrayDimensions > 0) {
+                        String elementTypeString = udtName;
+                        if (elementTypeString == null && formattedType != null) {
+                            elementTypeString = formattedType;
                         }
-                    } else if ("USER-DEFINED".equalsIgnoreCase(dataType)) {
-                        // Conservative: treat enum/user-defined types as TEXT.
-                        resolved = PostgresDataType.TEXT;
+                        resolved = getColumnCompoundType(dataType, elementTypeString);
                     } else {
-                        resolved = getColumnType(dataType);
+                        resolved = getColumnCompoundType(formattedType != null ? formattedType : dataType, udtName);
                     }
 
                     PostgresColumn c = new PostgresColumn(columnName, resolved);
@@ -404,32 +553,51 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         return columns;
     }
 
-    private static PostgresDataType resolveArrayTypeByUdtName(String udtName) {
-        if (udtName == null) {
-            return null;
-        }
-        switch (udtName) {
-        case "_int2":
-        case "_int4":
-        case "_int8":
-            return PostgresDataType.INT_ARRAY;
-        case "_text":
-        case "_varchar":
-        case "_bpchar":
-        case "_name":
-            return PostgresDataType.TEXT_ARRAY;
-        case "_uuid":
-            return PostgresDataType.UUID_ARRAY;
-        case "_timestamptz":
-            return PostgresDataType.TIMESTAMPTZ_ARRAY;
-        default:
-            return null;
-        }
-    }
-
     public PostgresSchema(List<PostgresTable> databaseTables, String databaseName) {
         super(databaseTables);
         this.databaseName = databaseName;
+    }
+
+    private static PostgresConstant getColumnValue(ResultSet rs, int columnIndex, PostgresCompoundDataType compoundType)
+            throws SQLException {
+        if (compoundType.isArray()) {
+            Array array = rs.getArray(columnIndex);
+            if (array == null) {
+                return PostgresConstant.createNullConstant();
+            }
+            return PostgresConstant.createArrayConstant(array, compoundType);
+        }
+        if (rs.getString(columnIndex) == null) {
+            return PostgresConstant.createNullConstant();
+        }
+        switch (compoundType.getDataType()) {
+        case INT:
+            return PostgresConstant.createIntConstant(rs.getLong(columnIndex));
+        case BOOLEAN:
+            return PostgresConstant.createBooleanConstant(rs.getBoolean(columnIndex));
+        case TEXT:
+            return PostgresConstant.createTextConstant(rs.getString(columnIndex));
+        case DATE:
+            return PostgresConstant.createDateConstant(rs.getString(columnIndex));
+        case TIME:
+            return PostgresConstant.createTimeConstant(rs.getString(columnIndex));
+        case TIMETZ:
+            return PostgresConstant.createTimeWithTimeZoneConstant(rs.getString(columnIndex));
+        case TIMESTAMP:
+            return PostgresConstant.createTimestampConstant(rs.getString(columnIndex));
+        case TIMESTAMPTZ:
+            return PostgresConstant.createTimestampWithTimeZoneConstant(rs.getString(columnIndex));
+        case INTERVAL:
+            return PostgresConstant.createIntervalConstant(rs.getString(columnIndex));
+        case JSON:
+        case JSONB:
+        case UUID:
+        case BYTEA:
+        case ENUM:
+            return PostgresConstant.createTextConstant(rs.getString(columnIndex));
+        default:
+            throw new IgnoreMeException();
+        }
     }
 
     public PostgresTables getRandomTableNonEmptyTables() {

@@ -12,6 +12,7 @@ import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.postgres.PostgresGlobalState;
+import sqlancer.postgres.PostgresCompoundDataType;
 import sqlancer.postgres.PostgresProvider;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
 import sqlancer.postgres.PostgresSchema.PostgresDataType;
@@ -254,9 +255,21 @@ public final class PostgresCommon {
     }
 
     public static boolean appendDataType(PostgresDataType type, StringBuilder sb, boolean allowSerial,
-            boolean generateOnlyKnown, List<String> opClasses) throws AssertionError {
+            List<String> opClasses) throws AssertionError {
+        return appendDataType(PostgresCompoundDataType.create(type), sb, allowSerial, opClasses);
+    }
+
+    public static boolean appendDataType(PostgresCompoundDataType compoundType, StringBuilder sb, boolean allowSerial,
+            List<String> opClasses) throws AssertionError {
         boolean serial = false;
-        switch (type) {
+        if (compoundType.isArray()) {
+            serial = appendDataType(compoundType.getElemType(), sb, false, opClasses);
+            for (int i = 0; i < compoundType.getArrayDimensions(); i++) {
+                sb.append("[]");
+            }
+            return serial;
+        }
+        switch (compoundType.getDataType()) {
         case BOOLEAN:
             sb.append("boolean");
             break;
@@ -273,7 +286,7 @@ public final class PostgresCommon {
                 sb.append("TEXT");
             } else if (Randomly.getBoolean()) {
                 // TODO: support CHAR (without VAR)
-                if (PostgresProvider.generateOnlyKnown || Randomly.getBoolean()) {
+                if (Randomly.getBoolean()) {
                     sb.append("VAR");
                 }
                 sb.append("CHAR");
@@ -283,7 +296,7 @@ public final class PostgresCommon {
             } else {
                 sb.append("name");
             }
-            if (Randomly.getBoolean() && !PostgresProvider.generateOnlyKnown) {
+            if (Randomly.getBoolean()) {
                 sb.append(" COLLATE ");
                 sb.append('"');
                 sb.append(Randomly.fromList(opClasses));
@@ -323,6 +336,9 @@ public final class PostgresCommon {
         case TIME:
             sb.append("time");
             break;
+        case TIMETZ:
+            sb.append("timetz");
+            break;
         case TIMESTAMP:
             sb.append("timestamp");
             break;
@@ -344,18 +360,8 @@ public final class PostgresCommon {
         case BYTEA:
             sb.append("bytea");
             break;
-        case INT_ARRAY:
-            sb.append("integer[]");
-            break;
-        case TEXT_ARRAY:
-            sb.append("text[]");
-            break;
-        case UUID_ARRAY:
-            sb.append("uuid[]");
-            break;
-        case TIMESTAMPTZ_ARRAY:
-            sb.append("timestamptz[]");
-            break;
+        case ARRAY:
+            throw new AssertionError(compoundType);
         case ENUM:
             // Use a created enum type name; if none exist, fall back to text for stability.
             if (PostgresProvider.getEnumTypeNames().isEmpty()) {
@@ -365,7 +371,7 @@ public final class PostgresCommon {
             }
             break;
         default:
-            throw new AssertionError(type);
+            throw new AssertionError(compoundType);
         }
         return serial;
     }

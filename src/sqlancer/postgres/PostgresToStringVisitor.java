@@ -6,7 +6,6 @@ import java.util.Optional;
 import sqlancer.Randomly;
 import sqlancer.common.visitor.BinaryOperation;
 import sqlancer.common.visitor.ToStringVisitor;
-import sqlancer.postgres.PostgresSchema.PostgresDataType;
 import sqlancer.postgres.ast.PostgresAggregate;
 import sqlancer.postgres.ast.PostgresBetweenOperation;
 import sqlancer.postgres.ast.PostgresBinaryJsonOperation;
@@ -40,6 +39,9 @@ import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
+import sqlancer.postgres.ast.PostgresTemporalFunction.TemporalFunctionKind;
 import sqlancer.postgres.ast.PostgresUnionSelect;
 import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.ast.PostgresWindowFunction;
@@ -269,6 +271,59 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             sb.append(" OFFSET ");
             visit(s.getOffsetClause());
         }
+        if (canRenderForClause(s)) {
+            sb.append(" FOR ");
+            sb.append(s.getForClause().getTextRepresentation());
+            if (!s.getForClauseOfReferences().isEmpty()) {
+                sb.append(" OF ");
+                sb.append(String.join(", ", s.getForClauseOfReferences()));
+            }
+            if (s.getLockWaitOption() != null && !s.getLockWaitOption().getTextRepresentation().isEmpty()) {
+                sb.append(" ");
+                sb.append(s.getLockWaitOption().getTextRepresentation());
+            }
+        }
+    }
+
+    private boolean canRenderForClause(PostgresSelect select) {
+        if (!select.isAllowForClause() || select.getForClause() == null) {
+            return false;
+        }
+        if (select.getSelectOption() != PostgresSelect.SelectType.ALL || select.getDistinctOnClause() != null) {
+            return false;
+        }
+        if (!select.getGroupByExpressions().isEmpty() || select.getHavingClause() != null) {
+            return false;
+        }
+        if (select.getWindowFunctions() != null && !select.getWindowFunctions().isEmpty()) {
+            return false;
+        }
+        if (select.getFetchColumns() != null
+                && select.getFetchColumns().stream().anyMatch(PostgresAggregate.class::isInstance)) {
+            return false;
+        }
+        if (select.getFromList().stream().anyMatch(this::locksDerivedOrViewRelation)) {
+            return false;
+        }
+        if (select.getJoinClauses().stream().map(PostgresJoin::getTableReference).anyMatch(this::locksDerivedOrViewRelation)) {
+            return false;
+        }
+        return select.getJoinClauses().stream().noneMatch(j -> j.getType() == PostgresJoinType.LEFT
+                || j.getType() == PostgresJoinType.RIGHT || j.getType() == PostgresJoinType.FULL);
+    }
+
+    private boolean locksDerivedOrViewRelation(PostgresExpression relation) {
+        if (relation instanceof PostgresSubquery || relation instanceof PostgresDerivedTable
+                || relation instanceof PostgresCteTableReference) {
+            return true;
+        }
+        if (relation instanceof PostgresFromTable) {
+            return ((PostgresFromTable) relation).getTable().isView();
+        }
+        if (relation instanceof PostgresTableReference) {
+            return ((PostgresTableReference) relation).getTable().isView();
+        }
+        return false;
     }
 
     @Override
@@ -289,6 +344,41 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             visit(arg);
         }
         sb.append(")");
+    }
+
+    @Override
+    public void visit(PostgresTemporalFunction function) {
+        if (function.getKind() == TemporalFunctionKind.EXTRACT) {
+            sb.append("EXTRACT(");
+            sb.append(function.getModifier());
+            sb.append(" FROM ");
+            visit(function.getArguments()[0]);
+            sb.append(")");
+            return;
+        }
+        sb.append(function.getKind().getFunctionName());
+        sb.append("(");
+        if (function.getModifier() != null) {
+            sb.append("'");
+            sb.append(function.getModifier().replace("'", "''"));
+            sb.append("'");
+            if (function.getArguments().length != 0) {
+                sb.append(", ");
+            }
+        }
+        int i = 0;
+        for (PostgresExpression arg : function.getArguments()) {
+            if (i++ != 0) {
+                sb.append(", ");
+            }
+            visit(arg);
+        }
+        sb.append(")");
+    }
+
+    @Override
+    public void visit(PostgresTemporalBinaryArithmeticOperation op) {
+        visit((BinaryOperation<PostgresExpression>) op);
     }
 
     @Override
@@ -352,6 +442,9 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
         case TIME:
             sb.append("TIME");
             break;
+        case TIMETZ:
+            sb.append("TIMETZ");
+            break;
         case TIMESTAMP:
             sb.append("TIMESTAMP");
             break;
@@ -388,10 +481,6 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
     public void visit(PostgresBetweenOperation op) {
         sb.append("(");
         visit(op.getExpr());
-        if (PostgresProvider.generateOnlyKnown && op.getExpr().getExpressionType() == PostgresDataType.TEXT
-                && op.getLeft().getExpressionType() == PostgresDataType.TEXT) {
-            sb.append(" COLLATE \"C\"");
-        }
         sb.append(") BETWEEN ");
         if (op.isSymmetric()) {
             sb.append("SYMMETRIC ");
@@ -400,10 +489,6 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
         visit(op.getLeft());
         sb.append(") AND (");
         visit(op.getRight());
-        if (PostgresProvider.generateOnlyKnown && op.getExpr().getExpressionType() == PostgresDataType.TEXT
-                && op.getRight().getExpressionType() == PostgresDataType.TEXT) {
-            sb.append(" COLLATE \"C\"");
-        }
         sb.append(")");
     }
 

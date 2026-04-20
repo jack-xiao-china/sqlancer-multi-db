@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetTime;
 import java.util.UUID;
 
 import sqlancer.IgnoreMeException;
@@ -68,12 +69,15 @@ import sqlancer.postgres.ast.PostgresPostfixText;
 import sqlancer.postgres.ast.PostgresPrefixOperation;
 import sqlancer.postgres.ast.PostgresPrefixOperation.PrefixOperator;
 import sqlancer.postgres.ast.PostgresSelect;
-import sqlancer.postgres.ast.PostgresSelect.ForClause;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
 import sqlancer.postgres.ast.PostgresSelect.SelectType;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
+import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation.TemporalBinaryOperator;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
+import sqlancer.postgres.ast.PostgresTemporalFunction.TemporalFunctionKind;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowSpecification;
@@ -179,18 +183,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     }
 
     private PostgresExpression generateBooleanExpression(int depth) {
-        List<BooleanExpression> validOptions = new ArrayList<>(Arrays.asList(BooleanExpression.values()));
-        if (PostgresProvider.generateOnlyKnown) {
-            validOptions.remove(BooleanExpression.SIMILAR_TO);
-            validOptions.remove(BooleanExpression.POSIX_REGEX);
-            validOptions.remove(BooleanExpression.BINARY_RANGE_COMPARISON);
-            validOptions.remove(BooleanExpression.JSON_CONTAIN);
-        }
-        // JSON_CONTAIN requires enableJSON flag
-        if (!PostgresProvider.enableJSON) {
-            validOptions.remove(BooleanExpression.JSON_CONTAIN);
-        }
-        BooleanExpression option = Randomly.fromList(validOptions);
+        BooleanExpression option = Randomly.fromList(Arrays.asList(BooleanExpression.values()));
         switch (option) {
         case POSTFIX_OPERATOR:
             PostfixOperator random = PostfixOperator.getRandom();
@@ -251,7 +244,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             PostgresExpression right;
             if (jsonOp.requiresArrayInput()) {
                 // ?| and ?& require text array on right side
-                right = generateConstant(r, PostgresDataType.TEXT_ARRAY);
+                right = generateConstant(r, PostgresCompoundDataType.createArray(PostgresDataType.TEXT));
             } else {
                 right = generateJsonExpression(depth + 1, PostgresDataType.JSONB);
             }
@@ -271,7 +264,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     }
 
     private PostgresExpression generateFunction(int depth, PostgresDataType type) {
-        if (PostgresProvider.generateOnlyKnown || Randomly.getBoolean()) {
+        if (Randomly.getBoolean()) {
             return generateFunctionWithKnownResult(depth, type);
         } else {
             return generateFunctionWithUnknownResult(depth, type);
@@ -287,10 +280,6 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     private PostgresExpression getComparison(PostgresExpression leftExpr, PostgresExpression rightExpr) {
         PostgresBinaryComparisonOperation op = new PostgresBinaryComparisonOperation(leftExpr, rightExpr,
                 PostgresBinaryComparisonOperation.PostgresBinaryComparisonOperator.getRandom());
-        if (PostgresProvider.generateOnlyKnown && op.getLeft().getExpressionType() == PostgresDataType.TEXT
-                && op.getRight().getExpressionType() == PostgresDataType.TEXT) {
-            return new PostgresCollate(op, "C");
-        }
         return op;
     }
 
@@ -308,27 +297,38 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         return new PostgresExpressionGenerator(globalState).generateExpression(0, type);
     }
 
+    public static PostgresExpression generateExpression(PostgresGlobalState globalState, PostgresCompoundDataType type) {
+        return new PostgresExpressionGenerator(globalState).generateExpression(0, type);
+    }
+
     public PostgresExpression generateExpression(int depth, PostgresDataType originalType) {
-        PostgresDataType dataType = originalType;
+        return generateExpression(depth, getCompoundDataType(originalType));
+    }
+
+    public PostgresExpression generateExpression(int depth, PostgresCompoundDataType originalType) {
+        if (originalType.isArray()) {
+            if (!filterColumns(originalType).isEmpty() && Randomly.getBoolean()) {
+                return createColumnOfType(originalType);
+            }
+            return generateConstant(r, originalType);
+        }
+        PostgresDataType dataType = originalType.getDataType();
         if (dataType == PostgresDataType.REAL && Randomly.getBoolean()) {
             dataType = Randomly.fromOptions(PostgresDataType.INT, PostgresDataType.FLOAT);
         }
         if (dataType == PostgresDataType.FLOAT && Randomly.getBoolean()) {
             dataType = PostgresDataType.INT;
         }
-        if (!filterColumns(dataType).isEmpty() && Randomly.getBoolean()) {
-            return potentiallyWrapInCollate(dataType, createColumnOfType(dataType));
+        PostgresCompoundDataType effectiveType = getCompoundDataType(dataType);
+        if (!filterColumns(effectiveType).isEmpty() && Randomly.getBoolean()) {
+            return potentiallyWrapInCollate(effectiveType, createColumnOfType(effectiveType));
         }
         PostgresExpression exprInternal = generateExpressionInternal(depth, dataType);
-        return potentiallyWrapInCollate(dataType, exprInternal);
+        return potentiallyWrapInCollate(effectiveType, exprInternal);
     }
 
-    private PostgresExpression potentiallyWrapInCollate(PostgresDataType dataType, PostgresExpression exprInternal) {
-        if (dataType == PostgresDataType.TEXT && PostgresProvider.generateOnlyKnown) {
-            return new PostgresCollate(exprInternal, "C");
-        } else {
-            return exprInternal;
-        }
+    private PostgresExpression potentiallyWrapInCollate(PostgresCompoundDataType dataType, PostgresExpression exprInternal) {
+        return exprInternal;
     }
 
     private PostgresExpression generateExpressionInternal(int depth, PostgresDataType dataType) throws AssertionError {
@@ -349,13 +349,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                     }
                 }
             } else {
-                /*
-                 * Cast/function exploration uses getCompoundDataType, which only lists scalar compound spellings.
-                 * ENUM and array casts need concrete type names (e.g. e0, integer[]) — keep first-stage behavior.
-                 */
-                if (dataType == PostgresDataType.ENUM || dataType == PostgresDataType.INT_ARRAY
-                        || dataType == PostgresDataType.TEXT_ARRAY || dataType == PostgresDataType.UUID_ARRAY
-                        || dataType == PostgresDataType.TIMESTAMPTZ_ARRAY) {
+                if (dataType == PostgresDataType.ENUM) {
                     return generateConstant(r, dataType);
                 }
                 if (Randomly.getBoolean()) {
@@ -384,22 +378,17 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                 return generateRangeExpression(depth);
             case DATE:
             case TIME:
+            case TIMETZ:
             case TIMESTAMP:
             case TIMESTAMPTZ:
             case INTERVAL:
-                // Minimal stable support: columns/constants only (comparisons are generated in boolean expressions).
-                return generateConstant(r, dataType);
+                return generateTemporalExpression(depth, dataType);
             case JSON:
             case JSONB:
                 return generateJsonExpression(depth, dataType);
             case UUID:
             case BYTEA:
-            case INT_ARRAY:
-            case TEXT_ARRAY:
-            case UUID_ARRAY:
-            case TIMESTAMPTZ_ARRAY:
             case ENUM:
-                // First-stage: generate constants only (schema may conservatively downgrade/skip).
                 return generateConstant(r, dataType);
             default:
                 throw new AssertionError(dataType);
@@ -407,7 +396,10 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         }
     }
 
-    private static PostgresCompoundDataType getCompoundDataType(PostgresDataType type) {
+    public static PostgresCompoundDataType getCompoundDataType(PostgresDataType type) {
+        if (type == PostgresDataType.ARRAY) {
+            return getRandomArrayType();
+        }
         switch (type) {
         case BOOLEAN:
         case DECIMAL: // TODO
@@ -419,6 +411,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         case INET:
         case DATE:
         case TIME:
+        case TIMETZ:
         case TIMESTAMP:
         case TIMESTAMPTZ:
         case INTERVAL:
@@ -426,11 +419,11 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         case JSONB:
         case UUID:
         case BYTEA:
+        case ENUM:
             return PostgresCompoundDataType.create(type);
         case TEXT: // TODO
         case BIT:
-            // PQS strict (generateOnlyKnown) must avoid size specifications.
-            if (Randomly.getBoolean() || PostgresProvider.generateOnlyKnown) {
+            if (Randomly.getBoolean()) {
                 return PostgresCompoundDataType.create(type);
             } else {
                 return PostgresCompoundDataType.create(type, (int) Randomly.getNotCachedInteger(1, 1000));
@@ -439,6 +432,18 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             throw new AssertionError(type);
         }
 
+    }
+
+    public static PostgresCompoundDataType getRandomArrayType() {
+        return getRandomArrayType(1);
+    }
+
+    public static PostgresCompoundDataType getRandomArrayType(int minDimensions) {
+        PostgresDataType elementType = Randomly.fromOptions(PostgresDataType.INT, PostgresDataType.BOOLEAN,
+                PostgresDataType.TEXT, PostgresDataType.DATE, PostgresDataType.TIME, PostgresDataType.TIMESTAMP,
+                PostgresDataType.TIMESTAMPTZ, PostgresDataType.INTERVAL);
+        int dimensions = (int) Randomly.getNotCachedInteger(minDimensions, PostgresCompoundDataType.MAX_ARRAY_DIMENSIONS);
+        return PostgresCompoundDataType.createArray(PostgresCompoundDataType.create(elementType), dimensions);
     }
 
     private enum RangeExpression {
@@ -450,10 +455,6 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     }
 
     private PostgresExpression generateJsonExpression(int depth, PostgresDataType dataType) {
-        if (!PostgresProvider.enableJSON || PostgresProvider.generateOnlyKnown) {
-            return generateConstant(r, dataType);
-        }
-
         JsonExpression option = Randomly.fromOptions(JsonExpression.values());
 
         switch (option) {
@@ -656,6 +657,9 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         case FUNCTION:
             return generateFunction(depth + 1, PostgresDataType.INT);
         case BINARY_ARITHMETIC_EXPRESSION:
+            if (Randomly.getBooleanWithRatherLowProbability()) {
+                return generateTemporalIntExpression(depth + 1);
+            }
             return new PostgresBinaryArithmeticOperation(generateExpression(depth + 1, PostgresDataType.INT),
                     generateExpression(depth + 1, PostgresDataType.INT), PostgresBinaryOperator.getRandom());
         default:
@@ -670,11 +674,26 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         return PostgresColumnValue.create(fromList, value);
     }
 
+    private PostgresExpression createColumnOfType(PostgresCompoundDataType type) {
+        List<PostgresColumn> columns = filterColumns(type);
+        PostgresColumn fromList = Randomly.fromList(columns);
+        PostgresConstant value = rw == null ? null : rw.getValues().get(fromList);
+        return PostgresColumnValue.create(fromList, value);
+    }
+
     final List<PostgresColumn> filterColumns(PostgresDataType type) {
         if (columns == null) {
             return Collections.emptyList();
         } else {
             return columns.stream().filter(c -> c.getType() == type).collect(Collectors.toList());
+        }
+    }
+
+    final List<PostgresColumn> filterColumns(PostgresCompoundDataType type) {
+        if (columns == null) {
+            return Collections.emptyList();
+        } else {
+            return columns.stream().filter(c -> c.getCompoundType().equals(type)).collect(Collectors.toList());
         }
     }
 
@@ -690,13 +709,18 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     }
 
     public static PostgresExpression generateConstant(Randomly r, PostgresDataType type) {
+        return generateConstant(r, getCompoundDataType(type));
+    }
+
+    public static PostgresExpression generateConstant(Randomly r, PostgresCompoundDataType type) {
         if (Randomly.getBooleanWithSmallProbability()) {
             return PostgresConstant.createNullConstant();
         }
-        // if (Randomly.getBooleanWithSmallProbability()) {
-        // return PostgresConstant.createTextConstant(r.getString());
-        // }
-        switch (type) {
+        if (type.isArray()) {
+            return PostgresConstant.createArrayConstant(generateArrayElements(r, type.getElemType()), type.getElemType());
+        }
+        PostgresDataType baseType = type.getDataType();
+        switch (baseType) {
         case INT:
             if (Randomly.getBooleanWithSmallProbability()) {
                 return PostgresConstant.createTextConstant(String.valueOf(r.getInteger()));
@@ -704,7 +728,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                 return PostgresConstant.createIntConstant(r.getInteger());
             }
         case BOOLEAN:
-            if (Randomly.getBooleanWithSmallProbability() && !PostgresProvider.generateOnlyKnown) {
+            if (Randomly.getBooleanWithSmallProbability()) {
                 return PostgresConstant
                         .createTextConstant(Randomly.fromOptions("TR", "TRUE", "FA", "FALSE", "0", "1", "ON", "off"));
             } else {
@@ -740,6 +764,14 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             int second = r.getInteger(0, 59);
             return PostgresConstant.createTimeConstant(LocalTime.of(hour, minute, second));
         }
+        case TIMETZ: {
+            int hour = r.getInteger(0, 23);
+            int minute = r.getInteger(0, 59);
+            int second = r.getInteger(0, 59);
+            int offsetHours = Randomly.fromOptions(-5, 0, 8);
+            return PostgresConstant.createTimeWithTimeZoneConstant(
+                    OffsetTime.of(hour, minute, second, 0, java.time.ZoneOffset.ofHours(offsetHours)));
+        }
         case TIMESTAMP: {
             int year = r.getInteger(2000, 2030);
             int month = r.getInteger(1, 12);
@@ -759,12 +791,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         }
         case JSON:
         case JSONB: {
-            if (!PostgresProvider.enableJSON || PostgresProvider.generateOnlyKnown) {
-                // Should be unreachable due to type pool control; keep generation safe.
-                return PostgresConstant.createNullConstant();
-            }
             String json = generateValidJsonLiteral(r, 0);
-            if (type == PostgresDataType.JSONB) {
+            if (baseType == PostgresDataType.JSONB) {
                 // Prefer explicit ::jsonb to minimize planner/unknown-type ambiguity.
                 return new PostgresPostfixText(PostgresConstant.createTextConstant(json), "::jsonb", null,
                         PostgresDataType.JSONB);
@@ -779,33 +807,20 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             return PostgresConstant.createUUIDConstant(uuid.toString());
         }
         case BYTEA: {
-            if (!PostgresProvider.enableBYTEA || PostgresProvider.generateOnlyKnown) {
-                return PostgresConstant.createNullConstant();
-            }
             return PostgresConstant.createByteaConstant("DEADBEEF");
-        }
-        case INT_ARRAY: {
-            return PostgresConstant.createArrayConstant(PostgresDataType.INT_ARRAY, generateArrayElements(r, PostgresDataType.INT));
-        }
-        case TEXT_ARRAY: {
-            return PostgresConstant.createArrayConstant(PostgresDataType.TEXT_ARRAY, generateArrayElements(r, PostgresDataType.TEXT));
-        }
-        case UUID_ARRAY: {
-            return PostgresConstant.createArrayConstant(PostgresDataType.UUID_ARRAY, generateArrayElements(r, PostgresDataType.UUID));
-        }
-        case TIMESTAMPTZ_ARRAY: {
-            return PostgresConstant.createArrayConstant(PostgresDataType.TIMESTAMPTZ_ARRAY, generateArrayElements(r, PostgresDataType.TIMESTAMPTZ));
         }
         case ENUM: {
             String typeName = PostgresProvider.getRandomEnumTypeName();
             return PostgresConstant.createEnumConstant(typeName, PostgresProvider.getRandomEnumLabel(typeName, r));
         }
+        case ARRAY:
+            return generateConstant(r, getRandomArrayType());
         default:
-            throw new AssertionError(type);
+            throw new AssertionError(baseType);
         }
     }
 
-    private static List<PostgresConstant> generateArrayElements(Randomly r, PostgresDataType elementType) {
+    private static List<PostgresConstant> generateArrayElements(Randomly r, PostgresCompoundDataType elementType) {
         int n = r.getInteger(0, 3);
         List<PostgresConstant> elems = new ArrayList<>();
         for (int i = 0; i < n; i++) {
@@ -871,6 +886,11 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         return new PostgresExpressionGenerator(globalState).setColumns(columns).generateExpression(0, type);
     }
 
+    public static PostgresExpression generateExpression(PostgresGlobalState globalState, List<PostgresColumn> columns,
+            PostgresCompoundDataType type) {
+        return new PostgresExpressionGenerator(globalState).setColumns(columns).generateExpression(0, type);
+    }
+
     public static PostgresExpression generateExpression(PostgresGlobalState globalState, List<PostgresColumn> columns) {
         return new PostgresExpressionGenerator(globalState).setColumns(columns).generateExpression(0);
 
@@ -886,6 +906,216 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
 
     public PostgresExpression generateExpression(PostgresDataType dataType) {
         return generateExpression(0, dataType);
+    }
+
+    public PostgresExpression generateExpression(PostgresCompoundDataType dataType) {
+        return generateExpression(0, dataType);
+    }
+
+    private static boolean isTemporalType(PostgresDataType type) {
+        switch (type) {
+        case DATE:
+        case TIME:
+        case TIMETZ:
+        case TIMESTAMP:
+        case TIMESTAMPTZ:
+        case INTERVAL:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    private enum TemporalExpression {
+        CONSTANT, CAST, FUNCTION, ARITHMETIC
+    }
+
+    private PostgresExpression generateTemporalExpression(int depth, PostgresDataType dataType) {
+        if (depth > maxDepth || Randomly.getBooleanWithRatherLowProbability()) {
+            return generateConstant(r, dataType);
+        }
+        List<TemporalExpression> options = new ArrayList<>(Arrays.asList(TemporalExpression.values()));
+        if (dataType == PostgresDataType.DATE) {
+            options.remove(TemporalExpression.FUNCTION);
+        }
+        if (!canGenerateTemporalFunction(dataType)) {
+            options.remove(TemporalExpression.FUNCTION);
+        }
+        if (!canGenerateTemporalArithmetic(dataType)) {
+            options.remove(TemporalExpression.ARITHMETIC);
+        }
+        TemporalExpression option = Randomly.fromList(options);
+        switch (option) {
+        case CONSTANT:
+            return generateConstant(r, dataType);
+        case CAST:
+            return new PostgresCastOperation(PostgresConstant.createTextConstant(getStableTemporalTextValue(dataType)),
+                    getCompoundDataType(dataType));
+        case FUNCTION:
+            return generateTemporalFunctionExpression(depth + 1, dataType);
+        case ARITHMETIC:
+            return generateTemporalArithmeticExpression(depth + 1, dataType);
+        default:
+            throw new AssertionError(option);
+        }
+    }
+
+    private boolean canGenerateTemporalFunction(PostgresDataType dataType) {
+        return dataType == PostgresDataType.INTERVAL || dataType == PostgresDataType.TIMESTAMP
+                || dataType == PostgresDataType.TIMESTAMPTZ;
+    }
+
+    private boolean canGenerateTemporalArithmetic(PostgresDataType dataType) {
+        return isTemporalType(dataType) && dataType != PostgresDataType.DATE;
+    }
+
+    private PostgresExpression generateTemporalFunctionExpression(int depth, PostgresDataType returnType) {
+        switch (returnType) {
+        case INTERVAL:
+            return generateIntervalFunction(depth);
+        case TIMESTAMP:
+            if (Randomly.getBoolean()) {
+                return new PostgresTemporalFunction(TemporalFunctionKind.DATE_TRUNC, PostgresDataType.TIMESTAMP,
+                        getTimestampField(), true, generateExpression(depth + 1, PostgresDataType.TIMESTAMP));
+            }
+            return new PostgresTemporalFunction(TemporalFunctionKind.TIMEZONE, PostgresDataType.TIMESTAMP,
+                    getTimezoneLiteral(), true, generateExpression(depth + 1, PostgresDataType.TIMESTAMPTZ));
+        case TIMESTAMPTZ:
+            return new PostgresTemporalFunction(TemporalFunctionKind.DATE_TRUNC, PostgresDataType.TIMESTAMPTZ,
+                    getTimestampField(), true, generateExpression(depth + 1, PostgresDataType.TIMESTAMPTZ));
+        default:
+            throw new AssertionError(returnType);
+        }
+    }
+
+    private PostgresExpression generateIntervalFunction(int depth) {
+        switch (Randomly.fromOptions(TemporalFunctionKind.MAKE_INTERVAL, TemporalFunctionKind.JUSTIFY_DAYS,
+                TemporalFunctionKind.JUSTIFY_HOURS, TemporalFunctionKind.JUSTIFY_INTERVAL)) {
+        case MAKE_INTERVAL:
+            return new PostgresTemporalFunction(TemporalFunctionKind.MAKE_INTERVAL, PostgresDataType.INTERVAL, null,
+                    true, generateExpression(depth + 1, PostgresDataType.INT),
+                    generateExpression(depth + 1, PostgresDataType.INT), generateExpression(depth + 1, PostgresDataType.INT),
+                    generateExpression(depth + 1, PostgresDataType.INT), generateExpression(depth + 1, PostgresDataType.INT),
+                    generateExpression(depth + 1, PostgresDataType.INT), generateExpression(depth + 1, PostgresDataType.INT));
+        case JUSTIFY_DAYS:
+            return new PostgresTemporalFunction(TemporalFunctionKind.JUSTIFY_DAYS, PostgresDataType.INTERVAL, null,
+                    true, generateExpression(depth + 1, PostgresDataType.INTERVAL));
+        case JUSTIFY_HOURS:
+            return new PostgresTemporalFunction(TemporalFunctionKind.JUSTIFY_HOURS, PostgresDataType.INTERVAL, null,
+                    true, generateExpression(depth + 1, PostgresDataType.INTERVAL));
+        case JUSTIFY_INTERVAL:
+            return new PostgresTemporalFunction(TemporalFunctionKind.JUSTIFY_INTERVAL, PostgresDataType.INTERVAL,
+                    null, true, generateExpression(depth + 1, PostgresDataType.INTERVAL));
+        default:
+            throw new AssertionError();
+        }
+    }
+
+    private PostgresExpression generateTemporalArithmeticExpression(int depth, PostgresDataType returnType) {
+        switch (returnType) {
+        case TIME:
+            return new PostgresTemporalBinaryArithmeticOperation(generateExpression(depth + 1, PostgresDataType.TIME),
+                    generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                    Randomly.fromOptions(TemporalBinaryOperator.values()), PostgresDataType.TIME);
+        case TIMETZ:
+            return new PostgresTemporalBinaryArithmeticOperation(generateExpression(depth + 1, PostgresDataType.TIMETZ),
+                    generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                    Randomly.fromOptions(TemporalBinaryOperator.values()), PostgresDataType.TIMETZ);
+        case TIMESTAMP:
+            if (Randomly.getBoolean()) {
+                return new PostgresTemporalBinaryArithmeticOperation(
+                        generateExpression(depth + 1, PostgresDataType.TIMESTAMP),
+                        generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                        Randomly.fromOptions(TemporalBinaryOperator.values()), PostgresDataType.TIMESTAMP);
+            }
+            return new PostgresTemporalBinaryArithmeticOperation(generateExpression(depth + 1, PostgresDataType.DATE),
+                    generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                    Randomly.fromOptions(TemporalBinaryOperator.values()), PostgresDataType.TIMESTAMP);
+        case TIMESTAMPTZ:
+            return new PostgresTemporalBinaryArithmeticOperation(
+                    generateExpression(depth + 1, PostgresDataType.TIMESTAMPTZ),
+                    generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                    Randomly.fromOptions(TemporalBinaryOperator.values()), PostgresDataType.TIMESTAMPTZ);
+        case INTERVAL:
+            if (Randomly.getBoolean()) {
+                return new PostgresTemporalBinaryArithmeticOperation(
+                        generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                        generateExpression(depth + 1, PostgresDataType.INTERVAL),
+                        Randomly.fromOptions(TemporalBinaryOperator.values()), PostgresDataType.INTERVAL);
+            } else if (Randomly.getBoolean()) {
+                return new PostgresTemporalBinaryArithmeticOperation(
+                        generateExpression(depth + 1, PostgresDataType.TIMESTAMP),
+                        generateExpression(depth + 1, PostgresDataType.TIMESTAMP),
+                        TemporalBinaryOperator.SUBTRACTION, PostgresDataType.INTERVAL);
+            }
+            return new PostgresTemporalBinaryArithmeticOperation(
+                    generateExpression(depth + 1, PostgresDataType.TIMESTAMPTZ),
+                    generateExpression(depth + 1, PostgresDataType.TIMESTAMPTZ), TemporalBinaryOperator.SUBTRACTION,
+                    PostgresDataType.INTERVAL);
+        default:
+            throw new AssertionError(returnType);
+        }
+    }
+
+    private PostgresExpression generateTemporalIntExpression(int depth) {
+        if (Randomly.getBoolean()) {
+            return new PostgresTemporalBinaryArithmeticOperation(generateExpression(depth + 1, PostgresDataType.DATE),
+                    generateExpression(depth + 1, PostgresDataType.DATE), TemporalBinaryOperator.SUBTRACTION,
+                    PostgresDataType.INT);
+        }
+        PostgresDataType sourceType = Randomly.fromOptions(PostgresDataType.DATE, PostgresDataType.TIME,
+                PostgresDataType.TIMETZ, PostgresDataType.TIMESTAMP, PostgresDataType.TIMESTAMPTZ,
+                PostgresDataType.INTERVAL);
+        String field = getTemporalField(sourceType);
+        TemporalFunctionKind kind = Randomly.fromOptions(TemporalFunctionKind.DATE_PART, TemporalFunctionKind.EXTRACT);
+        return new PostgresTemporalFunction(kind, PostgresDataType.INT, field, true,
+                generateExpression(depth + 1, sourceType));
+    }
+
+    private String getStableTemporalTextValue(PostgresDataType type) {
+        switch (type) {
+        case DATE:
+            return String.format("%04d-%02d-%02d", r.getInteger(2000, 2030), r.getInteger(1, 12), r.getInteger(1, 28));
+        case TIME:
+            return String.format("%02d:%02d:%02d", r.getInteger(0, 23), r.getInteger(0, 59), r.getInteger(0, 59));
+        case TIMETZ:
+            return String.format("%02d:%02d:%02d%s", r.getInteger(0, 23), r.getInteger(0, 59), r.getInteger(0, 59),
+                    Randomly.fromOptions("+00:00", "+08:00", "-05:00"));
+        case TIMESTAMP:
+            return String.format("%04d-%02d-%02d %02d:%02d:%02d", r.getInteger(2000, 2030), r.getInteger(1, 12),
+                    r.getInteger(1, 28), r.getInteger(0, 23), r.getInteger(0, 59), r.getInteger(0, 59));
+        case TIMESTAMPTZ:
+            return getStableTemporalTextValue(PostgresDataType.TIMESTAMP) + Randomly.fromOptions("+00:00", "+08:00", "-05:00");
+        case INTERVAL:
+            return String.format("%d days %02d:%02d:%02d", r.getInteger(0, 30), r.getInteger(0, 23), r.getInteger(0, 59),
+                    r.getInteger(0, 59));
+        default:
+            throw new AssertionError(type);
+        }
+    }
+
+    private String getTemporalField(PostgresDataType sourceType) {
+        switch (sourceType) {
+        case DATE:
+            return Randomly.fromOptions("year", "month", "day");
+        case TIME:
+        case TIMETZ:
+            return Randomly.fromOptions("hour", "minute", "second");
+        case TIMESTAMP:
+        case TIMESTAMPTZ:
+        case INTERVAL:
+            return Randomly.fromOptions("year", "month", "day", "hour", "minute", "second");
+        default:
+            throw new AssertionError(sourceType);
+        }
+    }
+
+    private String getTimestampField() {
+        return Randomly.fromOptions("year", "month", "day", "hour", "minute", "second");
+    }
+
+    private String getTimezoneLiteral() {
+        return Randomly.fromOptions("UTC", "+00:00", "+08:00", "-05:00");
     }
 
     public PostgresExpressionGenerator setGlobalState(PostgresGlobalState globalState) {
@@ -925,6 +1155,23 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     }
 
     public static PostgresSubquery createSubquery(PostgresGlobalState globalState, String name, PostgresTables tables) {
+        return createSubquery(globalState, name, tables, true);
+    }
+
+    public static List<String> getLockableTableRefs(PostgresSelect select) {
+        List<String> refs = new ArrayList<>();
+        select.getFromList().stream().filter(PostgresFromTable.class::isInstance).map(PostgresFromTable.class::cast)
+                .map(PostgresFromTable::getTable).filter(t -> !t.isView()).map(t -> t.getName()).forEach(refs::add);
+        select.getJoinClauses().stream()
+                .filter(j -> j.getType() == PostgresJoinType.INNER || j.getType() == PostgresJoinType.CROSS)
+                .map(PostgresJoin::getTableReference).filter(PostgresFromTable.class::isInstance)
+                .map(PostgresFromTable.class::cast).map(PostgresFromTable::getTable).filter(t -> !t.isView())
+                .map(t -> t.getName()).forEach(refs::add);
+        return refs;
+    }
+
+    public static PostgresSubquery createSubquery(PostgresGlobalState globalState, String name, PostgresTables tables,
+            boolean allowForClauses) {
         List<PostgresExpression> columns = new ArrayList<>();
         PostgresExpressionGenerator gen = new PostgresExpressionGenerator(globalState).setColumns(tables.getColumns());
         for (int i = 0; i < Randomly.smallNumber() + 1; i++) {
@@ -947,9 +1194,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                         PostgresConstant.createIntConstant(Randomly.getPositiveOrZeroNonCachedInteger()));
             }
         }
-        if (Randomly.getBooleanWithRatherLowProbability()) {
-            select.setForClause(ForClause.getRandom());
-        }
+        select.maybeSetRandomForClause(allowForClauses);
         return new PostgresSubquery(select, name);
     }
 
@@ -989,6 +1234,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             List<PostgresExpression> windowFunctions = generateWindowFunctions();
             select.setWindowFunctions(windowFunctions);
         }
+
+        select.maybeSetRandomForClause(true);
 
         return select;
     }
