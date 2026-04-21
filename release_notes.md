@@ -1,6 +1,14 @@
 # Release Notes
 
-<<<<<<< HEAD
+## v0.1.73 | 2026-04-21
+- 集成验证修复：MySQL、PostgreSQL、GaussDB-PG、GaussDB-A 全面通过集成测试
+- 修复 MySQL ALTER TABLE 对视图执行问题：使用 `getRandomTableNoViewOrBailout()` 替代 `getRandomTable()`，确保只在 BASE TABLE 上执行 ALTER TABLE
+- 修复 MySQL DQE oracle rowId 列名问题：将 `COLUMN_ROWID` 从 `rowId` 改为 `rowid`，避免 MySQL 标识符大小写问题
+- 修复 MySQL JSON 列索引问题：添加预期错误信息处理 JSON 列无法直接创建索引的限制
+- 修复 MySQL CODDTEST oracle SQL 语法错误处理：添加预期错误信息
+- 修复 MySQLViewGenerator 未使用导入：移除 `sqlancer.common.DBMSCommon` 导入消除编译警告
+- 验证结果：MySQL 执行 73K+ 查询（成功率95%），PostgreSQL 执行 18K+ 查询（成功率53%），GaussDB-PG 执行 99K+ 查询（成功率53%），所有数据库稳定运行无工具报错
+
 ## v0.1.72 | 2026-04-20
 - 优化 PostgreSQL 查询加锁策略：删除冗余的 `WHERE` oracle 别名，仅保留 `TLP_WHERE`；将原先基于 oracle 名称的 `FOR ...` 锁子句过滤改为统一的查询形状/执行上下文判定，避免在 `NOREC`、`CERT`、`EET` 等不适合的路径上错误注入行锁，同时保留直接查询路径上的锁覆盖能力
 - 修复日志目录按分钟切分问题：单次 SQLancer 运行内复用同一个 run 目录，不再因跨分钟新建日志文件夹，确保一次运行的全部数据库日志落到同一目录；同步更新 `--log-dir` 说明与相关回归测试
@@ -11,41 +19,6 @@
 - 新增 PostgreSQL 查询与类型能力：补齐 `FOR UPDATE/NO KEY UPDATE/SHARE/KEY SHARE` 与 `NOWAIT/SKIP LOCKED` 锁子句生成与序列化；引入 temporal AST（`PostgresTemporalFunction`、`PostgresTemporalBinaryArithmeticOperation`、`PostgresTemporalUtil`）并打通 `TIMETZ`、`DATE_TRUNC/DATE_PART/EXTRACT/MAKE_INTERVAL/TIMEZONE` 等时间类型链路；增强 schema 元数据（constraint/index/statistics/compound type）与索引模型生成能力
 - 修复 PostgreSQL 长跑稳定性：修复 `MainOptions.logExecutionTime()` 与 `--log-each-select` 的断言冲突；修复 `PostgresCODDTestOracle` 的空 `ExpectedErrors`、错误 folding 语义与布尔常量上下文不一致问题；修复 `PostgresInOperation` 在 expected-value 比较中的 NPE；调整 PostgreSQL 建库入口统一连接 `postgres` 数据库、简化 `CREATE DATABASE` 语句并将 tablespace 测试默认值收敛为各 OS 默认关闭；补充 `.settings/org.eclipse.jdt.core.prefs` 以恢复标准 `mvn -DskipTests compile/package`
 - 验证 PostgreSQL 真实连库运行：使用 `java -jar target/sqlancer-2.0.0.jar` 直连本地 PostgreSQL 16.4 验证，常规 smoke 下 pg oracle 全量可运行；并完成高并发长跑验证，其中 `QUERY_PARTITIONING`、`DQE`、`CODDTEST` 已在 `--num-threads 10 --num-tries 10 --num-queries 10000` 下通过
-=======
-## v0.1.70 | 2026-04-20
-- 修复 MySQL 视图生成器列数量不匹配：移除显式列名列表，让 MySQL 自动从 SELECT 推导列名，避免 "SELECT list and column names list have different column counts" 错误
-- 修复 MySQL 索引生成器在视图上创建索引：使用 `getRandomTableNonView()` 方法确保只在 BASE TABLE 上创建索引
-- 修复 MySQL BLOB/TEXT/JSON 类型约束生成：禁止在这些类型上生成 UNIQUE 和 PRIMARY KEY 约束，避免 "used in key specification without a key length" 错误
-- 修复 MySQL 字符集转换错误处理：添加二进制与字符串比较时的字符集错误到预期错误列表
-- 修复 MySQL 日期时间常量比较：`MySQLTextConstant.isEquals()` 对非 INT/STRING 类型改用 `IgnoreMeException` 避免 `AssertionError`
-- 修复 MySQL EET oracle 新类型支持：添加 BIT/ENUM/SET/JSON/BLOB 等类型的 fallback 值生成
-- 修复 MySQL PQS oracle 空时间值处理：`getRandomRowValue()` 对 null Timestamp/Time 值返回 NullConstant
-
-## v0.1.69 | 2026-04-20
-- 新增 MySQL JSON 类型支持：`MySQLDataType.JSON` 枚举、`MySQLJSONConstant` 常量类（支持 `getTextRepresentation/isEquals/castAsString`）、DDL 生成、INSERT 值生成、表达式常量生成，JSON 函数（`JSON_TYPE/JSON_VALID`）预期值计算
-- 新增 MySQL BINARY/BLOB 类型支持：`MySQLDataType.BINARY/VARBINARY/BLOB` 枚举、`MySQLBinaryConstant` 常量类（十六进制格式 `X'...'`）、DDL 生成、INSERT 值生成、表达式常量生成
-- 新增 MySQL 临时表和外键支持：`MySQLTableGenerator` 支持 `TEMPORARY` 表生成、`FOREIGN KEY` 约束生成（含 `ON DELETE/ON UPDATE` 动作），扩展 `MySQLTable.isTemporary()` 属性
-- 新增 MySQL RANGE/LIST 分区类型：`PartitionOptions` 扩展 `RANGE/LIST`，支持 `PARTITION BY RANGE/LIST` DDL 生成，含 `VALUES LESS THAN/MAXVALUE/VALUES IN` 分区定义
-- 新增 MySQL 内置函数预期值计算：数学函数（`ABS/CEIL/FLOOR/ROUND/MOD/SIGN`）、字符串函数（`CONCAT/LENGTH/UPPER/LOWER/TRIM/LEFT/RIGHT`）、时间函数（`NOW/CURDATE/CURTIME` 返回 null）
-- 修复 GaussDBPG 未使用导入：`GaussDBPGInsertGenerator` 移除未使用 `import java.util.stream.Collectors` 以消除编译警告
-
-## v0.1.68 | 2026-04-17
-- 新增 GaussDB-A 约束生成：`GaussDBATableGenerator` 支持 PRIMARY KEY、NOT NULL、UNIQUE 约束生成（Oracle A兼容语法），提升数据完整性测试覆盖
-- 新增 GaussDB-A DML 语句生成：`GaussDBAUpdateGenerator`、`GaussDBADeleteGenerator` 实现 UPDATE/DELETE 语句随机生成，扩展 DML 测试范围
-- 修复 GaussDB-A INSERT 错误处理：添加 not-null constraint、unique constraint 等预期错误，避免约束违规导致测试中断
-- 集成 UPDATE/DELETE 到 `GaussDBAProvider.generateDatabase()` 流程，实现完整 DML 生命周期测试
-
-## v0.1.67 | 2026-04-17
-- 新增 GaussDB-A 覆盖率分析报告：`gaussdb_a_coverage_analysis.md`，详细分析 Test Oracle（100%）、数据类型（61.8%）、对象类型、表达式操作符、聚合函数、JOIN类型等支持情况，并列出P0/P1/P2优先级缺失项建议
-
-## v0.1.66 | 2026-04-17
-- 修复 SQLancer GaussDB-A 表创建失败：`GaussDBASchema.fromConnection()` 查询条件仅限 `public` schema，无法找到测试 schema 中的表；现已改为包含测试 schema 名称
-- 修复 GaussDB-A Randomly NPE：`GaussDBAInOperation.create()` 传递 null 导致常量生成失败；现已正确接收 Randomly 参数
-- 修复 GaussDB-A 空字符串处理：`GaussDBAInsertGenerator` CLOB 类型生成时空字符串导致 substring 异常；现已添加空串检查与默认值
-- 修复 GaussDB-A 列引用 NPE：`GaussDBAToStringVisitor` 访问无表引用列时 `getTable().getName()` 崩溃；现已添加 null 检查
-- 修复 GaussDB-A 聚合查询错误处理：`GaussDBATLPAggregateOracle` SQLException 时抛 AssertionError 而非 IgnoreMeException；现已正确捕获并处理预期错误
-- 新增 GaussDB-A 兼容模式检测：`GaussDBAProvider.verifyCompatibilityMode()` 查询 `pg_database.datcompatibility` 验证数据库为 A 兼容模式，非 A 模式时发出警告提示用户创建正确兼容库
->>>>>>> 53dfd17 (save gaussdb and mysql new features at 0420)
 
 ## v0.1.65 | 2026-04-14
 - 修复 SQLancer PostgreSQL：`PostgresExpressionGenerator` 在通用表达式分支对 ENUM/数组类型生成 `CAST(... AS …)` 时调用 `getCompoundDataType` 未覆盖这些类型导致 `AssertionError`（AGGREGATE 等 oracle 可复现）；对上述类型在该分支改为常量生成，与首阶段保守策略一致
