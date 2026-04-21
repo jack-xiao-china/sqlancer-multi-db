@@ -90,7 +90,11 @@
       "Bash(git fetch *)",
       "Bash(git rebase *)",
       "Bash(git checkout *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Skill(ralph-loop:ralph-loop)",
+      "Bash(C:/Users/Jerry.Xiao/.claude/plugins/cache/claude-plugins-official/ralph-loop/1.0.0/scripts/setup-ralph-loop.sh *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
