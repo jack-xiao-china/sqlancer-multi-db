@@ -29,6 +29,12 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE]")
     public List<PostgresOracleFactory> oracle = Arrays.asList(PostgresOracleFactory.QUERY_PARTITIONING);
 
+    @Parameter(names = "--bombard", description = "Run a PostgreSQL stress mode that executes concurrent random SQL against a single database", arity = 1)
+    private boolean bombard;
+
+    @Parameter(names = "--bombard-workers", description = "Number of worker threads to run per database in PostgreSQL bombard mode")
+    private int bombardWorkers = 4;
+
     @Parameter(names = "--connection-timeout", description = "Timeout in seconds for connecting to the server", arity = 1)
     public int connectionTimeoutInSeconds;
 
@@ -59,6 +65,9 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
 
     @Parameter(names = "--pg-index-model", description = "PostgreSQL index generation model: 0=DEFAULT(auto), 1=UNIQUE, 2=PRIMARY_KEY, 3=COMPOSITE, 4=PREFIX_EXPR, 5=SUFFIX_EXPR, 6=EXPRESSION")
     public int pgIndexModel;
+
+    @Parameter(names = "--pg-tables", description = "Number of tables to create in PostgreSQL test databases (default: 3)")
+    public int pgTables = 3;
 
     private static boolean determineDefaultTablespaceSupport() {
         String osName = System.getProperty("os.name").toLowerCase();
@@ -153,10 +162,22 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
         return pgIndexModel;
     }
 
+    public int getPgTables() {
+        return pgTables;
+    }
+
     public void validate() {
         if (pgIndexModel < 0 || pgIndexModel > 6) {
             throw new AssertionError(String.format(
                     "Invalid --pg-index-model value %d. Expected one of: 0, 1, 2, 3, 4, 5, 6.", pgIndexModel));
         }
+    }
+
+    public boolean isBombard() {
+        return bombard;
+    }
+
+    public int getBombardWorkers() {
+        return bombardWorkers;
     }
 }

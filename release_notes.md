@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.1.75 | 2026-04-21
+- 新增 PostgreSQL 表数量参数：`--pg-tables=N` 控制测试数据库中创建的表数量（默认 3 张），此前为硬编码随机 4-6 张
+
+## v0.1.74 | 2026-04-21
+- 新增 PostgreSQL bombard 并发压测模式：`postgres --bombard=true --bombard-workers=N` 支持单 database 多 worker 并发执行随机 SQL；该模式独立于 oracle，复用 PostgreSQL 现有 mutator 权重并混合随机 SELECT，同时排除 `DISCARD`、`TRUNCATE`、`VACUUM`、`CLUSTER`、`REINDEX`、`CREATE_TABLESPACE` 等不适合长跑并发压测的高风险动作
+
 ## v0.1.73 | 2026-04-21
 - 集成验证修复：MySQL、PostgreSQL、GaussDB-PG、GaussDB-A 全面通过集成测试
 - 修复 MySQL ALTER TABLE 对视图执行问题：使用 `getRandomTableNoViewOrBailout()` 替代 `getRandomTable()`，确保只在 BASE TABLE 上执行 ALTER TABLE

@@ -43,6 +43,7 @@ import sqlancer.postgres.gen.PostgresExplainGenerator;
 import sqlancer.postgres.gen.PostgresIndexGenerator;
 import sqlancer.postgres.gen.PostgresInsertGenerator;
 import sqlancer.postgres.gen.PostgresNotifyGenerator;
+import sqlancer.postgres.gen.PostgresRandomQueryGenerator;
 import sqlancer.postgres.gen.PostgresReindexGenerator;
 import sqlancer.postgres.gen.PostgresSequenceGenerator;
 import sqlancer.postgres.gen.PostgresSetGenerator;
@@ -60,6 +61,7 @@ import sqlancer.postgres.gen.PostgresViewGenerator;
 @AutoService(DatabaseProvider.class)
 public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, PostgresOptions> {
 
+    private static final int BOMBARD_MAX_TABLES = 12;
     private static final Object ENUM_TYPES_LOCK = new Object();
     private static final List<String> enumTypeNames = new ArrayList<>();
     private static final Map<String, List<String>> enumTypeLabels = new HashMap<>();
@@ -227,7 +229,8 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
     public void generateDatabase(PostgresGlobalState globalState) throws Exception {
         createEnumTypes(globalState);
         readFunctions(globalState);
-        createTables(globalState, Randomly.fromOptions(4, 5, 6));
+        int numTables = globalState.getDbmsSpecificOptions().getPgTables();
+        createTables(globalState, numTables);
         prepareTables(globalState);
 
         extensionsList = globalState.getDbmsSpecificOptions().extensions;
@@ -251,47 +254,17 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         PostgresOptions opts = globalState.getDbmsSpecificOptions();
         opts.validate();
 
-        username = globalState.getOptions().getUserName();
-        password = globalState.getOptions().getPassword();
-        host = globalState.getOptions().getHost();
-        port = globalState.getOptions().getPort();
-        entryURL = globalState.getDbmsSpecificOptions().connectionURL;
-        // trim URL to exclude "jdbc:"
-        if (entryURL.startsWith("jdbc:")) {
-            entryURL = entryURL.substring(5);
-        }
         databaseName = globalState.getDatabaseName();
-
         try {
-            URI uri = new URI(entryURL);
-            String userInfoURI = uri.getUserInfo();
-            if (userInfoURI != null) {
-                // username and password specified in URL take precedence
-                if (userInfoURI.contains(":")) {
-                    String[] userInfo = userInfoURI.split(":", 2);
-                    username = userInfo[0];
-                    password = userInfo[1];
-                } else {
-                    username = userInfoURI;
-                    password = null;
-                }
-                int userInfoIndex = entryURL.indexOf(userInfoURI);
-                String preUserInfo = entryURL.substring(0, userInfoIndex);
-                String postUserInfo = entryURL.substring(userInfoIndex + userInfoURI.length() + 1);
-                entryURL = preUserInfo + postUserInfo;
-            }
-            if (host == null) {
-                host = uri.getHost();
-            }
-            if (port == MainOptions.NO_SET_PORT) {
-                port = uri.getPort();
-            }
-
             String entryDatabaseName = "postgres";
-            URI entryUri = new URI(uri.getScheme(), null, host, port, "/" + entryDatabaseName, uri.getQuery(),
-                    uri.getFragment());
-            entryURL = entryUri.toString();
-            entryPath = entryUri.getPath();
+            ConnectionInfo connectionInfo = resolveConnectionInfo(globalState.getOptions(), opts, "postgres");
+            entryURL = connectionInfo.url;
+            entryPath = connectionInfo.path;
+            testURL = connectionInfo.url;
+            username = connectionInfo.username;
+            password = connectionInfo.password;
+            host = connectionInfo.host;
+            port = connectionInfo.port;
 
             Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
             globalState.getState().logStatement(String.format("\\c %s;", entryDatabaseName));
@@ -332,12 +305,24 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             }
             con.close();
 
-            URI testUri = new URI(uri.getScheme(), null, host, port, "/" + databaseName, uri.getQuery(),
-                    uri.getFragment());
-            testURL = testUri.toString();
             globalState.getState().logStatement(String.format("\\c %s;", databaseName));
+            return createDatabaseConnection(globalState.getOptions(), opts, databaseName);
+        } catch (URISyntaxException e) {
+            throw new AssertionError(e);
+        }
+    }
 
-            con = DriverManager.getConnection("jdbc:" + testURL, username, password);
+    public SQLConnection createDatabaseConnection(MainOptions options, PostgresOptions postgresOptions, String databaseName)
+            throws SQLException {
+        try {
+            ConnectionInfo connectionInfo = resolveConnectionInfo(options, postgresOptions, databaseName);
+            username = connectionInfo.username;
+            password = connectionInfo.password;
+            host = connectionInfo.host;
+            port = connectionInfo.port;
+            testURL = connectionInfo.url;
+            Connection con = DriverManager.getConnection("jdbc:" + connectionInfo.url, connectionInfo.username,
+                    connectionInfo.password);
             try (Statement s = con.createStatement()) {
                 s.execute("SET lc_messages TO 'C'");
             } catch (SQLException ignored) {
@@ -466,8 +451,148 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         globalState.executeStatement(new SQLQueryAdapter("SET SESSION statement_timeout = 5000;\n"));
     }
 
+    public void bootstrapBombardDatabase(PostgresGlobalState globalState) throws Exception {
+        createEnumTypes(globalState);
+        readFunctions(globalState);
+        globalState.updateSchema();
+        createTables(globalState, Randomly.fromOptions(2, 3));
+        globalState.updateSchema();
+    }
+
+    public SQLQueryAdapter getQueryForBombard(PostgresGlobalState globalState, long workerId, long sequence)
+            throws Exception {
+        int tableCount = globalState.getSchema().getDatabaseTables().size();
+        if (tableCount < BOMBARD_MAX_TABLES && shouldCreateBombardTable(tableCount)) {
+            return PostgresTableGenerator.generate(getBombardTableName(workerId, sequence), globalState.getSchema(),
+                    globalState);
+        }
+        if (!globalState.getSchema().getDatabaseTables().isEmpty() && Randomly.getBoolean()) {
+            String query = PostgresVisitor
+                    .asString(PostgresRandomQueryGenerator.createRandomQuery(Randomly.smallNumber() + 1, globalState))
+                    + ";";
+            return new SQLQueryAdapter(query);
+        }
+        return getWeightedBombardAction(globalState).getQuery(globalState);
+    }
+
+    static boolean isExcludedBombardAction(Action action) {
+        switch (action) {
+        case DISCARD:
+        case CREATE_TABLESPACE:
+        case TRUNCATE:
+        case VACUUM:
+        case CLUSTER:
+        case REINDEX:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    private boolean shouldCreateBombardTable(int tableCount) {
+        if (tableCount == 0) {
+            return true;
+        }
+        if (tableCount < 2) {
+            return Randomly.getBooleanWithSmallProbability();
+        }
+        return tableCount < BOMBARD_MAX_TABLES && Randomly.getBooleanWithRatherLowProbability();
+    }
+
+    private Action getWeightedBombardAction(PostgresGlobalState globalState) {
+        List<Action> availableActions = new ArrayList<>();
+        List<Integer> weights = new ArrayList<>();
+        int totalWeight = 0;
+        for (Action action : Action.values()) {
+            if (isExcludedBombardAction(action)) {
+                continue;
+            }
+            int weight = mapActions(globalState, action);
+            if (weight <= 0) {
+                continue;
+            }
+            availableActions.add(action);
+            weights.add(weight);
+            totalWeight += weight;
+        }
+        if (availableActions.isEmpty()) {
+            throw new AssertionError("No PostgreSQL bombard actions available");
+        }
+        int selection = globalState.getRandomly().getInteger(0, totalWeight);
+        int current = 0;
+        for (int i = 0; i < availableActions.size(); i++) {
+            current += weights.get(i);
+            if (selection < current) {
+                return availableActions.get(i);
+            }
+        }
+        return availableActions.get(availableActions.size() - 1);
+    }
+
+    static String getBombardTableName(long workerId, long sequence) {
+        return String.format("tb%d_%d", workerId, sequence);
+    }
+
     private String getCreateDatabaseCommand(PostgresGlobalState state) {
         return "CREATE DATABASE " + databaseName;
+    }
+
+    private ConnectionInfo resolveConnectionInfo(MainOptions options, PostgresOptions postgresOptions, String targetDatabase)
+            throws URISyntaxException {
+        String resolvedUsername = options.getUserName();
+        String resolvedPassword = options.getPassword();
+        String resolvedHost = options.getHost();
+        int resolvedPort = options.getPort();
+        String resolvedEntryURL = postgresOptions.connectionURL;
+        if (resolvedEntryURL.startsWith("jdbc:")) {
+            resolvedEntryURL = resolvedEntryURL.substring(5);
+        }
+        URI uri = new URI(resolvedEntryURL);
+        String userInfoURI = uri.getUserInfo();
+        if (userInfoURI != null) {
+            if (userInfoURI.contains(":")) {
+                String[] userInfo = userInfoURI.split(":", 2);
+                resolvedUsername = userInfo[0];
+                resolvedPassword = userInfo[1];
+            } else {
+                resolvedUsername = userInfoURI;
+                resolvedPassword = null;
+            }
+        }
+        if (resolvedHost == null) {
+            resolvedHost = uri.getHost();
+        }
+        if (resolvedHost == null) {
+            resolvedHost = PostgresOptions.DEFAULT_HOST;
+        }
+        if (resolvedPort == MainOptions.NO_SET_PORT) {
+            resolvedPort = uri.getPort();
+        }
+        if (resolvedPort == -1) {
+            resolvedPort = PostgresOptions.DEFAULT_PORT;
+        }
+        URI dbUri = new URI(uri.getScheme(), null, resolvedHost, resolvedPort, "/" + targetDatabase, uri.getQuery(),
+                uri.getFragment());
+        return new ConnectionInfo(resolvedUsername, resolvedPassword, resolvedHost, resolvedPort, dbUri.toString(),
+                dbUri.getPath());
+    }
+
+    private static final class ConnectionInfo {
+        private final String username;
+        private final String password;
+        private final String host;
+        private final int port;
+        private final String url;
+        private final String path;
+
+        private ConnectionInfo(String username, String password, String host, int port, String url, String path) {
+            this.username = username;
+            this.password = password;
+            this.host = host;
+            this.port = port;
+            this.url = url;
+            this.path = path;
+        }
     }
 
     @Override

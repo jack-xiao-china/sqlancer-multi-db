@@ -31,6 +31,9 @@ public class PostgresGlobalState extends SQLGlobalState<PostgresOptions, Postgre
     @Override
     public void setConnection(SQLConnection con) {
         super.setConnection(con);
+        if (con == null) {
+            return;
+        }
         try {
             this.opClasses = getOpclasses(getConnection());
             this.operators = getOperators(getConnection());
