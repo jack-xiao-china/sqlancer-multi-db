@@ -125,6 +125,9 @@ public class MySQLIndexGenerator {
         errors.add("Data truncated for functional index");
         errors.add("used in key specification without a key length");
         errors.add("Row size too large"); // seems to happen together with MIN_ROWS in the table declaration
+        // MySQL 不支持直接在 JSON 列上创建索引
+        errors.add("JSON column");
+        errors.add("supports indexing only via generated columns on a specified JSON path");
         return new SQLQueryAdapter(string, errors, true);
     }
 

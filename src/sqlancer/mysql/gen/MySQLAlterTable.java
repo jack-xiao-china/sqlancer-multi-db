@@ -69,7 +69,7 @@ public class MySQLAlterTable {
         errors.add("Compression failed with the following error");
         errors.add("Punch hole not supported by the filesystem");
         sb.append("ALTER TABLE ");
-        MySQLTable table = schema.getRandomTable();
+        MySQLTable table = schema.getRandomTableNoViewOrBailout();
         sb.append(table.getName());
         sb.append(" ");
         List<Action> list = new ArrayList<>(Arrays.asList(Action.values()));

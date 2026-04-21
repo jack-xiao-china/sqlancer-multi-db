@@ -35,7 +35,7 @@ import sqlancer.common.schema.AbstractTables;
 
 public abstract class DQEBase<S extends SQLGlobalState<?, ?>> {
 
-    public static final String COLUMN_ROWID = "rowId";
+    public static final String COLUMN_ROWID = "rowid";
     public static final String COLUMN_UPDATED = "updated";
 
     protected final S state;

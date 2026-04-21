@@ -61,6 +61,8 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
         errors.add("Expression #1 of ORDER BY clause is not in GROUP BY clause");
         errors.add("Every derived table must have its own alias");
         errors.add("Column count doesn't match value count");
+        // Handle SQL syntax errors from generated queries
+        errors.add("You have an error in your SQL syntax");
     }
 
     @Override

@@ -86,7 +86,11 @@
       "Bash(dir \"D:\\\\Jack.Xiao\\\\dbtools\\\\sqlancer-main\\\\sqlancer-main\\\\src\\\\sqlancer\\\\postgres\\\\gen\\\\\" 2>nul)",
       "Bash(mysql *)",
       "Bash(chmod +x mysql_integration_test.sh)",
-      "Bash(tee mysql_test_logs/NOREC_test.log)"
+      "Bash(tee mysql_test_logs/NOREC_test.log)",
+      "Bash(git fetch *)",
+      "Bash(git rebase *)",
+      "Bash(git checkout *)",
+      "Bash(git push *)"
     ]
   }
 }

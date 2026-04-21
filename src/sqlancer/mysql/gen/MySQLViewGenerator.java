@@ -1,7 +1,6 @@
 package sqlancer.mysql.gen;
 
 import sqlancer.Randomly;
-import sqlancer.common.DBMSCommon;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.mysql.MySQLErrors;
