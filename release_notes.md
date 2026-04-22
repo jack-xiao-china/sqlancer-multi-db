@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.1.76 | 2026-04-22
+- 优化 MySQL 数据类型覆盖：移除 PQS 模式下的类型限制，所有数据类型默认在所有 test oracle 中可用
+- 覆盖类型：BIT、时间类型（DATE/TIME/DATETIME/TIMESTAMP/YEAR）、二进制类型（BINARY/VARBINARY/BLOB）、JSON、SET、ENUM
+- 修改文件：MySQLSchema.getRandom()、MySQLExpressionGenerator.generateConstant()、MySQLTableGenerator.appendType()
+- 验证结果：BIT(56)、DATETIME(4)、TIME(5)、JSON_TYPE 等类型和函数在 QUERY_PARTITIONING oracle 中正常工作
+
 ## v0.1.75 | 2026-04-21
 - 修复 MySQL TRUNCATE TABLE 对视图执行问题：`MySQLTruncateTableGenerator` 使用 `getRandomTableNoViewOrBailout()` 替代 `getRandomTable()`，确保只在 BASE TABLE 上执行 TRUNCATE
 - 修复 MySQL ANALYZE TABLE 空列问题：`MySQLAnalyzeTable.updateHistogram()` 和 `dropHistogram()` 添加空列检查，避免对无列的表执行 HISTOGRAM 操作导致 AssertionError

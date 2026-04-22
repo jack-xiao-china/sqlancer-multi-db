@@ -36,7 +36,7 @@ public class MySQLSchema extends AbstractSchema<MySQLGlobalState, MySQLTable> {
         public static MySQLDataType getRandom(MySQLGlobalState globalState) {
             List<MySQLDataType> dataTypes = new ArrayList<>(Arrays.asList(values()));
             MySQLOptions options = globalState.getDbmsSpecificOptions();
-            // 根据参数过滤类型
+            // 根据参数过滤类型（参数默认全部开启）
             if (!options.testBit) {
                 dataTypes.remove(MySQLDataType.BIT);
             }
@@ -54,17 +54,14 @@ public class MySQLSchema extends AbstractSchema<MySQLGlobalState, MySQLTable> {
                 dataTypes.remove(MySQLDataType.VARBINARY);
                 dataTypes.remove(MySQLDataType.BLOB);
             }
-            // PQS 模式下排除复杂类型
-            if (globalState.usesPQS()) {
-                dataTypes.remove(MySQLDataType.BIT);
-                dataTypes.remove(MySQLDataType.ENUM);
-                dataTypes.remove(MySQLDataType.SET);
-                dataTypes.remove(MySQLDataType.JSON);
-                dataTypes.remove(MySQLDataType.BINARY);
-                dataTypes.remove(MySQLDataType.VARBINARY);
-                dataTypes.remove(MySQLDataType.BLOB);
-                return Randomly.fromOptions(MySQLDataType.INT, MySQLDataType.VARCHAR);
+            if (!options.testDates) {
+                dataTypes.remove(MySQLDataType.DATE);
+                dataTypes.remove(MySQLDataType.TIME);
+                dataTypes.remove(MySQLDataType.DATETIME);
+                dataTypes.remove(MySQLDataType.TIMESTAMP);
+                dataTypes.remove(MySQLDataType.YEAR);
             }
+            // 所有类型在所有 oracle 中可用（包括 PQS）
             return Randomly.fromList(dataTypes);
         }
 

@@ -163,14 +163,13 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
         final boolean testDates = state.getDbmsSpecificOptions().testDates;
         final MySQLOptions options = state.getDbmsSpecificOptions();
 
-        // 根据参数构建可用的常量类型列表
+        // 根据参数构建可用的常量类型列表（所有类型在所有 oracle 中可用）
         List<ConstantType> availableTypes = new ArrayList<>();
         availableTypes.add(ConstantType.INT);
         availableTypes.add(ConstantType.NULL);
         availableTypes.add(ConstantType.STRING);
-        if (!state.usesPQS()) {
-            availableTypes.add(ConstantType.DOUBLE);
-        }
+        availableTypes.add(ConstantType.DOUBLE);
+        // 时间类型（默认开启）
         if (testDates) {
             availableTypes.add(ConstantType.DATE);
             availableTypes.add(ConstantType.TIME);
@@ -178,20 +177,20 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
             availableTypes.add(ConstantType.TIMESTAMP);
             availableTypes.add(ConstantType.YEAR);
         }
-        // 根据参数添加 BIT/ENUM/SET 类型
-        if (options.testBit && !state.usesPQS()) {
+        // BIT/ENUM/SET/JSON/BINARY 类型（默认开启，覆盖所有 oracle）
+        if (options.testBit) {
             availableTypes.add(ConstantType.BIT);
         }
-        if (options.testEnums && !state.usesPQS()) {
+        if (options.testEnums) {
             availableTypes.add(ConstantType.ENUM);
         }
-        if (options.testSets && !state.usesPQS()) {
+        if (options.testSets) {
             availableTypes.add(ConstantType.SET);
         }
-        if (options.testJSONDataType && !state.usesPQS()) {
+        if (options.testJSONDataType) {
             availableTypes.add(ConstantType.JSON);
         }
-        if (options.testBinary && !state.usesPQS()) {
+        if (options.testBinary) {
             availableTypes.add(ConstantType.BINARY);
         }
 
