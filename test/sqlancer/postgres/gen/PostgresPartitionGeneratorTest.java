@@ -47,6 +47,54 @@ class PostgresPartitionGeneratorTest {
         assertEquals("FOR VALUES WITH (MODULUS 8, REMAINDER 5)", sb.toString());
     }
 
+    @Test
+    void rendersRangeRangeSubpartitionClause() {
+        PostgresColumn column = new PostgresColumn("c0", PostgresDataType.INT);
+        StringBuilder sb = new StringBuilder();
+
+        PostgresPartitionGenerator.appendPartitionBound(sb, partitionedTable(column, PartitionStrategy.RANGE), column,
+                0);
+        PostgresPartitionGenerator.appendPartitionBy(sb, PartitionStrategy.RANGE, column);
+
+        assertEquals("FOR VALUES FROM (0) TO (100) PARTITION BY RANGE(c0)", sb.toString());
+    }
+
+    @Test
+    void rendersRangeListSubpartitionClause() {
+        PostgresColumn column = new PostgresColumn("c0", PostgresDataType.INT);
+        StringBuilder sb = new StringBuilder();
+
+        PostgresPartitionGenerator.appendPartitionBound(sb, partitionedTable(column, PartitionStrategy.RANGE), column,
+                0);
+        PostgresPartitionGenerator.appendPartitionBy(sb, PartitionStrategy.LIST, column);
+
+        assertEquals("FOR VALUES FROM (0) TO (100) PARTITION BY LIST(c0)", sb.toString());
+    }
+
+    @Test
+    void rendersListRangeSubpartitionClause() {
+        PostgresColumn column = new PostgresColumn("c0", PostgresDataType.INT);
+        StringBuilder sb = new StringBuilder();
+
+        PostgresPartitionGenerator.appendPartitionBound(sb, partitionedTable(column, PartitionStrategy.LIST), column,
+                0);
+        PostgresPartitionGenerator.appendPartitionBy(sb, PartitionStrategy.RANGE, column);
+
+        assertEquals("FOR VALUES IN (0) PARTITION BY RANGE(c0)", sb.toString());
+    }
+
+    @Test
+    void rendersListListSubpartitionClause() {
+        PostgresColumn column = new PostgresColumn("c0", PostgresDataType.INT);
+        StringBuilder sb = new StringBuilder();
+
+        PostgresPartitionGenerator.appendPartitionBound(sb, partitionedTable(column, PartitionStrategy.LIST), column,
+                0);
+        PostgresPartitionGenerator.appendPartitionBy(sb, PartitionStrategy.LIST, column);
+
+        assertEquals("FOR VALUES IN (0) PARTITION BY LIST(c0)", sb.toString());
+    }
+
     private static PostgresTable partitionedTable(PostgresColumn column, PartitionStrategy strategy) {
         PostgresTable table = new PostgresTable("t0", List.of(column), List.of(), TableType.STANDARD, List.of(),
                 List.of(), false, true, true, false, null, strategy, List.of(column.getName()));

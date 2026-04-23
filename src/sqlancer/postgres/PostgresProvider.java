@@ -108,7 +108,9 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         DISCARD(PostgresDiscardGenerator::create), //
         DROP_INDEX(PostgresDropIndexGenerator::create), //
         CREATE_PARTITION(PostgresPartitionGenerator::createPartition), //
+        ATTACH_PARTITION(PostgresPartitionGenerator::attachPartition), //
         DETACH_PARTITION(PostgresPartitionGenerator::detachPartition), //
+        DROP_PARTITION(PostgresPartitionGenerator::dropPartition), //
         INSERT(PostgresInsertGenerator::insert), //
         UPDATE(PostgresUpdateGenerator::create), //
         TRUNCATE(PostgresTruncateGenerator::create), //
@@ -172,7 +174,11 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         case CREATE_PARTITION:
             nrPerformed = PostgresPartitionGenerator.hasCreatePartitionCandidate(globalState) ? r.getInteger(0, 3) : 0;
             break;
+        case ATTACH_PARTITION:
+            nrPerformed = PostgresPartitionGenerator.hasAttachPartitionCandidate(globalState) ? r.getInteger(0, 2) : 0;
+            break;
         case DETACH_PARTITION:
+        case DROP_PARTITION:
             nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case COMMIT:
@@ -453,7 +459,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         if (!PostgresPartitionGenerator.hasCreatePartitionCandidate(globalState)) {
             return;
         }
-        int nrPartitions = Randomly.fromOptions(1, 2);
+        int nrPartitions = Randomly.fromOptions(2, 3, 4);
         for (int i = 0; i < nrPartitions; i++) {
             try {
                 globalState.executeStatement(PostgresPartitionGenerator.createPartition(globalState));
@@ -508,7 +514,9 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         case CLUSTER:
         case REINDEX:
         case CREATE_PARTITION:
+        case ATTACH_PARTITION:
         case DETACH_PARTITION:
+        case DROP_PARTITION:
             return true;
         default:
             return false;

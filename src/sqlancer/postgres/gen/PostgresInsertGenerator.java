@@ -1,5 +1,6 @@
 package sqlancer.postgres.gen;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,7 +43,12 @@ public final class PostgresInsertGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("INSERT INTO ");
         sb.append(table.getName());
-        List<PostgresColumn> columns = table.getRandomNonEmptyColumnSubset();
+        PostgresColumn partitionKeyColumn = getPartitionKeyColumnForRouting(globalState, table);
+        String partitionRoutingValue = getPartitionRoutingValue(globalState, table, partitionKeyColumn);
+        List<PostgresColumn> columns = new ArrayList<>(table.getRandomNonEmptyColumnSubset());
+        if (partitionKeyColumn != null && !columns.contains(partitionKeyColumn)) {
+            columns.add(partitionKeyColumn);
+        }
         sb.append("(");
         sb.append(columns.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
         sb.append(")");
@@ -61,8 +67,8 @@ public final class PostgresInsertGenerator {
                 if (i != 0) {
                     sbRowValue.append(", ");
                 }
-                sbRowValue.append(PostgresVisitor.asString(PostgresExpressionGenerator
-                        .generateConstant(globalState.getRandomly(), columns.get(i).getCompoundType())));
+                appendInsertValue(globalState, sbRowValue, columns.get(i), partitionKeyColumn, partitionRoutingValue,
+                        false);
             }
             sbRowValue.append(")");
 
@@ -79,7 +85,7 @@ public final class PostgresInsertGenerator {
                 if (i != 0) {
                     sb.append(", ");
                 }
-                insertRow(globalState, sb, columns, n == 1);
+                insertRow(globalState, sb, columns, n == 1, partitionKeyColumn, partitionRoutingValue);
             }
         }
         if (Randomly.getBooleanWithRatherLowProbability()) {
@@ -105,27 +111,53 @@ public final class PostgresInsertGenerator {
     }
 
     private static void insertRow(PostgresGlobalState globalState, StringBuilder sb, List<PostgresColumn> columns,
-            boolean canBeDefault) {
+            boolean canBeDefault, PostgresColumn partitionKeyColumn, String partitionRoutingValue) {
         sb.append("(");
         for (int i = 0; i < columns.size(); i++) {
             if (i != 0) {
                 sb.append(", ");
             }
-            if (!Randomly.getBooleanWithSmallProbability() || !canBeDefault) {
-                PostgresExpression generateConstant;
-                if (Randomly.getBoolean()) {
-                    generateConstant = PostgresExpressionGenerator.generateConstant(globalState.getRandomly(),
-                            columns.get(i).getCompoundType());
-                } else {
-                    generateConstant = new PostgresExpressionGenerator(globalState)
-                            .generateExpression(columns.get(i).getCompoundType());
-                }
-                sb.append(PostgresVisitor.asString(generateConstant));
-            } else {
-                sb.append("DEFAULT");
-            }
+            appendInsertValue(globalState, sb, columns.get(i), partitionKeyColumn, partitionRoutingValue, canBeDefault);
         }
         sb.append(")");
+    }
+
+    private static void appendInsertValue(PostgresGlobalState globalState, StringBuilder sb, PostgresColumn column,
+            PostgresColumn partitionKeyColumn, String partitionRoutingValue, boolean canBeDefault) {
+        if (column == partitionKeyColumn && partitionRoutingValue != null) {
+            sb.append(partitionRoutingValue);
+            return;
+        }
+        if (Randomly.getBooleanWithSmallProbability() && canBeDefault) {
+            sb.append("DEFAULT");
+            return;
+        }
+        PostgresExpression generateConstant;
+        if (Randomly.getBoolean()) {
+            generateConstant = PostgresExpressionGenerator.generateConstant(globalState.getRandomly(),
+                    column.getCompoundType());
+        } else {
+            generateConstant = new PostgresExpressionGenerator(globalState).generateExpression(column.getCompoundType());
+        }
+        sb.append(PostgresVisitor.asString(generateConstant));
+    }
+
+    private static PostgresColumn getPartitionKeyColumnForRouting(PostgresGlobalState globalState, PostgresTable table) {
+        if (!table.isPartitioned() || !Randomly.getBoolean()) {
+            return null;
+        }
+        if (!PostgresPartitionGenerator.canGeneratePartitionRoutingValue(globalState, table)) {
+            return null;
+        }
+        return PostgresPartitionGenerator.getSimplePartitionKeyColumn(table);
+    }
+
+    private static String getPartitionRoutingValue(PostgresGlobalState globalState, PostgresTable table,
+            PostgresColumn partitionKeyColumn) {
+        if (partitionKeyColumn == null) {
+            return null;
+        }
+        return PostgresPartitionGenerator.getPartitionRoutingValue(globalState, table);
     }
 
 }

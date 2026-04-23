@@ -75,6 +75,8 @@
 - 验证结果：MySQL 执行 67K+ 查询（成功率 94%），TLP Aggregate oracle 发现 MySQL 逻辑 bug（符合预期行为），工具稳定运行无内部错误
 - 新增 PostgreSQL 表数量参数：`--pg-tables=N` 控制测试数据库中创建的表数量（默认 3 张），此前为硬编码随机 4-6 张
 - 补齐 PostgreSQL 分区表基础 DDL 覆盖：schema 识别父/子分区关系与简单分区 key；新增合法 `CREATE TABLE ... PARTITION OF ... FOR VALUES ...`（覆盖 RANGE/LIST/HASH，RANGE/LIST 支持 DEFAULT 分区）与 `ALTER TABLE ... DETACH PARTITION` 生成；建表阶段主动为父分区表补 child partition；`TRUNCATE` 低概率覆盖 `ONLY` 父分区表；bombard 模式排除分区 DDL 以避免压测锁干扰
+- 扩展 PostgreSQL 多级分区与 ALTER 分区 DDL 覆盖：`CREATE TABLE ... PARTITION OF ... FOR VALUES ... PARTITION BY ...` 支持生成 `RANGE+RANGE`、`RANGE+LIST`、`LIST+RANGE`、`LIST+LIST` 二级分区组合；新增 `ALTER TABLE ... ATTACH PARTITION ... FOR VALUES ...`、`ALTER TABLE ... DETACH PARTITION ...` 与 `DROP TABLE` 删除分区生成
+- 增强 PostgreSQL 分区 DML 覆盖：`INSERT` 针对已有 RANGE/LIST child partition 生成可路由的分区键值；`UPDATE` 低概率主动更新 partition key 到已有分区范围/列表值，覆盖分区表行迁移路径
 
 ## v0.1.74 | 2026-04-21
 - 集成验证完成：GaussDB-M（M兼容模式）全量通过集成测试，14个 oracle 全部可用
