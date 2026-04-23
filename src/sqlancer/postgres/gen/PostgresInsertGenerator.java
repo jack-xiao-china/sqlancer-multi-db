@@ -80,7 +80,8 @@ public final class PostgresInsertGenerator {
                 sb.append(sbRowValue);
             }
         } else {
-            int n = Math.max(1, globalState.getDbmsSpecificOptions().getPgGenerateSqlNum());
+            int n = globalState.getRandomly().getInteger(1,
+                    Math.max(1, globalState.getDbmsSpecificOptions().getPgGenerateRowsPerInsert()));
             for (int i = 0; i < n; i++) {
                 if (i != 0) {
                     sb.append(", ");

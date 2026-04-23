@@ -60,8 +60,11 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--pg-table-columns", description = "Specifies the number of columns generated in PostgreSQL CREATE TABLE statements")
     public int pgTableColumns = 10;
 
-    @Parameter(names = "--pg-generate-sql-num", description = "Specifies the number of rows generated in PostgreSQL INSERT ... VALUES statements")
+    @Parameter(names = "--pg-generate-sql-num", description = "Specifies the PostgreSQL mutation-stage SQL count budget used by prepareTables")
     public int pgGenerateSqlNum = 3;
+
+    @Parameter(names = "--pg-generate-rows-per-insert", description = "Specifies the maximum number of rows generated in a single PostgreSQL INSERT ... VALUES statement")
+    public int pgGenerateRowsPerInsert = 3;
 
     @Parameter(names = "--pg-index-model", description = "PostgreSQL index generation model: 0=DEFAULT(auto), 1=UNIQUE, 2=PRIMARY_KEY, 3=COMPOSITE, 4=PREFIX_EXPR, 5=SUFFIX_EXPR, 6=EXPRESSION")
     public int pgIndexModel;
@@ -158,6 +161,10 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
         return pgGenerateSqlNum;
     }
 
+    public int getPgGenerateRowsPerInsert() {
+        return pgGenerateRowsPerInsert;
+    }
+
     public int getPgIndexModel() {
         return pgIndexModel;
     }
@@ -170,6 +177,15 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
         if (pgIndexModel < 0 || pgIndexModel > 6) {
             throw new AssertionError(String.format(
                     "Invalid --pg-index-model value %d. Expected one of: 0, 1, 2, 3, 4, 5, 6.", pgIndexModel));
+        }
+        if (pgGenerateSqlNum < 0) {
+            throw new AssertionError(String.format(
+                    "Invalid --pg-generate-sql-num value %d. Expected a non-negative integer.", pgGenerateSqlNum));
+        }
+        if (pgGenerateRowsPerInsert < 1) {
+            throw new AssertionError(String.format(
+                    "Invalid --pg-generate-rows-per-insert value %d. Expected a positive integer.",
+                    pgGenerateRowsPerInsert));
         }
     }
 

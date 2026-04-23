@@ -154,7 +154,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         int nrPerformed;
         switch (a) {
         case CREATE_INDEX:
-            nrPerformed = r.getInteger(0, 3);
+            nrPerformed = r.getInteger(1, 5);
             break;
         case CLUSTER:
             // CLUSTER can be very expensive (reorders entire table)
@@ -165,39 +165,39 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case ALTER_STATISTICS:
-            nrPerformed = r.getInteger(0, 2);
+            nrPerformed = r.getInteger(0, 3);
             break;
         case DISCARD:
         case DROP_INDEX:
-            nrPerformed = r.getInteger(0, 5);
+            nrPerformed = r.getInteger(0, 6);
             break;
         case CREATE_PARTITION:
-            nrPerformed = PostgresPartitionGenerator.hasCreatePartitionCandidate(globalState) ? r.getInteger(0, 3) : 0;
+            nrPerformed = PostgresPartitionGenerator.hasCreatePartitionCandidate(globalState) ? r.getInteger(1, 5) : 0;
             break;
         case ATTACH_PARTITION:
-            nrPerformed = PostgresPartitionGenerator.hasAttachPartitionCandidate(globalState) ? r.getInteger(0, 2) : 0;
+            nrPerformed = PostgresPartitionGenerator.hasAttachPartitionCandidate(globalState) ? r.getInteger(0, 3) : 0;
             break;
         case DETACH_PARTITION:
         case DROP_PARTITION:
-            nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
+            nrPerformed = Randomly.getBooleanWithRatherLowProbability() ? r.getInteger(0, 2) : 0;
             break;
         case COMMIT:
             nrPerformed = r.getInteger(0, 0);
             break;
         case ALTER_TABLE:
-            nrPerformed = r.getInteger(0, 5);
+            nrPerformed = r.getInteger(3, 12);
             break;
         case REINDEX:
             // REINDEX can be expensive (rebuilds entire index)
             nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case RESET:
-            nrPerformed = r.getInteger(0, 3);
+            nrPerformed = r.getInteger(0, 4);
             break;
         case DELETE:
         case RESET_ROLE:
         case SET:
-            nrPerformed = r.getInteger(0, 5);
+            nrPerformed = r.getInteger(1, 7);
             break;
         case ANALYZE:
             // ANALYZE collects statistics and can be slow
@@ -214,7 +214,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         case UNLISTEN:
         case CREATE_SEQUENCE:
         case DROP_STATISTICS:
-            nrPerformed = r.getInteger(0, 2);
+            nrPerformed = r.getInteger(0, 3);
             break;
         case TRUNCATE:
             // TRUNCATE clears table data, may affect test oracle
@@ -228,10 +228,11 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             nrPerformed = Randomly.getBooleanWithSmallProbability() ? r.getInteger(0, 1) : 0;
             break;
         case UPDATE:
-            nrPerformed = r.getInteger(0, 10);
+            nrPerformed = r.getInteger(3, 10);
             break;
         case INSERT:
-            nrPerformed = r.getInteger(0, globalState.getOptions().getMaxNumberInserts());
+            nrPerformed = r.getInteger(Math.max(1, globalState.getDbmsSpecificOptions().getPgGenerateSqlNum() / 3),
+                    globalState.getDbmsSpecificOptions().getPgGenerateSqlNum());
             break;
         default:
             throw new AssertionError(a);

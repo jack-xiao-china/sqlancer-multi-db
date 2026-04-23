@@ -749,7 +749,11 @@ public class PostgresAlterTableGenerator {
 
     private void appendSetSchema(StringBuilder sb, ExpectedErrors errors) {
         sb.append("SET SCHEMA ");
-        sb.append(Randomly.fromOptions("public", "extensions"));
+        if (globalState.getDbmsSpecificOptions().extensions.isEmpty()) {
+            sb.append("public");
+        } else {
+            sb.append(Randomly.fromOptions("public", "extensions"));
+        }
         errors.add("schema does not exist");
         errors.add("already exists in schema");
         errors.add("cannot move");
