@@ -1,6 +1,6 @@
 # SQLancer 用户使用指导
 
-**文档版本**: v0.1.73 (2026-04-21)  
+**文档版本**: v0.1.81 (2026-04-24)  
 **参考源码**: [SQLancer GitHub](https://github.com/sqlancer/sqlancer)  
 
 本版本扩展了 SQLancer 对 MySQL、PostgreSQL、GaussDB-A、GaussDB-PG、GaussDB-M 等数据库的全面支持，包括：
@@ -96,6 +96,12 @@ java -jar sqlancer-2.0.0.jar --use-reducer mysql --oracle EET
 - 数组：ARRAY (INT[], VARCHAR[]等)
 - 枚举：ENUM
 
+**PostgreSQL DDL/DML 覆盖增强**：
+- DDL：`DROP TABLE`、`DROP VIEW`、`DROP SEQUENCE`、`ALTER SEQUENCE`、`ALTER INDEX`
+- 对象：composite `CREATE TYPE`、简单 SQL `CREATE FUNCTION`、`CREATE RULE`
+- 索引：`BTREE/HASH/GIST/GIN/SPGIST/BRIN`
+- DML：`MERGE`、低频 `COPY ... TO STDOUT`
+- 暂未启用：触发器与权限管理语句（如 `GRANT/REVOKE`）
 
 **PostgreSQL 专属参数**：
 ```bash
@@ -312,6 +318,11 @@ java -jar target/sqlancer-2.0.0.jar \
 ---
 
 ## 八、版本历史
+
+### v0.1.81 (2026-04-24)
+- 扩展 PostgreSQL DDL/DML 生成：DROP/ALTER 对象、composite CREATE TYPE、CREATE FUNCTION、CREATE RULE、MERGE、低频 COPY
+- PostgreSQL 索引 access method 增加 SPGIST/BRIN
+- 触发器与权限语句暂不启用，避免引入额外状态与权限噪声
 
 ### v0.1.73 (2026-04-21)
 - 集成验证：MySQL、PostgreSQL、GaussDB-PG、GaussDB-A 全面通过

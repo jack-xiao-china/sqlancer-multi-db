@@ -1,5 +1,6 @@
 package sqlancer.postgres.gen;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -17,6 +18,8 @@ public final class PostgresUpdateGenerator extends AbstractUpdateGenerator<Postg
 
     private final PostgresGlobalState globalState;
     private PostgresTable randomTable;
+    private PostgresColumn partitionKeyColumn;
+    private String partitionRoutingValue;
 
     private PostgresUpdateGenerator(PostgresGlobalState globalState) {
         this.globalState = globalState;
@@ -34,7 +37,11 @@ public final class PostgresUpdateGenerator extends AbstractUpdateGenerator<Postg
 
     private SQLQueryAdapter generate() {
         randomTable = globalState.getSchema().getRandomTable(t -> t.isInsertable());
-        List<PostgresColumn> columns = randomTable.getRandomNonEmptyColumnSubset();
+        configurePartitionKeyMovement();
+        List<PostgresColumn> columns = new ArrayList<>(randomTable.getRandomNonEmptyColumnSubset());
+        if (partitionKeyColumn != null && !columns.contains(partitionKeyColumn)) {
+            columns.add(partitionKeyColumn);
+        }
         sb.append("UPDATE ");
         sb.append(randomTable.getName());
         sb.append(" SET ");
@@ -46,6 +53,10 @@ public final class PostgresUpdateGenerator extends AbstractUpdateGenerator<Postg
         errors.add("invalid input syntax for ");
         errors.add("operator does not exist: text = boolean");
         errors.add("violates check constraint");
+        errors.add("no partition of relation");
+        errors.add("invalid input syntax");
+        errors.add("cannot move row");
+        errors.add("tuple to be locked was already moved to another partition");
         errors.add("could not determine which collation to use for string comparison");
         errors.add("but expression is of type");
         PostgresCommon.addCommonExpressionErrors(errors);
@@ -61,6 +72,10 @@ public final class PostgresUpdateGenerator extends AbstractUpdateGenerator<Postg
 
     @Override
     protected void updateValue(PostgresColumn column) {
+        if (column == partitionKeyColumn && partitionRoutingValue != null) {
+            sb.append(partitionRoutingValue);
+            return;
+        }
         if (!Randomly.getBoolean()) {
             PostgresExpression constant = PostgresExpressionGenerator.generateConstant(globalState.getRandomly(),
                     column.getCompoundType());
@@ -75,6 +90,17 @@ public final class PostgresUpdateGenerator extends AbstractUpdateGenerator<Postg
             sb.append(PostgresVisitor.asString(expr));
             sb.append(")");
         }
+    }
+
+    private void configurePartitionKeyMovement() {
+        if (!randomTable.isPartitioned() || !Randomly.getBoolean()) {
+            return;
+        }
+        if (!PostgresPartitionGenerator.canGeneratePartitionRoutingValue(globalState, randomTable)) {
+            return;
+        }
+        partitionKeyColumn = PostgresPartitionGenerator.getSimplePartitionKeyColumn(randomTable);
+        partitionRoutingValue = PostgresPartitionGenerator.getPartitionRoutingValue(globalState, randomTable);
     }
 
 }

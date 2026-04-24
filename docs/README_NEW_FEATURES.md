@@ -58,6 +58,18 @@ The current PostgreSQL-specific tuning options are:
 java -jar sqlancer.jar postgres --coverage-policy AGGRESSIVE --pg-index-model 6 --oracle WHERE
 ```
 
+### 2.1 PostgreSQL DDL/DML Coverage
+
+The PostgreSQL action set now includes additional schema and data-manipulation statements with conservative weights:
+
+- DDL: `DROP TABLE`, `DROP VIEW`, `DROP SEQUENCE`, `ALTER SEQUENCE`, `ALTER INDEX`
+- Object DDL: composite `CREATE TYPE`, simple SQL `CREATE FUNCTION`, `CREATE RULE`
+- Index access methods: `BTREE`, `HASH`, `GIST`, `GIN`, `SPGIST`, `BRIN`
+- DML: PostgreSQL 15+ `MERGE`
+- COPY: low-frequency `COPY ... TO STDOUT` coverage probe
+
+Trigger generation and privilege management statements such as `GRANT`/`REVOKE` are intentionally not enabled in this pass.
+
 ### 3. MySQL Extended Feature Flags
 
 MySQL has extensive feature flags for fine-grained testing control:

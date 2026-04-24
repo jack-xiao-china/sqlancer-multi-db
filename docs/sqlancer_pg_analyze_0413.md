@@ -52,16 +52,18 @@ SQLancer 当前在 `sqlancer.postgres.PostgresSchema.PostgresDataType` 中的类
 - **表（table）**：`CREATE TABLE` 支持 `TEMP/UNLOGGED`、`IF NOT EXISTS`、`LIKE ... INCLUDING/EXCLUDING`、列约束（`NOT NULL/NULL/UNIQUE/PRIMARY KEY/DEFAULT/CHECK/GENERATED`）、部分表级约束、`INHERITS`、`PARTITION BY (RANGE/LIST/HASH)`、`USING <access method>`、`WITH (...)`、`ON COMMIT ...`（临时表）等。
 - **索引/聚簇**：`CREATE INDEX`、`CLUSTER`、`REINDEX`、`DROP INDEX`
 - **视图**：`CREATE VIEW` 支持 `MATERIALIZED`、`OR REPLACE`、`TEMP/TEMPORARY`、`RECURSIVE`、`WITH ... CHECK OPTION`；并有 `ALTER VIEW RENAME COLUMN` 的 action。
-- **序列**：`CREATE SEQUENCE`
+- **删除/变更类 DDL**：独立生成 `DROP TABLE`、`DROP VIEW`、`DROP SEQUENCE`、`ALTER SEQUENCE`、`ALTER INDEX`
+- **序列**：`CREATE SEQUENCE` 以及低频 `ALTER/DROP SEQUENCE`
+- **类型/函数/规则对象**：enum 预置类型、composite `CREATE TYPE`、简单 SQL `CREATE FUNCTION`、`CREATE RULE`
 - **统计对象**：`CREATE STATISTICS / ALTER / DROP`（并从 `pg_statistic_ext` 读取）
 - **表空间**：`CREATE TABLESPACE`
 - **会话/事务/维护类语句**：`SET/RESET/RESET ROLE`、`COMMIT/ROLLBACK/BEGIN`、`ANALYZE/VACUUM/TRUNCATE/DISCARD`、`COMMENT ON`、`NOTIFY/LISTEN/UNLISTEN`
 
 对照 PostgreSQL “对象面”（文档 Chapter 5.14 及更广泛章节），当前明显欠缺的对象/DDL 方向包括（按对覆盖收益排序）：
 
-- **类型系统对象**：`CREATE TYPE`（enum/composite/range/base）、`CREATE DOMAIN`、`CREATE CAST`、`CREATE OPERATOR/OPERATOR CLASS/FAMILY`（至少需要“被引用/被使用”的覆盖）
-- **函数/过程/触发器生态**：`CREATE FUNCTION`、`CREATE PROCEDURE`、`CREATE TRIGGER`、`CREATE EVENT TRIGGER`（以及语言/扩展依赖）
-- **权限/角色/安全**：`CREATE ROLE/GRANT/REVOKE`、RLS policy（当前有 ALTER TABLE 的启用/强制动作，但缺少 `CREATE POLICY` 等）
+- **类型系统对象**：已覆盖 enum/composite `CREATE TYPE`；仍缺 `CREATE DOMAIN`、range/base type、`CREATE CAST`、`CREATE OPERATOR/OPERATOR CLASS/FAMILY`（至少需要“被引用/被使用”的覆盖）
+- **函数/过程/触发器生态**：已覆盖简单 SQL `CREATE FUNCTION` 与 `CREATE RULE`；`CREATE PROCEDURE`、`CREATE TRIGGER`、`CREATE EVENT TRIGGER` 暂未启用（触发器会显著影响 DML 副作用，需单独评审）
+- **权限/角色/安全**：`CREATE ROLE/GRANT/REVOKE`、RLS policy（当前有 ALTER TABLE 的启用/强制动作，但缺少 `CREATE POLICY` 等；权限语句本轮暂不启用）
 - **Schema/命名空间**：`CREATE SCHEMA`、search_path 变化（当前 extension 仅在单独 schema 里创建，但不生成 schema 对象变体）
 - **外部数据（FDW）**：文档中属于重要对象面（当前未见 CREATE SERVER/USER MAPPING/FOREIGN TABLE 等生成）
 - **物化视图刷新/依赖对象**：`REFRESH MATERIALIZED VIEW`、依赖链相关 DDL
@@ -86,7 +88,8 @@ SQLancer 当前在 `sqlancer.postgres.PostgresSchema.PostgresDataType` 中的类
   - `INSERT ... SELECT ...`、`DEFAULT VALUES`
   - `UPDATE ... FROM ...`（PostgreSQL 常用）
   - `DELETE ... USING ...`
-  - `MERGE`（PG15+ 引入，属于显著语法面）
+  - `MERGE` 已作为低频 DML action 接入，但仍可继续增强 `WHEN` 子句组合与列筛选策略
+  - `COPY` 已低频覆盖 `COPY ... TO STDOUT`，主要作为语法探针，避免 JDBC COPY 交互模式带来高频噪声
   - 更系统化的 `RETURNING`（INSERT/UPDATE/DELETE 全覆盖与多列/表达式变体）
 - **更丰富的查询语法点**：
   - `DISTINCT ON`、`GROUPING SETS/ROLLUP/CUBE`、`FILTER (WHERE ...)`（聚合）
@@ -118,9 +121,9 @@ SQLancer 当前在 `sqlancer.postgres.PostgresSchema.PostgresDataType` 中的类
 
 - **已覆盖核心**
   - 常见表达式、JOIN、WHERE/GROUP BY/HAVING、ORDER BY、LIMIT/OFFSET、子查询、窗口函数（有一定概率）、部分 CTE/递归（主要在视图生成中体现）
-  - DML 基本形态（INSERT/UPDATE/DELETE + 少量 Postgres 特性：`ON CONFLICT DO NOTHING`、`DELETE ONLY`、`RETURNING`）
+  - DML 基本形态（INSERT/UPDATE/DELETE + 少量 Postgres 特性：`ON CONFLICT DO NOTHING`、`DELETE ONLY`、`RETURNING`），以及低频 `MERGE` / `COPY ... TO STDOUT`
 - **明显缺口**
-  - `MERGE`、`UPDATE ... FROM`、`DELETE ... USING`、`INSERT ... SELECT`、`ON CONFLICT DO UPDATE`
+  - `UPDATE ... FROM`、`DELETE ... USING`、`INSERT ... SELECT`、`ON CONFLICT DO UPDATE`，以及更完整的 `MERGE`/`COPY` 变体
   - `DISTINCT ON`、`GROUPING SETS/ROLLUP/CUBE`、`FILTER`、更系统化 set operations（UNION/INTERSECT/EXCEPT）与 `VALUES`
   - 类型驱动的语法（array/json/range/tsvector 等）
 
@@ -175,7 +178,7 @@ SQLancer 并非“实现一个完整 SQL 解析器/执行器”，而是围绕 t
   - `INSERT ... SELECT ...`
   - `UPDATE ... FROM ...`
   - `DELETE ... USING ...`
-  - `MERGE`
+  - 继续增强 `MERGE` 的 `WHEN MATCHED/NOT MATCHED` 分支组合与 identity/generated 列筛选
   - 全面化 `RETURNING`（INSERT/UPDATE/DELETE）
 - **SELECT 子句增强**：
   - `DISTINCT ON`

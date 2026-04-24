@@ -29,6 +29,9 @@ public class PostgresAlterTableGenerator {
         ALTER_TABLE_DROP_COLUMN,
         DROP_CONSTRAINT,
         ALTER_TABLE_RENAME_COLUMN,
+        ALTER_TABLE_RENAME_TABLE,
+        ALTER_TABLE_SET_SCHEMA,
+        RENAME_CONSTRAINT,
         ALTER_COLUMN_TYPE,
         ALTER_COLUMN_SET_DROP_DEFAULT,
         ALTER_COLUMN_SET_DROP_NULL,
@@ -49,6 +52,8 @@ public class PostgresAlterTableGenerator {
         SET_WITH_OIDS,
         SET_WITHOUT_OIDS,
         SET_LOGGED_UNLOGGED,
+        INHERIT,
+        NO_INHERIT,
         NOT_OF,
         OWNER_TO,
         REPLICA_IDENTITY,
@@ -273,12 +278,17 @@ public class PostgresAlterTableGenerator {
         case VALIDATE_CONSTRAINT:
         case CLUSTER_ON:
         case DROP_CONSTRAINT:
+        case RENAME_CONSTRAINT:
             return ActionTier.REQUIRES_OBJECT;
         case ALTER_TABLE_DROP_COLUMN:
         case ALTER_TABLE_RENAME_COLUMN:
+        case ALTER_TABLE_RENAME_TABLE:
+        case ALTER_TABLE_SET_SCHEMA:
         case ALTER_COLUMN_TYPE:
         case ADD_TABLE_CONSTRAINT:
         case SET_LOGGED_UNLOGGED:
+        case INHERIT:
+        case NO_INHERIT:
         case REPLICA_IDENTITY:
         case ALTER_VIEW_RENAME_COLUMN:
         case SET_WITH_OIDS:
@@ -298,6 +308,12 @@ public class PostgresAlterTableGenerator {
             return !randomTable.getConstraints().isEmpty();
         case ALTER_TABLE_RENAME_COLUMN:
             return true;
+        case ALTER_TABLE_RENAME_TABLE:
+            return randomTable.getTableType() != PostgresTable.TableType.TEMPORARY;
+        case ALTER_TABLE_SET_SCHEMA:
+            return randomTable.getTableType() != PostgresTable.TableType.TEMPORARY;
+        case RENAME_CONSTRAINT:
+            return !randomTable.getConstraints().isEmpty();
         case ALTER_COLUMN_TYPE:
             return !randomTable.isPartitioned() && randomTable.getTableType() != PostgresTable.TableType.TEMPORARY;
         case ADD_TABLE_CONSTRAINT_USING_INDEX:
@@ -310,6 +326,9 @@ public class PostgresAlterTableGenerator {
             return false;
         case SET_LOGGED_UNLOGGED:
             return !randomTable.isPartitioned() && randomTable.getTableType() != PostgresTable.TableType.TEMPORARY;
+        case INHERIT:
+        case NO_INHERIT:
+            return hasInheritanceCandidate();
         case REPLICA_IDENTITY:
             return true;
         case ALTER_VIEW_RENAME_COLUMN:
@@ -337,6 +356,15 @@ public class PostgresAlterTableGenerator {
             }
         }
         return constraints;
+    }
+
+    private boolean hasInheritanceCandidate() {
+        for (PostgresTable table : globalState.getSchema().getDatabaseTables()) {
+            if (!table.isView() && table != randomTable) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private List<PostgresIndex> getCompatibleIndexesForReplicaIdentity() {
@@ -404,6 +432,15 @@ public class PostgresAlterTableGenerator {
             break;
         case ALTER_TABLE_RENAME_COLUMN:
             appendTableRenameColumn(sb, errors);
+            break;
+        case ALTER_TABLE_RENAME_TABLE:
+            appendRenameTable(sb, errors);
+            break;
+        case ALTER_TABLE_SET_SCHEMA:
+            appendSetSchema(sb, errors);
+            break;
+        case RENAME_CONSTRAINT:
+            appendRenameConstraint(sb, errors);
             break;
         case ALTER_COLUMN_TYPE:
             alterColumn(randomTable, sb);
@@ -550,6 +587,12 @@ public class PostgresAlterTableGenerator {
             errors.add("to logged because it references unlogged table");
             errors.add("to unlogged because it references logged table");
             break;
+        case INHERIT:
+            appendInherit(sb, errors, false);
+            break;
+        case NO_INHERIT:
+            appendInherit(sb, errors, true);
+            break;
         case NOT_OF:
             errors.add("is not a typed table");
             sb.append("NOT OF");
@@ -694,6 +737,39 @@ public class PostgresAlterTableGenerator {
         errors.add("cannot rename column");
     }
 
+    private void appendRenameTable(StringBuilder sb, ExpectedErrors errors) {
+        sb.append("RENAME TO ");
+        sb.append(randomTable.getName());
+        sb.append("_renamed_");
+        sb.append(r.getInteger(1, 1000));
+        errors.add("relation already exists");
+        errors.add("cannot rename");
+        errors.add("because other objects depend on it");
+    }
+
+    private void appendSetSchema(StringBuilder sb, ExpectedErrors errors) {
+        sb.append("SET SCHEMA ");
+        if (globalState.getDbmsSpecificOptions().extensions.isEmpty()) {
+            sb.append("public");
+        } else {
+            sb.append(Randomly.fromOptions("public", "extensions"));
+        }
+        errors.add("schema does not exist");
+        errors.add("already exists in schema");
+        errors.add("cannot move");
+        errors.add("because other objects depend on it");
+    }
+
+    private void appendRenameConstraint(StringBuilder sb, ExpectedErrors errors) {
+        sb.append("RENAME CONSTRAINT ");
+        sb.append(Randomly.fromList(randomTable.getConstraints()).getName());
+        sb.append(" TO ");
+        sb.append(randomTable.getFreeColumnName());
+        errors.add("constraint does not exist");
+        errors.add("already exists");
+        errors.add("cannot rename inherited constraint");
+    }
+
     private void appendConstraintUsingIndex(StringBuilder sb, ExpectedErrors errors) {
         List<PostgresIndex> indexes = getCompatibleIndexesForConstraint();
         if (indexes.isEmpty()) {
@@ -727,6 +803,30 @@ public class PostgresAlterTableGenerator {
         sb.append(Randomly.fromList(constraints).getName());
         errors.add("is violated by some row");
         errors.add("does not exist");
+    }
+
+    private void appendInherit(StringBuilder sb, ExpectedErrors errors, boolean noInherit) {
+        List<PostgresTable> candidates = new ArrayList<>();
+        for (PostgresTable table : globalState.getSchema().getDatabaseTables()) {
+            if (!table.isView() && table != randomTable) {
+                candidates.add(table);
+            }
+        }
+        if (candidates.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        sb.append(noInherit ? "NO INHERIT " : "INHERIT ");
+        sb.append(Randomly.fromList(candidates).getName());
+        errors.add("cannot inherit from partitioned table");
+        errors.add("cannot inherit to temporary relation from permanent relation");
+        errors.add("cannot inherit from temporary relation");
+        errors.add("would be inherited from relation");
+        errors.add("is not a parent of relation");
+        errors.add("child table is missing column");
+        errors.add("has different type");
+        errors.add("has a different collation");
+        errors.add("cannot inherit from a partition");
+        errors.add("cannot change inheritance of a partition");
     }
 
     private void appendReplicaIdentity(StringBuilder sb, ExpectedErrors errors) {

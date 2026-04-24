@@ -30,7 +30,7 @@ public final class PostgresIndexGenerator {
     }
 
     public enum IndexType {
-        BTREE, HASH, GIST, GIN
+        BTREE, HASH, GIST, GIN, SPGIST, BRIN
     }
 
     public enum PostgresIndexModel {
@@ -154,8 +154,8 @@ public final class PostgresIndexGenerator {
 
     private static List<IndexElement> createIndexElements(PostgresGlobalState globalState, PostgresTable randomTable,
             PostgresIndexModel model, IndexType method, ExpectedErrors errors) {
-        if (method == IndexType.HASH) {
-            return createHashIndexElements(randomTable);
+        if (method == IndexType.HASH || method == IndexType.BRIN) {
+            return createSingleColumnIndexElements(randomTable);
         }
         int minColumns = model == PostgresIndexModel.COMPOSITE ? 2 : 1;
         int maxColumns = Math.max(minColumns, Math.min(randomTable.getColumns().size(), Randomly.smallNumber() + 1));
@@ -186,7 +186,7 @@ public final class PostgresIndexGenerator {
                 || model == PostgresIndexModel.EXPRESSION || index == 0;
     }
 
-    private static List<IndexElement> createHashIndexElements(PostgresTable randomTable) {
+    private static List<IndexElement> createSingleColumnIndexElements(PostgresTable randomTable) {
         List<IndexElement> elements = new ArrayList<>();
         elements.add(new IndexElement(randomTable.getRandomColumn().getName()));
         return elements;
@@ -209,7 +209,7 @@ public final class PostgresIndexGenerator {
             errors.add("does not accept");
             errors.add("does not exist for access method");
         }
-        if (method == IndexType.BTREE || method == IndexType.GIST) {
+        if (method == IndexType.BTREE || method == IndexType.GIST || method == IndexType.BRIN) {
             if (Randomly.getBoolean()) {
                 sb.append(" ");
                 sb.append(Randomly.fromOptions("ASC", "DESC"));
@@ -295,14 +295,15 @@ public final class PostgresIndexGenerator {
         case PREFIX_EXPR:
         case SUFFIX_EXPR:
         case EXPRESSION:
-            return Randomly.fromOptions(IndexType.BTREE, IndexType.GIST);
+            return Randomly.fromOptions(IndexType.BTREE, IndexType.GIST, IndexType.SPGIST, IndexType.BRIN);
         case COMPOSITE:
-            return Randomly.fromOptions(IndexType.BTREE, IndexType.GIST, IndexType.GIN);
+            return Randomly.fromOptions(IndexType.BTREE, IndexType.GIST, IndexType.GIN, IndexType.BRIN);
         case UNIQUE:
         case PRIMARY_KEY:
             throw new AssertionError(model);
         default:
-            return Randomly.fromOptions(IndexType.BTREE, IndexType.HASH, IndexType.GIST, IndexType.GIN);
+            return Randomly.fromOptions(IndexType.BTREE, IndexType.HASH, IndexType.GIST, IndexType.GIN,
+                    IndexType.SPGIST, IndexType.BRIN);
         }
     }
 
@@ -325,6 +326,8 @@ public final class PostgresIndexGenerator {
         errors.add("already exists");
         errors.add("has no default operator class");
         errors.add("does not support");
+        errors.add("does not support multicolumn indexes");
+        errors.add("does not support included columns");
         errors.add("cannot cast");
         errors.add("invalid input syntax for");
         errors.add("must be type ");
