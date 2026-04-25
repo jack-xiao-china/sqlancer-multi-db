@@ -43,13 +43,13 @@ java -jar target/sqlancer-2.0.0.jar \
 # GaussDB-M测试
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 19995 \
-    --username sqlbuilder1 --password your_password \
+    --username root --password password \
     gaussdb-m --oracle AGGREGATE
 
 # GaussDB-A测试
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 8000 \
-    --username tpcc --password your_password \
+    --username root --password password \
     gaussdb-a --oracle QUERY_PARTITIONING
 ```
 
@@ -197,7 +197,7 @@ CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 8000 \
-    --username tpcc --password Taurus@123 \
+    --username root --password password \
     gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 ```
 
@@ -241,7 +241,7 @@ GaussDB-PG 支持 PostgreSQL 风格的 SQL 语法。
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 5432 \
-    --username tpcc --password Taurus@123 \
+    --username root --password password \
     gaussdb-pg --oracle QUERY_PARTITIONING
 ```
 
@@ -275,7 +275,7 @@ GaussDB-M 支持 MySQL 风格的 SQL 语法。
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 19995 \
-    --username sqlbuilder1 --password your_password \
+    --username root --password password \
     gaussdb-m --oracle QUERY_PARTITIONING
 ```
 
@@ -354,7 +354,7 @@ CREATE DATABASE gaussdb_m_test WITH dbcompatibility 'B';
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 3306 \
-    --username root --password Taurus@123 \
+    --username root --password password \
     --num-tries 10 --timeout-seconds 100 \
     mysql --oracle QUERY_PARTITIONING
 ```
@@ -363,7 +363,7 @@ java -jar target/sqlancer-2.0.0.jar \
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 5432 \
-    --username tpcc --password Taurus@123 \
+    --username root --password password \
     --num-tries 10 --timeout-seconds 100 \
     postgres --oracle QUERY_PARTITIONING
 ```
@@ -372,7 +372,7 @@ java -jar target/sqlancer-2.0.0.jar \
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 5432 \
-    --username tpcc --password Taurus@123 \
+    --username root --password password \
     --num-tries 10 --timeout-seconds 100 \
     gaussdb-pg --oracle QUERY_PARTITIONING
 ```
@@ -384,7 +384,7 @@ java -jar target/sqlancer-2.0.0.jar \
 
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 8000 \
-    --username tpcc --password Taurus@123 \
+    --username root --password password \
     --num-tries 10 --timeout-seconds 100 \
     gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 ```
@@ -393,7 +393,7 @@ java -jar target/sqlancer-2.0.0.jar \
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost --port 19995 \
-    --username sqlbuilder1 --password your_password \
+    --username root --password password \
     --num-tries 10 --timeout-seconds 100 \
     gaussdb-m --oracle QUERY_PARTITIONING
 ```

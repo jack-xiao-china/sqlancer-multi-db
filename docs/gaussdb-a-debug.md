@@ -1,8 +1,19 @@
-步骤一：编译
-set PATH=D:\tools\dev\apache-maven-3.9.13-bin\apache-maven-3.9.13\bin;%PATH%
-mvn -version
-cd D:\Jack.Xiao\dbtools\sqlancer-main\sqlancer-main\target>
+# GaussDB-A Debug Guide
+
+## 步骤一：编译
+
+```bash
 mvn clean package -DskipTests
-步骤二：压测调试
+```
+
+## 步骤二：压测调试
+
+```bash
 cd target
-D:\Jack.Xiao\dbtools\sqlancer-main\sqlancer-main\target>java -jar sqlancer-2.0.0.jar --host 192.168.95.195 --port 8000 --username tpcc --password Taurus@123 --database-prefix tb --num-tries 1 --timeout-seconds 100 --num-threads 2 gaussdb-a  --oracle  "test_oracle" 
+java -jar sqlancer-2.0.0.jar --host localhost --port 8000 --username root --password password --database-prefix tb --num-tries 1 --timeout-seconds 100 --num-threads 2 gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
+```
+
+**注意**: 需要先创建A兼容数据库：
+```sql
+CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
+```

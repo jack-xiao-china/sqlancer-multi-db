@@ -17,9 +17,6 @@
 ### 构建/编译
 
 ```bash
-set PATH=D:\tools\dev\apache-maven-3.9.13-bin\apache-maven-3.9.13\bin;%PATH%
-mvn -version
-cd D:\Jack.Xiao\dbtools\sqlancer-main\sqlancer-main>
 mvn clean package -DskipTests
 ```
 
@@ -27,7 +24,7 @@ mvn clean package -DskipTests
 
 ```bash
 cd target
-java -jar sqlancer-2.0.0.jar --host localhost --port 3306 --username root --password Taurus@123 --num-tries 1 --timeout-seconds 100 --log-each-select true --num-threads 2 mysql --oracle QUERY_PARTITIONING
+java -jar sqlancer-2.0.0.jar --host localhost --port 3306 --username root --password password --num-tries 1 --timeout-seconds 100 --log-each-select true --num-threads 2 mysql --oracle QUERY_PARTITIONING
 ```
 
 ## 输出与日志指南
@@ -46,19 +43,17 @@ java -jar sqlancer-2.0.0.jar --host localhost --port 3306 --username root --pass
 执行：
 
 ```bash
-set PATH=D:\tools\dev\apache-maven-3.9.13-bin\apache-maven-3.9.13\bin;%PATH%
-cd D:\Jack.Xiao\dbtools\sqlancer-main\sqlancer-main
 mvn package -DskipTests
 ```
 
 ```powershell
-.\scripts\run-mysql-oracles-smoke.ps1 -DbHost localhost -Port 3306 -Username root -Password Taurus@123
+.\scripts\run-mysql-oracles-smoke.ps1 -DbHost localhost -Port 3306 -Username root -Password password
 ```
 
 在 Linux 环境（bash）运行：
 
 ```bash
-export DB_HOST=localhost DB_PORT=3306 DB_USER=root DB_PASS='Taurus@123'
+export DB_HOST=localhost DB_PORT=3306 DB_USER=root DB_PASS='password'
 export TIMEOUT_SECONDS=25 NUM_QUERIES=5000 NUM_THREADS=1
 ./scripts/run-mysql-oracles-smoke.sh
 ```

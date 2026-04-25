@@ -238,7 +238,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_a_test';
 **Step 2: Grant permissions**
 ```sql
 -- Grant CREATE/DROP SCHEMA permissions to test user
-GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO tpcc;
+GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO root;
 ```
 
 ## Basic Usage
@@ -247,7 +247,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO tpcc;
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 8000 \
-    --username tpcc \
+    --username root --password password \
     --password your_password \
     gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 ```
@@ -321,10 +321,10 @@ This follows Oracle's schema-based isolation pattern.
 
 # 2. Run comprehensive test
 java -jar target/sqlancer-2.0.0.jar \
-    --host 192.168.95.195 \
+    --host localhost \
     --port 8000 \
-    --username tpcc \
-    --password "Taurus@123" \
+    --username root --password password \
+    --username root --password password \
     --num-tries 10 \
     --timeout-seconds 300 \
     gaussdb-a \
@@ -357,7 +357,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 8000 \
-    --username tpcc \
+    --username root --password password \
     --password your_password \
     gaussdb-pg --target-database gaussdb_pg_test --oracle QUERY_PARTITIONING
 ```
@@ -411,10 +411,10 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 # CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
 
 java -jar target/sqlancer-2.0.0.jar \
-    --host 192.168.95.195 \
+    --host localhost \
     --port 8000 \
-    --username tpcc \
-    --password "Taurus@123" \
+    --username root --password password \
+    --username root --password password \
     gaussdb-pg \
     --target-database gaussdb_pg_test \
     --enable-time-types \
@@ -435,8 +435,8 @@ GaussDB-M supports MySQL-style SQL syntax. Uses built-in openGauss JDBC driver w
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 19995 \
-    --username sqlbuilder1 \
-    --password your_password \
+    --username root \
+    --password password \
     gaussdb-m --oracle QUERY_PARTITIONING
 ```
 
@@ -480,10 +480,10 @@ This follows MySQL's database-based isolation pattern.
 
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
-    --host 121.37.186.131 \
+    --host localhost \
     --port 19995 \
-    --username sqlbuilder1 \
-    --password "huawei@123" \
+    --username root \
+    --password password \
     --num-tries 10 \
     --timeout-seconds 300 \
     gaussdb-m \

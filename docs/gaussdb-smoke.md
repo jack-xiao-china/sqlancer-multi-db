@@ -12,8 +12,8 @@
 ```bash
 java -jar target/sqlancer-2.0.0.jar ^
   --connection-url "jdbc:gaussdb://127.0.0.1:8000/test" ^
-  --username sqlancer ^
-  --password sqlancer ^
+  --username root ^
+  --password password ^
   --num-tries 1 ^
   --timeout-seconds 60 ^
   --num-queries 2000 ^
