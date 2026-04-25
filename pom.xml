@@ -78,23 +78,12 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>sqlancer.Main</mainClass>
-                </transformer>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
-              </transformers>
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                  </excludes>
-                </filter>
-              </filters>
+              <!-- Only shade jcommander, keep jar lightweight (~4MB) -->
+              <artifactSet>
+                <includes>
+                  <include>com.beust:jcommander</include>
+                </includes>
+              </artifactSet>
             </configuration>
           </execution>
         </executions>
@@ -104,21 +93,6 @@
         <artifactId>maven-antrun-plugin</artifactId>
         <version>3.1.0</version>
         <executions>
-          <!-- Unpack lib/*.jar into classes directory before shade -->
-          <execution>
-            <id>unpack-lib-jars</id>
-            <phase>process-classes</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <target>
-                <unzip dest="${project.build.outputDirectory}">
-                  <fileset dir="${project.basedir}/lib" includes="*.jar" erroronmissingdir="false" />
-                </unzip>
-              </target>
-            </configuration>
-          </execution>
           <!-- Copy lib/*.jar to target/lib/ for distribution -->
           <execution>
             <id>copy-lib-jars</id>
@@ -129,6 +103,7 @@
             <configuration>
               <target>
                 <mkdir dir="${project.build.directory}/lib" />
+                <!-- Copy local JDBC drivers from lib/ to target/lib/ -->
                 <copy todir="${project.build.directory}/lib" overwrite="true">
                   <fileset dir="${project.basedir}/lib" includes="*.jar" erroronmissingdir="false" />
                 </copy>
@@ -226,8 +201,7 @@
               <overWriteReleases>false</overWriteReleases>
               <overWriteSnapshots>false</overWriteSnapshots>
               <overWriteIfNewer>true</overWriteIfNewer>
-              <excludeArtifactIds>jcommander</excludeArtifactIds>
-              <includeSystemScope>true</includeSystemScope>
+              <excludeArtifactIds>jcommander,opengauss-jdbc</excludeArtifactIds>
             </configuration>
           </execution>
         </executions>
@@ -244,6 +218,10 @@
               <classpathPrefix>lib/</classpathPrefix>
               <mainClass>sqlancer.Main</mainClass>
             </manifest>
+            <!-- Manually add opengauss-jdbc to Class-Path (system scope deps not auto-added) -->
+            <manifestEntries>
+              <Class-Path>lib/opengauss-jdbc-6.0.2-og.jar</Class-Path>
+            </manifestEntries>
           </archive>
         </configuration>
       </plugin>
