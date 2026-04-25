@@ -6,8 +6,8 @@
 SQLANCER_JAR="/d/Jack.Xiao/dbtools/sqlancer-main/sqlancer-main/target/sqlancer-2.0.0.jar"
 HOST="localhost"
 PORT="5432"
-USERNAME="tpcc"
-PASSWORD="Taurus@123"
+USERNAME="root"
+PASSWORD="password"
 TIMEOUT="45"
 THREADS="1"
 

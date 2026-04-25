@@ -60,8 +60,8 @@ class SQLancerLogAnalyzer:
         self.db_config = db_config or {
             'host': 'localhost',
             'port': 5432,
-            'user': 'tpcc',
-            'password': 'Taurus@123',
+            'user': 'root',
+            'password': 'password',
             'database': 'test'
         }
         self.results = {
@@ -631,8 +631,8 @@ def main():
     parser.add_argument('path', nargs='?', help='Path to log directory or base directory')
     parser.add_argument('--db-host', default='localhost', help='Database host')
     parser.add_argument('--db-port', type=int, default=5432, help='Database port')
-    parser.add_argument('--db-user', default='tpcc', help='Database user')
-    parser.add_argument('--db-pass', default='Taurus@123', help='Database password')
+    parser.add_argument('--db-user', default='root', help='Database user')
+    parser.add_argument('--db-pass', default='password', help='Database password')
     parser.add_argument('--db-name', default='test', help='Database name')
     parser.add_argument('--output', '-o', help='Output file path')
     parser.add_argument('--format', '-f', choices=['markdown', 'json', 'html'], default='markdown',

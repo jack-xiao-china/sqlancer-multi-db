@@ -8,5 +8,5 @@ if %ERRORLEVEL% neq 0 (
 )
 echo Step 2: Running QUERY_PARTITIONING test...
 cd target
-java -jar sqlancer-2.0.0.jar --host localhost --port 3306 --username root --password Taurus@123 --num-tries 9 --timeout-seconds 300 --num-threads 2 mysql --oracle QUERY_PARTITIONING
+java -jar sqlancer-2.0.0.jar --host localhost --port 3306 --username root --password password --num-tries 9 --timeout-seconds 300 --num-threads 2 mysql --oracle QUERY_PARTITIONING
 echo Exit code: %ERRORLEVEL%

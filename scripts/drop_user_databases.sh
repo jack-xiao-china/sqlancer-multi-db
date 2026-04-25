@@ -3,8 +3,8 @@
 # PostgreSQL连接信息
 PGHOST="localhost"
 PGPORT="5432"
-PGUSER="tpcc"
-PGPASSWORD="Taurus@123"
+PGUSER="root"
+PGPASSWORD="password"
 PGDATABASE="tpcc"
 
 # 系统数据库，不应删除

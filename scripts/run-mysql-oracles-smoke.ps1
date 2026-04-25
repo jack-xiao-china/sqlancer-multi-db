@@ -4,7 +4,7 @@ param(
   [string]$DbHost = "localhost",
   [int]$Port = 3306,
   [string]$Username = "root",
-  [string]$Password = "Taurus@123",
+  [string]$Password = "password",
   [int]$TimeoutSeconds = 60,
   [int]$NumQueries = 5000,
   [int]$NumThreads = 1

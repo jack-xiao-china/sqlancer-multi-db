@@ -9,8 +9,8 @@ set -e
 SQLANCER_JAR="/d/Jack.Xiao/dbtools/sqlancer-main/sqlancer-main/target/sqlancer-2.0.0.jar"
 DBMS_HOST="localhost"
 DBMS_PORT="5432"
-DBMS_USER="tpcc"
-DBMS_PASS="Taurus@123"
+DBMS_USER="root"
+DBMS_PASS="password"
 DBMS_TYPE="postgres"
 ANALYSIS_DIR="logs/analysis"
 
