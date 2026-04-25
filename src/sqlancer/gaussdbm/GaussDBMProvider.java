@@ -34,7 +34,7 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         if (driverLoaded) {
             return;
         }
-        // Try to load openGauss driver first (recommended for GaussDB)
+        // Load openGauss JDBC driver (supports all GaussDB variants)
         try {
             Class.forName("org.opengauss.Driver");
             System.err.println("[INFO] Loaded openGauss JDBC driver (org.opengauss.Driver)");
@@ -49,7 +49,7 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
             System.err.println("[INFO] Loaded MySQL JDBC driver (com.mysql.cj.jdbc.Driver)");
             driverLoaded = true;
         } catch (ClassNotFoundException e) {
-            throw new AssertionError("No JDBC driver available. Please ensure opengauss-jdbc or mysql driver is in classpath.", e);
+            throw new AssertionError("JDBC driver not found. Please ensure lib/opengauss-jdbc.jar is in classpath.", e);
         }
     }
 
@@ -114,8 +114,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
                 System.err.println("[ERROR] Connection failed: " + e.getMessage());
             }
         } else {
-            // Try multiple URL schemes for GaussDB M-compatibility
-            String[] urlSchemes = { "opengauss", "gaussdb", "mysql" };
+            // Use opengauss JDBC URL scheme
+            String[] urlSchemes = { "opengauss" };
 
             for (String scheme : urlSchemes) {
                 jdbcUrl = String.format("jdbc:%s://%s:%d/%s?%s", scheme, host, port, baseConnectionDatabase, baseParams);
@@ -145,8 +145,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         if (con == null) {
             String msg = "Connection failed to GaussDB-M. Last error: " + (lastError != null ? lastError.getMessage() : "null");
             msg += "\n\nPossible solutions:";
-            msg += "\n1. Ensure opengauss-jdbc driver is in classpath (recommended)";
-            msg += "\n2. Use --connection-url to specify full JDBC URL";
+            msg += "\n1. Ensure lib/opengauss-jdbc.jar is in classpath";
+            msg += "\n2. Use --connection-url to specify full JDBC URL (jdbc:opengauss://host:port/database)";
             msg += "\n3. Verify host, port, username, password are correct";
             throw new SQLException(msg, lastError);
         }

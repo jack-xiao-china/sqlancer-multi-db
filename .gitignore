@@ -1,6 +1,5 @@
 target/
 .classpath
-.settings/
 .vscode
 .project
 .checkstyle
@@ -14,5 +13,7 @@ databaseconnectiontest.db
 database*.log
 database*.properties
 database*.script
+database*.lck
 databases/
 logs/
+.settings/

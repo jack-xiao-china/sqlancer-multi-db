@@ -100,8 +100,10 @@
             <configuration>
               <target>
                 <mkdir dir="${project.build.directory}/lib" />
-                <copy file="${project.basedir}/src/sqlancer/gaussdb/gsjdbc4.jar"
-                  tofile="${project.build.directory}/lib/gsjdbc4.jar" overwrite="true" />
+                <!-- Copy local JDBC drivers from lib/ to target/lib/ -->
+                <copy todir="${project.build.directory}/lib" overwrite="true">
+                  <fileset dir="${project.basedir}/lib" includes="*.jar" erroronmissingdir="false" />
+                </copy>
                 <delete>
                   <fileset dir="${project.build.directory}/" includes="original-sqlancer-*.jar" />
                 </delete>
@@ -196,7 +198,7 @@
               <overWriteReleases>false</overWriteReleases>
               <overWriteSnapshots>false</overWriteSnapshots>
               <overWriteIfNewer>true</overWriteIfNewer>
-              <excludeArtifactIds>jcommander</excludeArtifactIds>
+              <excludeArtifactIds>jcommander,opengauss-jdbc</excludeArtifactIds>
             </configuration>
           </execution>
         </executions>
@@ -423,20 +425,14 @@
       <version>4.0.1</version>
     </dependency>
 
-    <!-- GaussDB JDBC driver (local jar) -->
-    <dependency>
-      <groupId>com.huawei.gaussdb</groupId>
-      <artifactId>gsjdbc4</artifactId>
-      <version>4</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/src/sqlancer/gaussdb/gsjdbc4.jar</systemPath>
-    </dependency>
-
-    <!-- openGauss JDBC driver (recommended for GaussDB connections) -->
+    <!-- GaussDB JDBC driver (local jar for portability) -->
+    <!-- Note: Copy opengauss-jdbc.jar to lib/ directory before building -->
     <dependency>
       <groupId>org.opengauss</groupId>
       <artifactId>opengauss-jdbc</artifactId>
       <version>6.0.2-og</version>
+      <scope>system</scope>
+      <systemPath>${project.basedir}/lib/opengauss-jdbc-6.0.2-og.jar</systemPath>
     </dependency>
   </dependencies>
   <reporting>

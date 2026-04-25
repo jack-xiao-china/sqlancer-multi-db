@@ -31,22 +31,13 @@ public class GaussDBPGProvider extends SQLProviderAdapter<GaussDBPGGlobalState, 
         if (driverLoaded) {
             return;
         }
-        // Try to load openGauss driver first (recommended for GaussDB)
+        // Load openGauss JDBC driver
         try {
             Class.forName("org.opengauss.Driver");
             System.err.println("[INFO] Loaded openGauss JDBC driver (org.opengauss.Driver)");
             driverLoaded = true;
-            return;
         } catch (ClassNotFoundException e) {
-            System.err.println("[INFO] openGauss driver not found, trying PostgreSQL driver...");
-        }
-        // Fallback to PostgreSQL driver
-        try {
-            Class.forName("org.postgresql.Driver");
-            System.err.println("[INFO] Loaded PostgreSQL JDBC driver (org.postgresql.Driver)");
-            driverLoaded = true;
-        } catch (ClassNotFoundException e) {
-            throw new AssertionError("No JDBC driver available. Please ensure opengauss-jdbc or postgresql driver is in classpath.", e);
+            throw new AssertionError("JDBC driver not found. Please ensure lib/opengauss-jdbc.jar is in classpath.", e);
         }
     }
 
@@ -111,7 +102,8 @@ public class GaussDBPGProvider extends SQLProviderAdapter<GaussDBPGGlobalState, 
             }
         } else {
             // Try multiple URL schemes: opengauss first, then postgresql as fallback
-            String[] urlSchemes = { "opengauss", "postgresql" };
+            // Use opengauss JDBC URL scheme
+            String[] urlSchemes = { "opengauss" };
 
             for (String scheme : urlSchemes) {
                 jdbcUrl = String.format("jdbc:%s://%s:%d/%s?%s", scheme, host, port, targetDatabase, baseParams);
@@ -137,7 +129,7 @@ public class GaussDBPGProvider extends SQLProviderAdapter<GaussDBPGGlobalState, 
         if (con == null) {
             String msg = "Connection failed to GaussDB-PG. Last error: " + (lastError != null ? lastError.getMessage() : "null");
             msg += "\n\nPossible solutions:";
-            msg += "\n1. Ensure opengauss-jdbc driver is in classpath (recommended)";
+            msg += "\n1. Ensure lib/opengauss-jdbc.jar is in classpath";
             msg += "\n2. Use --connection-url to specify full JDBC URL";
             msg += "\n3. Create a PG-compatible database: CREATE DATABASE tpg WITH dbcompatibility 'pg';";
             msg += "\n4. Use --target-database option to specify your PG-compatible database";
