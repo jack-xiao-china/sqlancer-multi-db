@@ -217,24 +217,66 @@ java -jar target/sqlancer-2.0.0.jar \
 
 ## Introduction
 
-GaussDB-A supports Oracle-style SQL syntax and data types. Connect using PostgreSQL JDBC driver with A-compatibility mode database.
+GaussDB-A supports Oracle-style SQL syntax and data types. Uses built-in openGauss JDBC driver with SM3 authentication support.
+
+**⚠️ IMPORTANT: `--target-database` is REQUIRED**
+
+You must specify an A-compatible database. The tool will NOT connect to `postgres` by default.
+
+## Prerequisites
+
+**Step 1: Create A-compatible database (REQUIRED)**
+```sql
+-- Connect to GaussDB as administrator
+CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
+
+-- Verify compatibility mode
+SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_a_test';
+-- Should return: A
+```
+
+**Step 2: Grant permissions**
+```sql
+-- Grant CREATE/DROP SCHEMA permissions to test user
+GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO tpcc;
+```
 
 ## Basic Usage
 
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
-    --port 5432 \
+    --port 8000 \
     --username tpcc \
     --password your_password \
-    gaussdb-a --oracle QUERY_PARTITIONING
+    gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 ```
 
-## Creating A-Compatibility Database
+## Error Handling
 
-```sql
-CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
+**Without `--target-database`:**
 ```
+Exception: The following option is required: [--target-database]
+
+Usage: gaussdb-a [options]
+  * --target-database    A-compatible database to connect (REQUIRED)
+```
+
+**If database is not A-compatible:**
+```
+[WARN] Database 'xxx' compatibility mode is not 'A'
+[WARN] To create A-compatible database: CREATE DATABASE xxx WITH dbcompatibility 'A'
+```
+
+## Test Isolation Strategy
+
+GaussDB-A uses **Schema isolation** (not database isolation):
+- Connects to specified A-compatible database
+- Creates schemas: `database0`, `database1`, `database2`...
+- Sets `search_path` to test schema
+- Tables created within schema for isolation
+
+This follows Oracle's schema-based isolation pattern.
 
 ## GaussDB-A Oracles
 
@@ -266,10 +308,29 @@ CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 
 ## GaussDB-A Options
 
-| Option | Description |
-|--------|-------------|
-| `--enable-clob-blob` | Enable CLOB/BLOB type generation |
-| `--target-database` | Specify A-compatible database name |
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--target-database` | **YES** | A-compatible database name (must exist) |
+| `--enable-clob-blob` | No | Enable CLOB/BLOB type generation |
+
+## Complete Example
+
+```bash
+# 1. Create A-compatible database first
+# CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
+
+# 2. Run comprehensive test
+java -jar target/sqlancer-2.0.0.jar \
+    --host 192.168.95.195 \
+    --port 8000 \
+    --username tpcc \
+    --password "Taurus@123" \
+    --num-tries 10 \
+    --timeout-seconds 300 \
+    gaussdb-a \
+    --target-database gaussdb_a_test \
+    --oracle QUERY_PARTITIONING,DQP,EET
+```
 
 ---
 
@@ -277,28 +338,55 @@ CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 
 ## Introduction
 
-GaussDB-PG supports PostgreSQL-style SQL syntax. Uses PostgreSQL JDBC driver for connection.
+GaussDB-PG supports PostgreSQL-style SQL syntax. Uses built-in openGauss JDBC driver.
+
+## Prerequisites
+
+**Step 1: Create PG-compatible database (REQUIRED)**
+```sql
+CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
+
+-- Verify
+SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
+-- Should return: pg
+```
 
 ## Basic Usage
 
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
-    --port 5432 \
+    --port 8000 \
     --username tpcc \
     --password your_password \
-    gaussdb-pg --oracle QUERY_PARTITIONING
+    gaussdb-pg --target-database gaussdb_pg_test --oracle QUERY_PARTITIONING
 ```
 
-## Creating PG-Compatibility Database
+## Test Isolation Strategy
 
-```sql
-CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
-```
+Same as GaussDB-A: **Schema isolation** within specified database.
+- Creates schemas: `database0`, `database1`...
+- Sets `search_path` for isolation
 
 ## GaussDB-PG Oracles
 
 Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
+
+| Oracle | Description |
+|--------|-------------|
+| TLP_WHERE | TLP WHERE clause partitioning |
+| HAVING | TLP HAVING clause partitioning |
+| AGGREGATE | TLP aggregate function partitioning |
+| DISTINCT | TLP DISTINCT partitioning |
+| GROUP_BY | TLP GROUP BY partitioning |
+| NOREC | NoREC optimization detection |
+| QUERY_PARTITIONING | Combined oracle (default) |
+| PQS | Pivoted Query Synthesis |
+| CERT | Cardinality estimation testing |
+| DQP | Differential Query Plans |
+| DQE | SELECT/UPDATE/DELETE equivalence |
+| EET | Equivalent Expression Transformation |
+| FUZZER | Random query generation |
 
 ## GaussDB-PG Data Types
 
@@ -311,10 +399,27 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 
 ## GaussDB-PG Options
 
-| Option | Description |
-|--------|-------------|
-| `--enable-time-types` | Enable DATE, TIME, TIMESTAMP types |
-| `--target-database` | Specify PG-compatible database name |
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--target-database` | **YES** | PG-compatible database name |
+| `--enable-time-types` | No | Enable DATE, TIME, TIMESTAMP types |
+
+## Complete Example
+
+```bash
+# Create PG-compatible database first
+# CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
+
+java -jar target/sqlancer-2.0.0.jar \
+    --host 192.168.95.195 \
+    --port 8000 \
+    --username tpcc \
+    --password "Taurus@123" \
+    gaussdb-pg \
+    --target-database gaussdb_pg_test \
+    --enable-time-types \
+    --oracle QUERY_PARTITIONING
+```
 
 ---
 
@@ -322,23 +427,29 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 
 ## Introduction
 
-GaussDB-M supports MySQL-style SQL syntax. Requires MySQL JDBC driver and M-compatibility mode database.
+GaussDB-M supports MySQL-style SQL syntax. Uses built-in openGauss JDBC driver with automatic M-compatibility database creation.
 
 ## Basic Usage
 
 ```bash
 java -jar target/sqlancer-2.0.0.jar \
-    --connection-url "jdbc:gaussdb://127.0.0.1:8000/test" \
-    --username sqlancer \
-    --password sqlancer \
+    --host localhost \
+    --port 19995 \
+    --username sqlbuilder1 \
+    --password your_password \
     gaussdb-m --oracle QUERY_PARTITIONING
 ```
 
-## Creating M-Compatibility Database
+**Note**: GaussDB-M automatically creates M-compatible test databases. No `--target-database` required.
 
-```sql
-CREATE DATABASE gaussdb_m_test WITH dbcompatibility 'B';
-```
+## Test Isolation Strategy
+
+GaussDB-M uses **Database isolation**:
+- Connects to `postgres` initially
+- Creates databases: `database0`, `database1`... with `DBCOMPATIBILITY 'M'`
+- Switches to test database for testing
+
+This follows MySQL's database-based isolation pattern.
 
 ## GaussDB-M Oracles
 
@@ -358,6 +469,34 @@ CREATE DATABASE gaussdb_m_test WITH dbcompatibility 'B';
 | EET | Equivalent Expression Transformation |
 | CODDTEST | Constant-driven optimization testing |
 | FUZZER | Random query generation |
+
+## GaussDB-M Options
+
+| Option | Description |
+|--------|-------------|
+| No specific options | Uses global MySQL-compatible settings |
+
+## Complete Example
+
+```bash
+java -jar target/sqlancer-2.0.0.jar \
+    --host 121.37.186.131 \
+    --port 19995 \
+    --username sqlbuilder1 \
+    --password "huawei@123" \
+    --num-tries 10 \
+    --timeout-seconds 300 \
+    gaussdb-m \
+    --oracle QUERY_PARTITIONING,AGGREGATE,DQP
+```
+
+## GaussDB Compatibility Modes Comparison
+
+| Mode | Database Syntax | Isolation Method | `--target-database` |
+|------|-----------------|------------------|---------------------|
+| **GaussDB-A** | Oracle-style | Schema | **REQUIRED** |
+| **GaussDB-PG** | PostgreSQL-style | Schema | **REQUIRED** |
+| **GaussDB-M** | MySQL-style | Database | Optional (auto-creates) |
 
 ---
 
@@ -389,8 +528,16 @@ java -jar sqlancer.jar mysql --oracle NOREC,TLP_WHERE --num-tries 50 --timeout-s
 # PostgreSQL
 java -jar sqlancer.jar postgres --oracle NOREC,TLP_WHERE --num-tries 50 --timeout-seconds 60
 
-# GaussDB-PG
-java -jar sqlancer.jar gaussdb-pg --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
+# GaussDB-PG (requires target-database)
+java -jar sqlancer.jar gaussdb-pg --target-database gaussdb_pg_test \
+    --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
+
+# GaussDB-A (requires target-database)
+java -jar sqlancer.jar gaussdb-a --target-database gaussdb_a_test \
+    --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
+
+# GaussDB-M (auto-creates database)
+java -jar sqlancer.jar gaussdb-m --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
 ```
 
 ## Comprehensive Testing
@@ -410,6 +557,14 @@ java -jar sqlancer.jar postgres \
 
 # GaussDB-A comprehensive
 java -jar sqlancer.jar gaussdb-a \
+    --target-database gaussdb_a_test \
+    --oracle QUERY_PARTITIONING,DQP,DQE,EET \
+    --num-tries 100 --timeout-seconds 300
+
+# GaussDB-PG comprehensive
+java -jar sqlancer.jar gaussdb-pg \
+    --target-database gaussdb_pg_test \
+    --enable-time-types \
     --oracle QUERY_PARTITIONING,DQP,DQE,EET \
     --num-tries 100 --timeout-seconds 300
 ```
@@ -418,6 +573,13 @@ java -jar sqlancer.jar gaussdb-a \
 
 ```bash
 java -jar sqlancer.jar mysql \
+    --seed 1776222510722 \
+    --oracle EET \
+    --num-tries 1
+
+# GaussDB-A reproduction
+java -jar sqlancer.jar gaussdb-a \
+    --target-database gaussdb_a_test \
     --seed 1776222510722 \
     --oracle EET \
     --num-tries 1
@@ -461,9 +623,24 @@ java -jar sqlancer.jar mysql \
 
 | Error | Solution |
 |-------|----------|
+| `--target-database is required` | Create A/PG-compatible database and specify with `--target-database` |
 | "datcompatibility" field not found | PostgreSQL database connected, need GaussDB instance |
-| Session initialization failed | Try postgresql JDBC scheme instead of opengauss |
-| Compatibility mode warning | Create database with correct dbcompatibility |
+| Compatibility mode is not 'A' or 'pg' | Recreate database: `CREATE DATABASE xxx WITH dbcompatibility 'A'` |
+| Session initialization failed | Check network connectivity and credentials |
+| Cannot create schema | Grant CREATE SCHEMA permission to user |
+
+## Creating Compatibility Databases
+
+```sql
+-- A-compatibility (Oracle-style)
+CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
+
+-- PG-compatibility (PostgreSQL-style)
+CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
+
+-- M-compatibility (MySQL-style) - auto-created by SQLancer
+-- CREATE DATABASE gaussdb_m_test WITH dbcompatibility 'B';
+```
 
 ## Memory Issues
 
@@ -499,6 +676,12 @@ java -Xmx4g -jar sqlancer.jar ...
 ---
 
 # Version History
+
+## v0.1.83 (2026-04-25)
+- **GaussDB-A/PG**: `--target-database` now REQUIRED
+- **Error messages**: Clear guidance when parameter missing
+- **Documentation**: Updated with prerequisite steps
+- **Schema isolation**: Clarified A/PG use schema, M uses database
 
 ## v0.1.82 (2026-04-25)
 - **Packaging**: All dependencies bundled into single jar (~387MB)
