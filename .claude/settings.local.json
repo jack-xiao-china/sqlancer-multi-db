@@ -94,7 +94,19 @@
       "Skill(ralph-loop:ralph-loop)",
       "Bash(C:/Users/Jerry.Xiao/.claude/plugins/cache/claude-plugins-official/ralph-loop/1.0.0/scripts/setup-ralph-loop.sh *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(ping *)",
+      "Bash(git stash *)",
+      "WebFetch(domain:bugs.mysql.com)",
+      "Bash(git remote *)",
+      "Bash(git pull *)",
+      "Bash(awk '{sum+=$3; fail+=$5; err+=$7; skip+=$9} END {print \"Total tests: \" sum \", Failures: \" fail \", Errors: \" err \", Skipped: \" skip}')",
+      "Bash(jar tf *)",
+      "Bash(unzip *)",
+      "WebFetch(domain:opengauss.org)",
+      "WebFetch(domain:mvnrepository.com)",
+      "Bash(mvn dependency:get -Dartifact=org.opengauss:opengauss-jdbc:6.0.2-og -DremoteRepositories=https://repo1.maven.org/maven2)",
+      "Bash(mvn dependency:tree)"
     ]
   }
 }
