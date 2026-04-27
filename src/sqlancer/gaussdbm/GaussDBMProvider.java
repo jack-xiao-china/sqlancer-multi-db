@@ -160,8 +160,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
             System.err.println("[WARN] Could not get database metadata: " + e.getMessage());
         }
 
-        // Get test database name
-        String databaseName = globalState.getDatabaseName();
+        // Get test database name - use lowercase for consistent information_schema matching
+        String databaseName = globalState.getDatabaseName().toLowerCase();
 
         // Create M-compatible test database (like MySQL does)
         globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);

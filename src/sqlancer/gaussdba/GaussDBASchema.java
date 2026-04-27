@@ -167,9 +167,11 @@ public class GaussDBASchema extends AbstractSchema<GaussDBAGlobalState, GaussDBA
                 try (Statement s = con.createStatement()) {
                     // A兼容模式也使用information_schema查询
                     // 查询当前schema（可能是测试schema或public）中的表
+                    // Use LOWER() to handle case-insensitive schema matching
+                    String schemaNameLower = databaseName.toLowerCase();
                     try (ResultSet rs = s.executeQuery(
                             "SELECT table_name, table_schema, table_type FROM information_schema.tables "
-                                    + "WHERE table_schema='" + databaseName + "' OR table_schema='public' OR table_schema LIKE 'pg_temp_%' "
+                                    + "WHERE LOWER(table_schema)='" + schemaNameLower + "' OR table_schema='public' OR table_schema LIKE 'pg_temp_%' "
                                     + "ORDER BY table_name;")) {
                         while (rs.next()) {
                             String tableName = rs.getString("table_name");
@@ -224,9 +226,10 @@ public class GaussDBASchema extends AbstractSchema<GaussDBAGlobalState, GaussDBA
     protected static List<GaussDBAColumn> getTableColumns(SQLConnection con, String tableName, String tableSchema) throws SQLException {
         List<GaussDBAColumn> columns = new ArrayList<>();
         try (Statement s = con.createStatement()) {
+            // Use LOWER() for case-insensitive matching
             try (ResultSet rs = s.executeQuery(
                     "SELECT column_name, data_type FROM information_schema.columns "
-                            + "WHERE table_name = '" + tableName + "' AND table_schema = '" + tableSchema + "' "
+                            + "WHERE table_name = '" + tableName + "' AND LOWER(table_schema) = '" + tableSchema.toLowerCase() + "' "
                             + "ORDER BY column_name")) {
                 while (rs.next()) {
                     String columnName = rs.getString("column_name");

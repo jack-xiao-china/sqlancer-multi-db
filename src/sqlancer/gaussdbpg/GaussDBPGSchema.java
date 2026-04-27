@@ -184,9 +184,11 @@ public class GaussDBPGSchema extends AbstractSchema<GaussDBPGGlobalState, GaussD
                 List<GaussDBPGTable> databaseTables = new ArrayList<>();
                 try (Statement s = con.createStatement()) {
                     // PG-style schema query: use information_schema.tables with the actual schema name
+                    // Use LOWER() for case-insensitive matching
+                    String schemaNameLower = databaseName.toLowerCase();
                     try (ResultSet rs = s.executeQuery(
                             "SELECT table_name, table_schema, table_type FROM information_schema.tables "
-                                    + "WHERE table_schema='" + databaseName + "' OR table_schema LIKE 'pg_temp_%' "
+                                    + "WHERE LOWER(table_schema)='" + schemaNameLower + "' OR table_schema LIKE 'pg_temp_%' "
                                     + "ORDER BY table_name;")) {
                         while (rs.next()) {
                             String tableName = rs.getString("table_name");
@@ -244,9 +246,11 @@ public class GaussDBPGSchema extends AbstractSchema<GaussDBPGGlobalState, GaussD
         List<GaussDBPGColumn> columns = new ArrayList<>();
         try (Statement s = con.createStatement()) {
             // PG-style column query: use information_schema.columns
+            // Use LOWER() for case-insensitive matching
+            String schemaNameLower = schemaName.toLowerCase();
             try (ResultSet rs = s.executeQuery(
                     "SELECT column_name, data_type FROM information_schema.columns "
-                            + "WHERE table_name = '" + tableName + "' AND table_schema = '" + schemaName + "' "
+                            + "WHERE table_name = '" + tableName + "' AND LOWER(table_schema) = '" + schemaNameLower + "' "
                             + "ORDER BY column_name")) {
                 while (rs.next()) {
                     String columnName = rs.getString("column_name");

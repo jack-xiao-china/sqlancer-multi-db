@@ -211,10 +211,12 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                         if (rs != null) {
                             rs.close();
                         }
+                        // Use LOWER() for case-insensitive matching
+                        String dbNameLower = databaseName.toLowerCase();
                         try {
                             rs = s.executeQuery(
-                                "SELECT TABLE_NAME FROM information_schema.TABLES WHERE table_schema = '"
-                                + databaseName + "' OR table_schema = DATABASE()");
+                                "SELECT TABLE_NAME FROM information_schema.TABLES WHERE LOWER(table_schema) = '"
+                                + dbNameLower + "' OR LOWER(table_schema) = LOWER(DATABASE())");
                             while (rs.next()) {
                                 String tableName = rs.getString("TABLE_NAME");
                                 List<GaussDBColumn> databaseColumns = getTableColumns(con, tableName, databaseName);
@@ -357,9 +359,11 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                 }
             } catch (SQLException e) {
                 // Fall back to information_schema
+                // Use LOWER() for case-insensitive matching
+                String dbNameLower = databaseName.toLowerCase();
                 try (ResultSet rs = s.executeQuery(
-                    "SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION, COLUMN_KEY FROM information_schema.columns WHERE (table_schema = '"
-                    + databaseName + "' OR table_schema = DATABASE()) AND TABLE_NAME='" + tableName + "'")) {
+                    "SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION, COLUMN_KEY FROM information_schema.columns WHERE (LOWER(table_schema) = '"
+                    + dbNameLower + "' OR LOWER(table_schema) = LOWER(DATABASE())) AND TABLE_NAME='" + tableName + "'")) {
                     while (rs.next()) {
                         String columnName = rs.getString("COLUMN_NAME");
                         String dataType = rs.getString("DATA_TYPE");

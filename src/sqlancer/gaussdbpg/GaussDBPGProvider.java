@@ -146,7 +146,7 @@ public class GaussDBPGProvider extends SQLProviderAdapter<GaussDBPGGlobalState, 
             System.err.println("[WARN] Could not get database metadata: " + e.getMessage());
         }
 
-        String schemaName = globalState.getDatabaseName();
+        String schemaName = globalState.getDatabaseName().toLowerCase();
 
         // Create schema for test isolation
         try (Statement s = con.createStatement()) {

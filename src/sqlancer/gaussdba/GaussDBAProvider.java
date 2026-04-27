@@ -213,9 +213,10 @@ public class GaussDBAProvider extends SQLProviderAdapter<GaussDBAGlobalState, Ga
         // Verify database compatibility mode
         verifyCompatibilityMode(con, targetDatabase);
 
-        String schemaName = globalState.getDatabaseName();
+        String schemaName = globalState.getDatabaseName().toLowerCase();
 
         // Create schema for test isolation (A兼容模式也支持schema)
+        // Use lowercase to ensure consistent matching in information_schema queries
         try (Statement s = con.createStatement()) {
             String dropSql = "DROP SCHEMA IF EXISTS " + schemaName + " CASCADE";
             String createSql = "CREATE SCHEMA " + schemaName;
