@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.1.82 | 2026-04-24
+- 增强 PostgreSQL 外键覆盖：新增建表后 FK setup 阶段，在 mutation 前主动准备类型匹配的 referenced/FK 列、UNIQUE 约束、FOREIGN KEY 约束与固定 seed 值池
+- 覆盖外键拓扑：支持单向多表引用、简单链式引用、自引用、双表循环引用（DEFERRABLE INITIALLY DEFERRED）与 2-4 列复合外键
+- FK setup 类型覆盖 `integer/boolean/TEXT/varchar(500)/char(500)/numeric/double precision/real/money/bit varying(500)/inet/uuid/date/time/timetz/timestamp/timestamptz/interval/bytea/int4range/ENUM`，类型池按稳定性加权并继续避免 json/array；普通 PostgreSQL DDL/Cast 类型输出中的可变/定长字符串长度统一使用 500
+- FK setup 拓扑选择改为加权分布，优先覆盖单向/链式高收益场景，同时保留自引用、循环引用、2-4 列复合外键和低频已有列复用；分区表低频优先作为 child 参与 FK
+- FK setup 在创建约束后为 child FK 列插入引用池 seed rows，低频为 child FK 列添加池值 DEFAULT 并覆盖 `SET DEFAULT` 动作；外键约束低频覆盖 `NOT VALID` 与可延后/即时 `VALIDATE CONSTRAINT`，并补充 DELETE 触发 referenced-table 外键限制时的 expected errors
+- 将全局 `--num-statement-kind-retries` 默认值从 1000 降为 10，保留随机语句重试能力，同时避免 MERGE/INSERT/UPDATE 等 expected-error 语句被重试放大到远超 action 预算
+- 修复 PostgreSQL TLP/HAVING 误报：将 schema/表达式层的 `TEXT`、`VARCHAR(500)`、`CHAR(500)` 拆成独立类型并确定性渲染，避免同一个 AST 在 metamorphic query 中随机变换字符串类型后因 `CHAR` 空格填充导致结果不一致
+- 新增 `--test-foreign-keys=true|false` 控制开关；启用时每轮随机尝试创建 2-4 个 FK group，不再暴露额外 group 数量参数
+- INSERT/UPDATE 对 FK setup 生成的列按 schema 中的列类型直接选择稳定值池或 NULL，减少类型不匹配和缺失 referenced value 带来的无效 SQL；随机表约束中的 FOREIGN KEY 分支也优先选择同类型、同表类型的 referenced columns
+- 验证结果：`mvn -q -DskipTests compile` 与 `mvn -q package -DskipTests` 通过
+
 ## v0.1.81 | 2026-04-24
 - 扩展 PostgreSQL DDL/DML 随机生成覆盖（触发器与权限语句暂不启用）：
   - **DDL 增强**：新增独立 `DROP TABLE`、`DROP VIEW`、`DROP SEQUENCE` 生成器；新增 `ALTER SEQUENCE` 与 `ALTER INDEX` 生成器

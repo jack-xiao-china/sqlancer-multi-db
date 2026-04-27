@@ -40,7 +40,7 @@ public class MainOptions {
 
     @Parameter(names = {
             "--num-statement-kind-retries" }, description = "Specifies the number of times a specific statement kind (e.g., INSERT) should be retried when the DBMS indicates that it failed")
-    private int nrStatementRetryCount = 1000; // NOPMD
+    private int nrStatementRetryCount = 10; // NOPMD
 
     @Parameter(names = "--log-each-select", description = "Logs every statement issued", arity = 1)
     private boolean logEachSelect = true; // NOPMD

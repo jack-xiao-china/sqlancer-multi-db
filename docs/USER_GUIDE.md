@@ -1,6 +1,6 @@
 # SQLancer User Guide
 
-**Version**: v0.1.73 (2026-04-21)  
+**Version**: v0.1.82 (2026-04-24)  
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M, and 20+ other DBMS
 
 ## Introduction
@@ -151,6 +151,35 @@ java -jar target/sqlancer-2.0.0.jar \
 | CODDTEST | Constant-driven optimization | Moderate |
 | FUZZER | Random queries | ~3000 queries/s |
 
+### PQS and CERT Recommended Parameters
+
+PQS and CERT oracles require tables to contain rows for proper testing. Use these recommended parameters:
+
+```bash
+java -jar target/sqlancer-2.0.0.jar \
+    --username postgres \
+    --password your_password \
+    --num-threads 20 \
+    --timeout-seconds 30 \
+    --num-tries 20 \
+    postgres --pg-tables 1 \
+    --pg-generate-sql-num 10 \
+    --pg-generate-rows-per-insert 5 \
+    --oracle PQS
+```
+
+**Recommended Settings for PQS/CERT:**
+
+| Parameter | Recommended Value | Reason |
+|-----------|-------------------|--------|
+| `--pg-tables` | 1 | Single table ensures rows are inserted |
+| `--pg-generate-sql-num` | 10 | More INSERT statements per table |
+| `--pg-generate-rows-per-insert` | 5 | Multiple rows per INSERT |
+| `--num-threads` | 20 | Parallel testing |
+| `--timeout-seconds` | 30 | Per-thread timeout |
+
+**Note**: Using `--pg-tables 1` is important because PQS/CERT need non-empty tables. Multiple tables may result in temporary tables or DELETE/TRUNCATE operations clearing data.
+
 ## PostgreSQL Data Types
 
 | Type Category | Types Supported |
@@ -169,11 +198,18 @@ java -jar target/sqlancer-2.0.0.jar \
 
 ```bash
 --coverage-policy BALANCED          # CONSERVATIVE|BALANCED|AGGRESSIVE
+--test-foreign-keys true            # Prepare PostgreSQL foreign key groups before mutation
 --pg-table-columns 10               # Number of columns in CREATE TABLE
 --pg-generate-sql-num 3             # Rows in INSERT ... VALUES
 --pg-index-model 0                  # 0-6 for different index patterns
 --extensions "pg_trgm,postgis"      # Pre-create extensions
 ```
+
+### PostgreSQL Foreign Key Coverage
+
+When `--test-foreign-keys=true` is enabled, SQLancer prepares 2-4 foreign key groups after table creation and before mutation statements. The setup phase creates type-compatible referenced columns and child FK columns, adds UNIQUE and FOREIGN KEY constraints, and inserts stable seed values so later INSERT/UPDATE/DELETE statements can exercise referential actions with fewer invalid SQL statements.
+
+Covered FK shapes include star references, chains, self-references, deferred two-table cycles, composite foreign keys, and low-frequency reuse of compatible existing columns.
 
 ---
 

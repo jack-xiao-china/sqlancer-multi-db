@@ -28,10 +28,10 @@ public final class PostgresTypeGenerator {
             sb.append(DBMSCommon.createColumnName(i));
             sb.append(" ");
             PostgresDataType type = Randomly.fromOptions(PostgresDataType.INT, PostgresDataType.BOOLEAN,
-                    PostgresDataType.TEXT, PostgresDataType.DECIMAL, PostgresDataType.FLOAT, PostgresDataType.REAL,
-                    PostgresDataType.DATE, PostgresDataType.TIME, PostgresDataType.TIMESTAMP,
-                    PostgresDataType.TIMESTAMPTZ, PostgresDataType.INTERVAL, PostgresDataType.UUID,
-                    PostgresDataType.BYTEA);
+                    PostgresDataType.TEXT, PostgresDataType.VARCHAR, PostgresDataType.CHAR, PostgresDataType.DECIMAL,
+                    PostgresDataType.FLOAT, PostgresDataType.REAL, PostgresDataType.DATE, PostgresDataType.TIME,
+                    PostgresDataType.TIMESTAMP, PostgresDataType.TIMESTAMPTZ, PostgresDataType.INTERVAL,
+                    PostgresDataType.UUID, PostgresDataType.BYTEA);
             PostgresCommon.appendDataType(PostgresCompoundDataType.create(type), sb, false, globalState.getCollates());
         }
         sb.append(")");

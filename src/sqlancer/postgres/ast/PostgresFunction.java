@@ -108,7 +108,11 @@ public class PostgresFunction implements PostgresExpression {
                 if (!(evaluatedArgs[0] instanceof ArrayConstant)) {
                     return null;
                 }
-                Integer length = ((ArrayConstant) evaluatedArgs[0]).getLength((int) evaluatedArgs[1].asInt());
+                PostgresConstant dimensionArg = evaluatedArgs[1].cast(PostgresDataType.INT);
+                if (dimensionArg == null || dimensionArg.isNull()) {
+                    return PostgresConstant.createNullConstant();
+                }
+                Integer length = ((ArrayConstant) evaluatedArgs[0]).getLength((int) dimensionArg.asInt());
                 if (length == null) {
                     return PostgresConstant.createNullConstant();
                 }

@@ -6,6 +6,7 @@ import java.util.Optional;
 import sqlancer.Randomly;
 import sqlancer.common.visitor.BinaryOperation;
 import sqlancer.common.visitor.ToStringVisitor;
+import sqlancer.postgres.PostgresSchema.PostgresDataType;
 import sqlancer.postgres.ast.PostgresAggregate;
 import sqlancer.postgres.ast.PostgresBetweenOperation;
 import sqlancer.postgres.ast.PostgresBinaryJsonOperation;
@@ -407,8 +408,13 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             sb.append("INT");
             break;
         case TEXT:
-            // TODO: append TEXT, CHAR
-            sb.append(Randomly.fromOptions("VARCHAR"));
+            sb.append("TEXT");
+            break;
+        case VARCHAR:
+            sb.append("VARCHAR");
+            break;
+        case CHAR:
+            sb.append("CHAR");
             break;
         case REAL:
             sb.append("FLOAT");
@@ -470,10 +476,14 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             throw new AssertionError(cast.getType());
         }
         Optional<Integer> size = compoundType.getSize();
-        if (size.isPresent()) {
+        if (size.isPresent() && compoundType.getDataType() != PostgresDataType.TEXT) {
             sb.append("(");
             sb.append(size.get());
             sb.append(")");
+        } else if (!size.isPresent()
+                && (compoundType.getDataType() == PostgresDataType.VARCHAR
+                        || compoundType.getDataType() == PostgresDataType.CHAR)) {
+            sb.append("(500)");
         }
     }
 

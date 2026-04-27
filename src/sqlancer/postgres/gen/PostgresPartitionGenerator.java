@@ -228,6 +228,7 @@ public final class PostgresPartitionGenerator {
 
     private static boolean isListPartitionType(PostgresDataType dataType) {
         return dataType == PostgresDataType.INT || dataType == PostgresDataType.TEXT
+                || dataType == PostgresDataType.VARCHAR || dataType == PostgresDataType.CHAR
                 || dataType == PostgresDataType.ENUM || dataType == PostgresDataType.BOOLEAN;
     }
 
@@ -448,6 +449,8 @@ public final class PostgresPartitionGenerator {
         case INT:
             return String.valueOf(partitionIndex);
         case TEXT:
+        case VARCHAR:
+        case CHAR:
             return "'" + escapeSql("sqlancer_partition_" + partitionIndex) + "'";
         case ENUM:
             String[] labels = { "a", "b", "c", "d" };

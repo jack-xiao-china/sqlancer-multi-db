@@ -234,6 +234,7 @@ public class PostgresTableGenerator {
                 break;
             case "LIST":
                 if (dataType == PostgresDataType.INT || dataType == PostgresDataType.TEXT
+                        || dataType == PostgresDataType.VARCHAR || dataType == PostgresDataType.CHAR
                         || dataType == PostgresDataType.ENUM || dataType == PostgresDataType.BOOLEAN) {
                     supportedColumns.add(column);
                 }

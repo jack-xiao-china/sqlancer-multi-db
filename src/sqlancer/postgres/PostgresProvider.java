@@ -44,6 +44,7 @@ import sqlancer.postgres.gen.PostgresDropIndexGenerator;
 import sqlancer.postgres.gen.PostgresDropTableGenerator;
 import sqlancer.postgres.gen.PostgresDropViewGenerator;
 import sqlancer.postgres.gen.PostgresExplainGenerator;
+import sqlancer.postgres.gen.PostgresForeignKeySetupGenerator;
 import sqlancer.postgres.gen.PostgresFunctionGenerator;
 import sqlancer.postgres.gen.PostgresIndexGenerator;
 import sqlancer.postgres.gen.PostgresInsertGenerator;
@@ -289,6 +290,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         readFunctions(globalState);
         int numTables = globalState.getDbmsSpecificOptions().getPgTables();
         createTables(globalState, numTables);
+        PostgresForeignKeySetupGenerator.setup(globalState);
         prepareTables(globalState);
 
         extensionsList = globalState.getDbmsSpecificOptions().extensions;

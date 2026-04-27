@@ -72,6 +72,9 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--pg-tables", description = "Number of tables to create in PostgreSQL test databases (default: 3)")
     public int pgTables = 3;
 
+    @Parameter(names = "--test-foreign-keys", description = "Specifies whether to prepare PostgreSQL foreign key groups before mutation", arity = 1)
+    public boolean testForeignKeys = true;
+
     private static boolean determineDefaultTablespaceSupport() {
         String osName = System.getProperty("os.name").toLowerCase();
         if (osName.contains("linux")) {
@@ -171,6 +174,10 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
 
     public int getPgTables() {
         return pgTables;
+    }
+
+    public boolean testForeignKeys() {
+        return testForeignKeys;
     }
 
     public void validate() {

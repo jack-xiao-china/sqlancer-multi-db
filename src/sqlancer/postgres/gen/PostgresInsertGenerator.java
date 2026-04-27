@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 import sqlancer.Randomly;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
+import sqlancer.postgres.PostgresForeignKeyValuePool;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.PostgresSchema;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
@@ -129,6 +130,9 @@ public final class PostgresInsertGenerator {
             sb.append(partitionRoutingValue);
             return;
         }
+        if (isForeignKeySetupColumn(column) && appendForeignKeySetupValue(sb, column, canBeDefault)) {
+            return;
+        }
         if (Randomly.getBooleanWithSmallProbability() && canBeDefault) {
             sb.append("DEFAULT");
             return;
@@ -141,6 +145,29 @@ public final class PostgresInsertGenerator {
             generateConstant = new PostgresExpressionGenerator(globalState).generateExpression(column.getCompoundType());
         }
         sb.append(PostgresVisitor.asString(generateConstant));
+    }
+
+    private static boolean appendForeignKeySetupValue(StringBuilder sb, PostgresColumn column, boolean canBeDefault) {
+        List<String> values = PostgresForeignKeyValuePool.getValues(column);
+        if (values.isEmpty()) {
+            return false;
+        }
+        int choice = (int) Randomly.getNotCachedInteger(0, 10);
+        if (choice < 7) {
+            sb.append(Randomly.fromList(values));
+            return true;
+        } else if (choice < 9) {
+            sb.append("NULL");
+            return true;
+        } else if (canBeDefault && Randomly.getBooleanWithRatherLowProbability()) {
+            sb.append("DEFAULT");
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isForeignKeySetupColumn(PostgresColumn column) {
+        return column.getName().startsWith("fk_");
     }
 
     private static PostgresColumn getPartitionKeyColumnForRouting(PostgresGlobalState globalState, PostgresTable table) {

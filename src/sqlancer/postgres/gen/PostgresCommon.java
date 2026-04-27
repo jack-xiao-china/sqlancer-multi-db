@@ -3,7 +3,6 @@ package sqlancer.postgres.gen;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -282,26 +281,16 @@ public final class PostgresCommon {
             }
             break;
         case TEXT:
-            if (Randomly.getBoolean()) {
-                sb.append("TEXT");
-            } else if (Randomly.getBoolean()) {
-                // TODO: support CHAR (without VAR)
-                if (Randomly.getBoolean()) {
-                    sb.append("VAR");
-                }
-                sb.append("CHAR");
-                sb.append("(");
-                sb.append(ThreadLocalRandom.current().nextInt(1, 500));
-                sb.append(")");
-            } else {
-                sb.append("name");
-            }
-            if (Randomly.getBoolean()) {
-                sb.append(" COLLATE ");
-                sb.append('"');
-                sb.append(Randomly.fromList(opClasses));
-                sb.append('"');
-            }
+            sb.append(Randomly.fromOptions("TEXT", "name"));
+            appendCollation(sb, opClasses);
+            break;
+        case VARCHAR:
+            sb.append("VARCHAR(500)");
+            appendCollation(sb, opClasses);
+            break;
+        case CHAR:
+            sb.append("CHAR(500)");
+            appendCollation(sb, opClasses);
             break;
         case DECIMAL:
             sb.append("DECIMAL");
@@ -370,6 +359,15 @@ public final class PostgresCommon {
             throw new AssertionError(compoundType);
         }
         return serial;
+    }
+
+    private static void appendCollation(StringBuilder sb, List<String> opClasses) {
+        if (Randomly.getBoolean()) {
+            sb.append(" COLLATE ");
+            sb.append('"');
+            sb.append(Randomly.fromList(opClasses));
+            sb.append('"');
+        }
     }
 
     public enum TableConstraints {
@@ -473,15 +471,12 @@ public final class PostgresCommon {
             appendIndexParameters(sb, globalState, errors);
             break;
         case FOREIGN_KEY:
+            otherColumns = getCompatibleReferencedColumns(table, randomNonEmptyColumnSubset, globalState);
             sb.append("FOREIGN KEY (");
             sb.append(randomNonEmptyColumnSubset.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
             sb.append(") REFERENCES ");
-            PostgresTable randomOtherTable = globalState.getSchema().getRandomTable(tab -> !tab.isView());
+            PostgresTable randomOtherTable = otherColumns.get(0).getTable();
             sb.append(randomOtherTable.getName());
-            if (randomOtherTable.getColumns().size() < randomNonEmptyColumnSubset.size()) {
-                throw new IgnoreMeException();
-            }
-            otherColumns = randomOtherTable.getRandomNonEmptyColumnSubset(randomNonEmptyColumnSubset.size());
             sb.append("(");
             sb.append(otherColumns.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
             sb.append(")");
@@ -558,6 +553,49 @@ public final class PostgresCommon {
 
     private static void appendOperator(StringBuilder sb, List<String> operators) {
         sb.append(Randomly.fromList(operators));
+    }
+
+    private static List<PostgresColumn> getCompatibleReferencedColumns(PostgresTable table,
+            List<PostgresColumn> foreignKeyColumns, PostgresGlobalState globalState) {
+        List<List<PostgresColumn>> candidates = new ArrayList<>();
+        for (PostgresTable otherTable : globalState.getSchema().getDatabaseTables()) {
+            if (otherTable.isView() || otherTable.isPartitioned() || !isCompatibleForeignKeyTable(table, otherTable)) {
+                continue;
+            }
+            List<PostgresColumn> columns = getMatchingColumns(otherTable, foreignKeyColumns);
+            if (!columns.isEmpty()) {
+                candidates.add(columns);
+            }
+        }
+        if (candidates.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        return Randomly.fromList(candidates);
+    }
+
+    private static boolean isCompatibleForeignKeyTable(PostgresTable foreignKeyTable, PostgresTable referencedTable) {
+        if (foreignKeyTable.getTableType() == null) {
+            return true;
+        }
+        return foreignKeyTable.getTableType() == referencedTable.getTableType();
+    }
+
+    private static List<PostgresColumn> getMatchingColumns(PostgresTable referencedTable,
+            List<PostgresColumn> foreignKeyColumns) {
+        List<PostgresColumn> availableColumns = new ArrayList<>(referencedTable.getColumns());
+        List<PostgresColumn> matchingColumns = new ArrayList<>();
+        for (PostgresColumn foreignKeyColumn : foreignKeyColumns) {
+            List<PostgresColumn> typeMatches = availableColumns.stream()
+                    .filter(c -> c.getCompoundType().equals(foreignKeyColumn.getCompoundType()))
+                    .collect(Collectors.toList());
+            if (typeMatches.isEmpty()) {
+                return List.of();
+            }
+            PostgresColumn selectedColumn = Randomly.fromList(typeMatches);
+            matchingColumns.add(selectedColumn);
+            availableColumns.remove(selectedColumn);
+        }
+        return matchingColumns;
     }
 
     // complete

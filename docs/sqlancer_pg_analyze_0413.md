@@ -50,6 +50,11 @@ SQLancer 当前在 `sqlancer.postgres.PostgresSchema.PostgresDataType` 中的类
 从 `PostgresProvider.Action` 以及各类 generator 可见当前已“会主动生成/变更”的对象/DDL 大致包括：
 
 - **表（table）**：`CREATE TABLE` 支持 `TEMP/UNLOGGED`、`IF NOT EXISTS`、`LIKE ... INCLUDING/EXCLUDING`、列约束（`NOT NULL/NULL/UNIQUE/PRIMARY KEY/DEFAULT/CHECK/GENERATED`）、部分表级约束、`INHERITS`、`PARTITION BY (RANGE/LIST/HASH)`、`USING <access method>`、`WITH (...)`、`ON COMMIT ...`（临时表）等。
+- **外键约束**：除随机 `FOREIGN KEY` 约束外，新增建表后 FK setup 阶段，主动准备类型匹配的 referenced/FK 列、UNIQUE 约束、seed 值池和外键关系；覆盖单向、链式、自引用、循环引用与 2-4 列复合外键。
+  - FK setup 类型覆盖 `integer/boolean/TEXT/varchar(500)/char(500)/numeric/double precision/real/money/bit varying(500)/inet/uuid/date/time/timetz/timestamp/timestamptz/interval/bytea/int4range/ENUM`，类型池按稳定性加权并继续避免 json/array；普通 PostgreSQL schema/表达式层将 `TEXT`、`VARCHAR(500)`、`CHAR(500)` 拆成独立类型，DDL/Cast 输出确定且字符串长度统一使用 500。
+  - FK setup 拓扑选择使用加权分布，优先覆盖单向/链式高收益场景，同时保留自引用、循环引用、2-4 列复合外键和低频已有列复用；分区表低频优先作为 child 参与 FK。
+  - FK setup 在创建约束后为 child FK 列插入引用池 seed rows，低频为 child FK 列添加池值 DEFAULT 并覆盖 `SET DEFAULT` 动作。
+  - FK setup 低频覆盖 `NOT VALID` 与可延后/即时 `VALIDATE CONSTRAINT`，并在 DELETE 中补充 referenced-table 外键限制相关 expected errors。
 - **索引/聚簇**：`CREATE INDEX`、`CLUSTER`、`REINDEX`、`DROP INDEX`
 - **视图**：`CREATE VIEW` 支持 `MATERIALIZED`、`OR REPLACE`、`TEMP/TEMPORARY`、`RECURSIVE`、`WITH ... CHECK OPTION`；并有 `ALTER VIEW RENAME COLUMN` 的 action。
 - **删除/变更类 DDL**：独立生成 `DROP TABLE`、`DROP VIEW`、`DROP SEQUENCE`、`ALTER SEQUENCE`、`ALTER INDEX`
@@ -79,6 +84,7 @@ SQLancer 当前在 `sqlancer.postgres.PostgresSchema.PostgresDataType` 中的类
   - `INSERT`：支持多行 VALUES、`OVERRIDING SYSTEM/USER VALUE`、`ON CONFLICT ... DO NOTHING`
   - `UPDATE`：基础 `SET ...` + 可选 `WHERE`
   - `DELETE`：支持 `ONLY`、可选 `WHERE`、可选 `RETURNING`
+  - FK setup 生成的 `fk_`/`fk_ref_` 列在 INSERT/UPDATE 中按 schema 列类型优先使用稳定值池或 NULL，提升引用完整性相关语句的有效执行比例。
 
 与 PostgreSQL 18.3 文档中的语法全景相比，主要差距集中在：
 
@@ -163,6 +169,7 @@ SQLancer 并非“实现一个完整 SQL 解析器/执行器”，而是围绕 t
 
 - **索引生态增强**：更多 index 类型与选项（例如 partial index、expression index、INCLUDE、collation、opclass），以及与 `ANALYZE/VACUUM` 的联动。
 - **分区生态增强**：创建分区、ATTACH/DETACH、分区索引/约束更丰富组合（注意 expected errors 与稳定性）。
+- **外键生态增强**：当前已使用 setup 阶段覆盖单向、链式、自引用、循环和复合外键；后续可继续扩大 seed rows 对复杂 NOT NULL/default 表结构的适配。
 - **Schema/命名空间**：引入 `CREATE SCHEMA`、search_path 随机化（会显著增加解析路径覆盖）。
 - **RLS 完整链路**：在已有 ALTER TABLE 开关基础上补 `CREATE POLICY`/`ALTER POLICY`/`DROP POLICY`（这会直接影响查询结果与计划）。
 - **触发器/函数（谨慎推进）**：这是覆盖面大但也最容易引入不稳定与非确定性的方向。建议采用：

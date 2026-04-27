@@ -32,7 +32,7 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
     private final String databaseName;
 
     public enum PostgresDataType {
-        INT, BOOLEAN, TEXT, DECIMAL, FLOAT, REAL, RANGE, MONEY, BIT, INET, //
+        INT, BOOLEAN, TEXT, VARCHAR, CHAR, DECIMAL, FLOAT, REAL, RANGE, MONEY, BIT, INET, //
         DATE, TIME, TIMETZ, TIMESTAMP, TIMESTAMPTZ, INTERVAL, //
         JSON, JSONB, //
         UUID, BYTEA, //
@@ -145,14 +145,17 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         case "boolean":
         case "bool":
             return PostgresCompoundDataType.create(PostgresDataType.BOOLEAN);
-        case "text":
-        case "character":
-        case "bpchar":
-        case "character varying":
-        case "varchar":
         case "name":
         case "regclass":
             return PostgresCompoundDataType.create(PostgresDataType.TEXT);
+        case "text":
+            return PostgresCompoundDataType.create(PostgresDataType.TEXT);
+        case "character varying":
+        case "varchar":
+            return PostgresCompoundDataType.create(PostgresDataType.VARCHAR);
+        case "character":
+        case "bpchar":
+            return PostgresCompoundDataType.create(PostgresDataType.CHAR);
         case "numeric":
             return PostgresCompoundDataType.create(PostgresDataType.DECIMAL);
         case "double precision":
@@ -215,6 +218,8 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         case INT:
         case BOOLEAN:
         case TEXT:
+        case VARCHAR:
+        case CHAR:
         case DATE:
         case TIME:
         case TIMESTAMP:
@@ -709,6 +714,8 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         case BOOLEAN:
             return PostgresConstant.createBooleanConstant(rs.getBoolean(columnIndex));
         case TEXT:
+        case VARCHAR:
+        case CHAR:
             return PostgresConstant.createTextConstant(rs.getString(columnIndex));
         case DATE:
             return PostgresConstant.createDateConstant(rs.getString(columnIndex));

@@ -91,6 +91,8 @@ public abstract class PostgresConstant implements PostgresExpression {
             case INT:
                 return PostgresConstant.createIntConstant(value ? 1 : 0);
             case TEXT:
+            case VARCHAR:
+            case CHAR:
                 return PostgresConstant.createTextConstant(value ? "true" : "false");
             default:
                 return null;
@@ -146,14 +148,30 @@ public abstract class PostgresConstant implements PostgresExpression {
     public static class StringConstant extends PostgresConstant {
 
         private final String value;
+        private final PostgresDataType type;
 
         public StringConstant(String value) {
+            this(value, PostgresDataType.TEXT);
+        }
+
+        public StringConstant(String value, PostgresDataType type) {
             this.value = value;
+            this.type = type;
         }
 
         @Override
         public String getTextRepresentation() {
-            return String.format("'%s'", value.replace("'", "''"));
+            String literal = String.format("'%s'", value.replace("'", "''"));
+            switch (type) {
+            case VARCHAR:
+                return literal + "::varchar(500)";
+            case CHAR:
+                return literal + "::char(500)";
+            case TEXT:
+                return literal;
+            default:
+                throw new AssertionError(type);
+            }
         }
 
         @Override
@@ -202,8 +220,8 @@ public abstract class PostgresConstant implements PostgresExpression {
 
         @Override
         public PostgresConstant cast(PostgresDataType type) {
-            if (type == PostgresDataType.TEXT) {
-                return this;
+            if (isStringType(type)) {
+                return new StringConstant(value, type);
             }
             String s = value.trim();
             switch (type) {
@@ -242,6 +260,8 @@ public abstract class PostgresConstant implements PostgresExpression {
                     return PostgresConstant.createIntConstant(-1);
                 }
             case TEXT:
+            case VARCHAR:
+            case CHAR:
                 return this;
             case DATE:
                 return PostgresConstant.createDateConstant(s);
@@ -268,7 +288,7 @@ public abstract class PostgresConstant implements PostgresExpression {
 
         @Override
         public PostgresDataType getExpressionType() {
-            return PostgresDataType.TEXT;
+            return type;
         }
 
         @Override
@@ -367,6 +387,8 @@ public abstract class PostgresConstant implements PostgresExpression {
             case INT:
                 return this;
             case TEXT:
+            case VARCHAR:
+            case CHAR:
                 return PostgresConstant.createTextConstant(String.valueOf(val));
             default:
                 return null;
@@ -458,6 +480,14 @@ public abstract class PostgresConstant implements PostgresExpression {
         return new StringConstant(string);
     }
 
+    public static PostgresConstant createVarcharConstant(String string) {
+        return new StringConstant(string, PostgresDataType.VARCHAR);
+    }
+
+    public static PostgresConstant createCharConstant(String string) {
+        return new StringConstant(string, PostgresDataType.CHAR);
+    }
+
     public static class TemporalConstant extends PostgresConstant {
 
         private final String value;
@@ -510,7 +540,7 @@ public abstract class PostgresConstant implements PostgresExpression {
         public PostgresConstant cast(PostgresDataType castType) {
             if (castType == type) {
                 return this;
-            } else if (castType == PostgresDataType.TEXT) {
+            } else if (isStringType(castType)) {
                 return PostgresConstant.createTextConstant(value);
             } else {
                 return null;
@@ -857,6 +887,8 @@ public abstract class PostgresConstant implements PostgresExpression {
             case UUID:
                 return this;
             case TEXT:
+            case VARCHAR:
+            case CHAR:
                 return PostgresConstant.createTextConstant(uuid.toString());
             default:
                 return null;
@@ -940,6 +972,8 @@ public abstract class PostgresConstant implements PostgresExpression {
             case ENUM:
                 return this;
             case TEXT:
+            case VARCHAR:
+            case CHAR:
                 return PostgresConstant.createTextConstant(label);
             default:
                 return null;
@@ -986,7 +1020,7 @@ public abstract class PostgresConstant implements PostgresExpression {
 
         @Override
         public PostgresConstant cast(PostgresDataType type) {
-            if (type == PostgresDataType.TEXT) {
+            if (isStringType(type)) {
                 return PostgresConstant.createTextConstant(getTextRepresentation());
             }
             if (type == PostgresDataType.ARRAY) {
@@ -1107,6 +1141,8 @@ public abstract class PostgresConstant implements PostgresExpression {
             case BYTEA:
                 return this;
             case TEXT:
+            case VARCHAR:
+            case CHAR:
                 return PostgresConstant.createTextConstant(getUnquotedTextRepresentation());
             default:
                 return null;
@@ -1169,6 +1205,8 @@ public abstract class PostgresConstant implements PostgresExpression {
         case BOOLEAN:
             return createBooleanConstant((Boolean) value);
         case TEXT:
+        case VARCHAR:
+        case CHAR:
         case JSON:
         case JSONB:
         case UUID:
@@ -1218,6 +1256,10 @@ public abstract class PostgresConstant implements PostgresExpression {
             return "INT";
         case TEXT:
             return "TEXT";
+        case VARCHAR:
+            return "VARCHAR(500)";
+        case CHAR:
+            return "CHAR(500)";
         case REAL:
             return "FLOAT";
         case DECIMAL:
@@ -1267,7 +1309,7 @@ public abstract class PostgresConstant implements PostgresExpression {
 
         @Override
         public PostgresConstant cast(PostgresDataType type) {
-            if (type == PostgresDataType.TEXT) {
+            if (isStringType(type)) {
                 return PostgresConstant.createTextConstant(getUnquotedTextRepresentation());
             }
             return null;
@@ -1564,6 +1606,10 @@ public abstract class PostgresConstant implements PostgresExpression {
         }
         PostgresDataType type = constant.getExpressionType();
         return type == PostgresDataType.DECIMAL || type == PostgresDataType.FLOAT || type == PostgresDataType.REAL;
+    }
+
+    private static boolean isStringType(PostgresDataType type) {
+        return type == PostgresDataType.TEXT || type == PostgresDataType.VARCHAR || type == PostgresDataType.CHAR;
     }
 
     private static BigDecimal getNumericValue(PostgresConstant constant) {

@@ -94,7 +94,12 @@
       "Skill(ralph-loop:ralph-loop)",
       "Bash(C:/Users/Jerry.Xiao/.claude/plugins/cache/claude-plugins-official/ralph-loop/1.0.0/scripts/setup-ralph-loop.sh *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(rm -f logs/*.log)",
+      "Bash(rm -rf logs/postgres/*)",
+      "Bash(java -jar target/sqlancer-2.0.0.jar --username postgres --password Taurus_123 --num-threads 8 --timeout-seconds 30 --num-tries 20 --database-prefix norec_ postgres --oracle NOREC)",
+      "Bash(java -jar target/sqlancer-2.0.0.jar --username postgres --password Taurus_123 --num-threads 8 --timeout-seconds 30 --num-tries 20 --database-prefix pqs_ postgres --oracle PQS)",
+      "Bash(java -jar target/sqlancer-2.0.0.jar --username postgres --password Taurus_123 --num-threads 8 --timeout-seconds 30 --num-tries 20 --database-prefix tlp_ postgres --oracle TLP_WHERE)"
     ]
   }
 }

@@ -1,0 +1,699 @@
+# PostgreSQL 外键增强设计方案
+
+## 一、目标与背景
+
+### 1.1 当前问题
+
+现有的 PostgreSQL 外键测试采用"随机生成 + 错误过滤"策略，存在以下问题：
+
+1. **类型不匹配**：随机选择的外键列和被引用列类型可能不匹配，导致大量无效语句
+2. **缺少UNIQUE约束**：被引用列没有UNIQUE/PRIMARY KEY约束时会失败
+3. **临时表/永久表交叉引用**：临时表外键只能引用临时表，随机选择会触发错误
+4. **成功率低**：大部分随机生成的外键语句会触发预期错误，测试覆盖效率低
+
+### 1.2 解决思路
+
+在建表后、Mutation前增加一个"外键准备阶段"，主动创建外键相关的列、约束和种子数据，然后在INSERT/UPDATE时使用固定的值池，大幅提高外键测试的有效性和覆盖率。
+
+---
+
+## 二、新增参数配置
+
+### 2.1 主开关参数
+
+- 参数名：--test-foreign-keys
+- 类型：boolean
+- 默认值：true
+- 说明：是否启用外键准备阶段，创建外键列和约束
+
+### 2.2 辅助参数
+- 参数名：--fk-groups-max
+- 类型：int
+- 默认值：3
+- 说明：最多创建多少个外键组（每个组是一套外键关系）
+
+---
+
+## 三、整体流程
+
+### 3.1 执行顺序
+
+现有的 PostgresProvider.generateDatabase() 流程：
+
+1. createEnumTypes()      - 创建枚举类型
+2. readFunctions()        - 读取函数列表
+3. createTables()         - 创建基础表结构
+4. [新增] setupForeignKeys() - 外键准备阶段
+5. prepareTables()        - Mutation阶段
+6. 创建扩展               - extensions处理
+
+### 3.2 外键准备阶段触发条件
+
+在步骤4插入外键准备阶段，条件判断：
+
+- testForeignKeysSetup 参数为 true
+- fkSetupChance 概率判断通过
+- 表数量至少有2个（否则无法建立外键）
+
+---
+
+## 四、外键准备阶段详细流程
+
+### 4.1 选择参与外键的表
+
+从现有表中随机选择一组表参与外键关系，数量范围 2-4 个表。
+
+需要考虑的表类型限制：
+
+- **永久表组**：从永久表中选，外键关系只存在于永久表之间
+- **临时表组**：从临时表中选，外键关系只存在于临时表之间
+- **分区表限制**：分区表可以作为外键表（引用其他表），但不能作为被引用表（除非有主键）
+
+表选择策略：
+
+- 优先选择行数较少的表（避免大量级联删除的开销）
+- 避免选择视图（视图不能有外键）
+- 避免选择已分区表作为被引用表（除非已有主键）
+
+### 4.2 选择外键列的数据类型
+
+可用的外键数据类型池（排除不支持外键的类型）：
+
+- INT（最推荐，值域明确，性能好）
+- TEXT（需注意长度限制，UNIQUE列不能过长）
+- UUID（最推荐，天生唯一，值域无限）
+- DATE（适合，值域大）
+- TIMESTAMP（适合）
+- TIMESTAMPTZ（适合）
+- ENUM（适合，但池大小受限于枚举标签数量）
+
+不可用或不推荐：
+
+- BOOLEAN：只有2个值，UNIQUE约束最多只能有2行
+- ARRAY：PostgreSQL不支持数组类型外键
+- JSON/JSONB：不支持外键
+- RANGE：不支持外键
+- INET：类型匹配复杂，不推荐
+- BYTEA：不支持外键
+- MONEY：可用但不常用
+
+### 4.3 为选中的表添加外键相关列
+
+对于每个参与外键关系的表：
+
+**被引用表**（选取一个或多个表作为被引用表）：
+
+- 添加一个新列，列名格式建议：ref_<type> 或 fk_ref_<n>
+- 列类型：选定数据类型
+- 添加 UNIQUE 约束（必须，否则无法被外键引用）
+- 不添加 NOT NULL（允许NULL方便测试）
+
+**外键表**（除被引用表外的其他选中表）：
+
+- 添加一个新列，列名格式建议：fk_<type> 或 fk_<n>
+- 列类型：与被引用列完全相同的数据类型
+- 不添加 UNIQUE（除非有特殊需求）
+- 不添加 NOT NULL（允许NULL方便测试）
+
+列命名建议使用统一格式，方便后续识别：
+
+- fk_int_0, fk_int_1, fk_int_2 等
+- 或 ref_int, fk_int 这种区分命名
+
+### 4.4 建立外键约束
+
+使用 ALTER TABLE ADD CONSTRAINT 建立外键关系：
+
+约束命名建议显式指定，方便后续管理和复现：
+
+- 格式：fk_<外键表名>_<列名>_<被引用表名>
+
+例如：fk_t1_fk_int_t0
+
+外键约束选项：
+
+**ON DELETE 动作**（随机选择）：
+
+- CASCADE：级联删除外键表相关行
+- SET NULL：将被引用列设为NULL
+- SET DEFAULT：设为DEFAULT值（需确保DEFAULT值存在）
+- RESTRICT：阻止删除，报错
+- NO ACTION：事务结束时检查，效果同RESTRICT
+
+权重建议：CASCADE 40%, SET NULL 30%, RESTRICT 20%, NO ACTION 10%
+
+**ON UPDATE 动作**（随机选择）：
+
+- CASCADE：级联更新
+- SET NULL：设为NULL
+- SET DEFAULT：设为DEFAULT
+- RESTRICT：阻止更新
+- NO ACTION：同RESTRICT
+
+权重建议：同ON DELETE
+
+**DEFERRABLE 设置**：
+
+- NOT DEFERRABLE：默认，每条语句后立即检查
+- DEFERRABLE INITIALLY IMMEDIATE：默认立即检查，可延迟
+- DEFERRABLE INITIALLY DEFERRED：事务提交时检查
+
+权重建议：NOT DEFERRABLE 70%, DEFERRABLE 20%, DEFERRABLE INITIALLY DEFERRED 10%
+
+注意：循环引用场景必须使用 DEFERRABLE INITIALLY DEFERRED
+
+**MATCH 模式**：
+
+- MATCH SIMPLE：默认，允许外键列有NULL时跳过检查
+- MATCH FULL：外键列全部为NULL或全部非NULL
+- MATCH PARTIAL：PostgreSQL不完全支持，暂不使用
+
+权重建议：MATCH SIMPLE 80%, MATCH FULL 20%
+
+**NOT VALID 选项**：
+
+- 不添加 NOT VALID：立即验证所有现有数据
+- 添加 NOT VALID：不验证现有数据，后续可用 VALIDATE CONSTRAINT 验证
+
+权重建议：不添加 90%, 添加 10%
+
+### 4.5 插入种子数据到被引用表
+
+在被引用表的 UNIQUE 列中插入 N 个（默认10个）种子值：
+
+这些值构成固定的值池，后续INSERT/UPDATE时从池中取值。
+
+种子值必须是固定的、可预测的值，不同数据类型使用不同的种子值：
+
+插入时机：在建立外键约束之后插入（避免约束验证失败）
+
+插入方式：批量INSERT效率更高
+
+注意事项：
+
+- 如果被引用表有其他 NOT NULL 列且无DEFAULT，INSERT可能失败，需要处理
+- UNIQUE列已有值时INSERT会冲突，可先检查或添加错误处理
+
+---
+
+## 五、外键关系拓扑结构
+
+支持多种外键关系结构，随机选择一种：
+
+### 5.1 单向引用（基础结构）
+
+一个被引用表，多个外键表：
+
+t1.fk_col --> t0.ref_col (UNIQUE)
+t2.fk_col --> t0.ref_col (UNIQUE)
+t3.fk_col --> t0.ref_col (UNIQUE)
+
+特点：测试一个值被多个表引用的场景
+
+权重：40%
+
+### 5.2 链式引用
+
+外键形成链式关系：
+
+t1.fk --> t0.ref
+t2.fk --> t1.ref  (t1需要额外加一个ref列)
+t3.fk --> t2.ref  (t2需要额外加一个ref列)
+
+特点：测试级联删除的传播效果，DELETE t0 -> CASCADE删除t1 -> CASCADE删除t2...
+
+注意：需要给中间表添加额外的被引用列
+
+权重：20%
+
+### 5.3 循环引用（双向）
+
+两个表互相引用：
+
+t0.fk_a --> t1.ref_a (UNIQUE)
+t1.fk_b --> t0.ref_b (UNIQUE)
+
+必须条件：DEFERRABLE INITIALLY DEFERRED
+
+INSERT策略：两条INSERT在同一个事务中，COMMIT时才检查约束
+
+权重：10%
+
+### 5.4 自引用
+
+表引用自身：
+
+t0.parent_id --> t0.id (UNIQUE)
+
+场景：树形结构、员工-经理关系
+
+注意：
+- 如果使用已有的id列，需确保有UNIQUE约束
+- INSERT时需要先插入NULL或使用DEFERRABLE
+
+权重：10%
+
+### 5.5 多列复合外键
+
+多列组合外键：
+
+t0.(fk_a, fk_b) --> t1.(ref_a, ref_b) UNIQUE(ref_a, ref_b)
+
+特点：测试复合外键场景
+
+注意：类型必须一一对应匹配
+
+权重：5%（复杂，低优先级）
+
+### 5.6 混合结构
+
+同时创建多个独立的外键组，使用不同的数据类型：
+
+组1(INT): t1 --> t0
+组2(TEXT): t2 --> t0
+组3(UUID): t3 --> t1
+
+权重：15%
+
+---
+
+## 六、值池设计
+
+### 6.1 静态值池定义
+
+每种支持的数据类型定义一个固定的大小为10的值池：
+
+**INT类型池**（10个整数）：
+
+使用小整数，避免溢出问题：1, 2, 3, 5, 7, 11, 13, 17, 19, 23
+
+或使用固定范围的连续整数：100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
+
+**TEXT类型池**（10个字符串）：
+
+固定前缀+数字：fk_1, fk_2, fk_3, ..., fk_10
+
+或更短：a, b, c, d, e, f, g, h, i, j
+
+**UUID类型池**（10个UUID）：
+
+固定格式的UUID，方便识别：
+
+- 11111111-1111-1111-1111-111111111111
+- 22222222-2222-2222-2222-222222222222
+- ... 依此类推到第10个
+
+**DATE类型池**（10个日期）：
+
+使用固定的日期范围，间距1天：
+
+- 2000-01-01, 2000-01-02, 2000-01-03, ... 到 2000-01-10
+
+**TIMESTAMP类型池**（10个时间戳）：
+
+固定时间戳，间距1天：
+
+- 2000-01-01 00:00:00
+- 2000-01-02 00:00:00
+- ... 依此类推
+
+**TIMESTAMPTZ类型池**（10个带时区时间戳）：
+
+- 2000-01-01 00:00:00+00
+- 2000-01-02 00:00:00+00
+- ... 依此类推
+
+**ENUM类型池**：
+
+使用已定义的枚举标签，池大小等于标签数量：
+
+默认枚举标签：a, b, c, d（池大小4）
+
+### 6.2 值池的存储和访问
+
+值池作为静态常量存储在专门的类中。
+
+在GlobalState中记录哪些列是外键列，并关联对应的值池：
+
+存储结构：
+
+- 一个列表存储所有外键组信息
+- 一个映射存储列到外键信息的快速查找
+
+查找方式：
+
+- 通过表名+列名组合键查找
+
+---
+
+## 七、InsertGenerator改造
+
+### 7.1 插入值生成逻辑改造
+
+在生成INSERT语句的VALUES部分时：
+
+对于每个要插入的列，判断是否是外键列：
+
+如果是外键列：
+
+- 从对应的静态值池中随机选择一个值
+- 小概率选择NULL（约10%概率）
+
+如果不是外键列：
+
+- 保持现有的随机生成逻辑
+
+### 7.2 值的概率分布
+
+建议的值选择权重：
+
+- 从值池取已存在的值：60%
+- 选择NULL（如果列允许NULL）：10%
+- 正常随机生成（测试非池值的情况）：30%
+
+但考虑到外键列的特殊性，建议：
+
+- 从值池取值：70%
+- NULL：20%
+- 随机生成（预期会失败，但测试边界）：10%
+
+### 7.3 被引用表的INSERT特殊处理
+
+被引用表的UNIQUE列INSERT时：
+
+- 大概率从值池取值（与其他表共享）
+- 也可以生成新值（扩展池），但需确保UNIQUE不冲突
+
+建议权重：
+
+- 从值池取值：50%
+- 生成新值（需检查UNIQUE冲突）：40%
+- NULL：10%
+
+### 7.4 种子数据插入时
+
+在插入种子数据阶段（初始化被引用表的UNIQUE列）：
+
+直接使用值池的全部或部分值，确保这些值都存在。
+
+---
+
+## 八、UpdateGenerator改造
+
+### 8.1 外键列的UPDATE处理
+
+UPDATE外键列时，同样从值池取值：
+
+- 从值池取新值：70%
+- 设为NULL：20%
+- 设为DEFAULT：10%（需确保DEFAULT值在池中）
+
+### 8.2 被引用列的UPDATE特殊处理
+
+更新被引用表的UNIQUE列值时：
+
+如果是ON UPDATE CASCADE：
+
+- 更新后，所有外键表的引用值会自动更新
+- 值池需要同步更新（在概念上）
+
+如果是ON UPDATE RESTRICT/NO ACTION：
+
+- 如果有外键引用，UPDATE会失败
+- 作为预期错误处理
+
+建议权重：
+
+- 被引用列UPDATE概率较低（避免大量级联开销）
+- 外键列UPDATE概率正常
+
+---
+
+## 九、DeleteGenerator考虑
+
+### 9.1 被引用表DELETE的影响
+
+删除被引用表的行时：
+
+根据ON DELETE设置：
+
+- CASCADE：外键表相关行自动删除
+- SET NULL：外键列设为NULL
+- SET DEFAULT：设为DEFAULT
+- RESTRICT：阻止删除，报错
+- NO ACTION：同RESTRICT
+
+### 9.2 DELETE时的预期错误处理
+
+在预期错误列表中添加：
+
+- violates foreign key constraint
+- cannot delete ... because it is referenced by ...
+
+这些错误在RESTRICT/NO ACTION场景下会触发，是预期的。
+
+---
+
+## 十、数据结构设计
+
+### 10.1 外键组信息结构
+
+每个外键组包含以下信息：
+
+- **组ID**：唯一标识符，用于跟踪
+- **被引用表**：PostgresTable对象引用
+- **被引用列名**：字符串
+- **外键表列表**：多个外键表信息
+- **数据类型**：PostgresDataType枚举值
+- **值池**：List<Object>，引用静态池
+- **ON DELETE行为**：字符串常量
+- **ON UPDATE行为**：字符串常量
+- **DEFERRABLE设置**：boolean和INITIALLY设置
+- **约束名称**：显式指定的约束名
+
+### 10.2 外键表信息
+
+- **外键表**：PostgresTable对象
+- **外键列名**：字符串
+
+### 10.3 GlobalState中的存储
+
+在PostgresGlobalState中新增：
+
+- **外键组列表**：List<ForeignKeyGroup>，存储所有外键组
+- **列查找映射**：Map<String, ForeignKeyColumnInfo>，通过表名+列名快速查找
+- **被引用列集合**：Set<String>，记录哪些列是被引用列
+- **外键列集合**：Set<String>，记录哪些列是外键列
+
+查找方法：
+
+- 给定一个PostgresColumn，判断是否是外键列
+- 给定一个PostgresColumn，获取对应的外键组信息
+- 给定一个PostgresColumn，判断是否是被引用列
+
+---
+
+## 十一、各种边界情况处理
+
+### 11.1 被引用表的NOT NULL列问题
+
+如果被引用表有其他NOT NULL列且无DEFAULT：
+
+插入种子数据时会失败，需要在INSERT语句中处理：
+
+- 检查表的列是否有NOT NULL约束
+- 为这些列也生成合理的值
+- 或选择没有复杂NOT NULL约束的表作为被引用表
+
+### 11.2 UNIQUE值冲突
+
+如果被引用表的UNIQUE列已有数据：
+
+- 新INSERT的种子值可能冲突
+- 解决方案：在INSERT前检查是否已有数据，或使用NOT EXISTS过滤
+- 或：选择新建的表作为被引用表（数据较少）
+
+### 11.3 表类型不匹配（临时表vs永久表）
+
+严格区分：
+
+- 永久表组：只选择永久表参与，外键在永久表之间
+- 临时表组：只选择临时表参与，外键在临时表之间
+
+选择策略：
+
+- 先收集所有永久表和所有临时表
+- 分别处理两组
+- 按概率决定处理哪一组或两组都处理
+
+### 11.4 分区表限制
+
+PostgreSQL分区表的外键限制：
+
+- 分区表可以作为外键表（引用其他表）
+- 分区表作为被引用表需要满足：有PRIMARY KEY（PG 11+支持）
+
+处理策略：
+
+- 如果表是分区表，优先作为外键表
+- 如果分区表有主键，可以作为被引用表
+- 否则避免选择分区表作为被引用表
+
+### 11.5 循环引用的INSERT顺序
+
+循环引用场景下的INSERT：
+
+必须使用事务 + DEFERRABLE：
+
+事务中INSERT顺序不影响，COMMIT时统一检查。
+
+如果约束是NOT DEFERRABLE，则无法成功INSERT，需要在建立约束时就使用DEFERRABLE。
+
+### 11.6 BOOLEAN类型的值池限制
+
+BOOLEAN只有true/false两个值：
+
+UNIQUE约束下最多只能有2行不同的值。
+
+处理策略：
+
+- BOOLEAN不参与外键准备阶段
+- 或：限制BOOLEAN类型的外键池大小为2，并标记为特殊情况
+
+### 11.7 值池耗尽问题
+
+理论上值池固定大小为10，不会耗尽。
+
+但大量INSERT后，可能所有值都被使用：
+
+- 这是正常的，测试了多行引用同一值的场景
+- 如果需要新值，可以扩展池（动态添加）
+- 或触发INSERT失败作为预期错误
+
+### 11.8 ON DELETE SET DEFAULT的处理
+
+如果ON DELETE SET DEFAULT：
+
+删除被引用行后，外键列设为DEFAULT值。
+
+需要确保：
+
+- DEFAULT值在被引用表的UNIQUE列中存在
+- 或：设置DEFAULT为一个已知的池值
+
+建议：如果选择SET DEFAULT，显式设置DEFAULT为池中的某个值。
+
+---
+
+## 十二、错误处理
+
+### 12.1 预期错误列表
+
+外键准备阶段可能触发的错误：
+
+- cannot add UNIQUE constraint to partitioned table（如果分区表）
+- could not create unique index
+- duplicate key value violates unique constraint（种子数据冲突）
+
+Mutation阶段外键相关错误：
+
+- violates foreign key constraint
+- violates not-null constraint（如果NOT NULL）
+- duplicate key value violates unique constraint（被引用列UNIQUE）
+- update or delete on table ... violates foreign key constraint
+
+### 12.2 错误分类
+
+**必须避免的错误**（在生成时处理）：
+
+- 类型不匹配 -> 外键准备阶段统一类型
+- 缺少UNIQUE约束 -> 主动添加
+- 临时表引用永久表 -> 分组处理
+
+**预期可接受的错误**（添加到错误列表）：
+
+- 外键约束验证失败（违反引用完整性）
+- UNIQUE冲突（值池冲突）
+- RESTRICT阻止删除
+
+---
+
+## 十三、测试场景覆盖
+
+### 13.1 测试目标
+
+通过此方案可覆盖的测试场景：
+
+1. **基本外键功能**：引用完整性验证
+2. **级联删除**：ON DELETE CASCADE的多表传播
+3. **级联更新**：ON UPDATE CASCADE
+4. **SET NULL行为**：删除后设为NULL
+5. **循环引用**：双向依赖的INSERT/UPDATE
+6. **自引用**：表引用自身
+7. **链式引用**：多级依赖的级联传播
+8. **多表共享引用**：一个值被多个表引用
+9. **DEFERRABLE约束**：延迟验证
+10. **NOT VALID约束**：延迟验证后VALIDATE
+
+### 13.2 潜在Bug发现场景
+
+数据库系统在以下场景容易出现bug：
+
+- 多级级联删除的传播顺序
+- 循环引用的约束检查
+- DEFERRABLE约束的事务边界处理
+- 大量行引用同一值的性能问题
+- UPDATE和DELETE的并发冲突
+- 分区表的外键验证
+- 复合外键的类型匹配
+- NOT VALID约束的VALIDATE时机
+
+---
+
+## 十四、实现建议
+
+### 14.1 新增类文件
+
+建议新增以下类：
+
+- PostgresForeignKeySetupGenerator.java：外键准备阶段生成器
+- PostgresForeignKeyValuePool.java：静态值池定义
+- ForeignKeyColumnInfo.java：外键列信息数据结构（可作为内部类）
+- ForeignKeyGroup.java：外键组信息数据结构（可作为内部类）
+
+### 14.2 改动文件
+
+- PostgresOptions.java：添加新参数
+- PostgresGlobalState.java：添加外键信息存储和访问方法
+- PostgresProvider.java：在generateDatabase()中插入外键准备阶段
+- PostgresInsertGenerator.java：改造值生成逻辑
+- PostgresUpdateGenerator.java：改造值生成逻辑
+- PostgresDeleteGenerator.java：考虑级联影响
+
+### 14.3 实现顺序建议
+
+1. 先实现参数和数据结构
+2. 实现静态值池
+3. 实现外键准备阶段生成器
+4. 改造InsertGenerator
+5. 改造UpdateGenerator
+6. 测试验证
+
+---
+
+## 十五、总结
+
+本设计方案通过在外键准备阶段主动创建外键相关的列、约束和种子数据，并在INSERT/UPDATE时使用固定的值池，解决了现有随机生成策略的问题，大幅提高了外键测试的有效性和覆盖率。
+
+关键设计点：
+
+1. 参数开关控制是否启用
+2. 建表后、Mutation前插入外键准备阶段
+3. 统一的数据类型和UNIQUE约束
+4. 固定的静态值池（10个值）
+5. InsertGenerator改造识别外键列
+6. 支持多种外键拓扑结构
+7. 完善的边界情况处理
+8. 合理的错误分类和预期错误列表
+
+此方案实现后，PostgreSQL的外键测试覆盖率将大幅提升，能够更有效地发现数据库系统在外键相关场景下的潜在bug。

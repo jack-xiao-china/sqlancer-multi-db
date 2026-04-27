@@ -17,6 +17,8 @@ public final class PostgresDeleteGenerator {
         PostgresTable table = globalState.getSchema().getRandomTable(t -> !t.isView());
         ExpectedErrors errors = new ExpectedErrors();
         errors.add("violates foreign key constraint");
+        errors.add("update or delete on table");
+        errors.add("is still referenced from table");
         errors.add("violates not-null constraint");
         errors.add("could not determine which collation to use for string comparison");
         StringBuilder sb = new StringBuilder("DELETE FROM");

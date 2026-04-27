@@ -369,6 +369,9 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
                 return generateIntExpression(depth);
             case TEXT:
                 return generateTextExpression(depth);
+            case VARCHAR:
+            case CHAR:
+                return new PostgresCastOperation(generateTextExpression(depth), getCompoundDataType(dataType));
             case DECIMAL:
             case REAL:
             case FLOAT:
@@ -425,6 +428,8 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         case ENUM:
             return PostgresCompoundDataType.create(type);
         case TEXT: // TODO
+        case VARCHAR:
+        case CHAR:
         case BIT:
             if (Randomly.getBoolean()) {
                 return PostgresCompoundDataType.create(type);
@@ -443,8 +448,9 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
 
     public static PostgresCompoundDataType getRandomArrayType(int minDimensions) {
         PostgresDataType elementType = Randomly.fromOptions(PostgresDataType.INT, PostgresDataType.BOOLEAN,
-                PostgresDataType.TEXT, PostgresDataType.DATE, PostgresDataType.TIME, PostgresDataType.TIMESTAMP,
-                PostgresDataType.TIMESTAMPTZ, PostgresDataType.INTERVAL);
+                PostgresDataType.TEXT, PostgresDataType.VARCHAR, PostgresDataType.CHAR, PostgresDataType.DATE,
+                PostgresDataType.TIME, PostgresDataType.TIMESTAMP, PostgresDataType.TIMESTAMPTZ,
+                PostgresDataType.INTERVAL);
         int dimensions = (int) Randomly.getNotCachedInteger(minDimensions, PostgresCompoundDataType.MAX_ARRAY_DIMENSIONS);
         return PostgresCompoundDataType.createArray(PostgresCompoundDataType.create(elementType), dimensions);
     }
@@ -739,6 +745,10 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             }
         case TEXT:
             return PostgresConstant.createTextConstant(r.getString());
+        case VARCHAR:
+            return PostgresConstant.createVarcharConstant(r.getString());
+        case CHAR:
+            return PostgresConstant.createCharConstant(r.getString());
         case DECIMAL:
             return PostgresConstant.createDecimalConstant(r.getRandomBigDecimal());
         case FLOAT:
