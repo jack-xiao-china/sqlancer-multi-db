@@ -29,12 +29,14 @@ import sqlancer.gaussdbm.oracle.GaussDBMTLPAggregateOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPDistinctOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPGroupByOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPHavingOracle;
+import sqlancer.gaussdbm.oracle.GaussDBMSonarOracle;
 import sqlancer.gaussdbm.oracle.eet.GaussDBMEETOracle;
 
 class GaussDBMOracleIsolationTest {
 
     private static final Set<String> EXPECTED_ORACLE_NAMES = Set.of("AGGREGATE", "HAVING", "GROUP_BY", "DISTINCT",
-            "NOREC", "TLP_WHERE", "PQS", "CERT", "FUZZER", "DQP", "DQE", "EET", "CODDTEST", "QUERY_PARTITIONING");
+            "NOREC", "TLP_WHERE", "PQS", "CERT", "FUZZER", "DQP", "DQE", "EET", "CODDTEST", "SONAR",
+            "QUERY_PARTITIONING");
 
     /**
      * Expected concrete oracle implementation per factory constant (kept in sync with {@link GaussDBMOracleFactory}).
@@ -68,6 +70,8 @@ class GaussDBMOracleIsolationTest {
             return GaussDBMEETOracle.class;
         case CODDTEST:
             return GaussDBCODDTestOracle.class;
+        case SONAR:
+            return GaussDBMSonarOracle.class;
         case QUERY_PARTITIONING:
             return null;
         default:
@@ -85,7 +89,7 @@ class GaussDBMOracleIsolationTest {
             }
             visibleParameterNames.addAll(Arrays.asList(p.names()));
         }
-        assertEquals(Set.of("--help", "-h", "--oracle"), visibleParameterNames);
+        assertEquals(Set.of("--oracle"), visibleParameterNames);
     }
 
     @Test
@@ -95,9 +99,9 @@ class GaussDBMOracleIsolationTest {
     }
 
     @Test
-    void oracleFactoryExposesFourteenIndependentOracles() {
+    void oracleFactoryExposesFifteenIndependentOracles() {
         GaussDBMOracleFactory[] values = GaussDBMOracleFactory.values();
-        assertEquals(14, values.length);
+        assertEquals(15, values.length);
         Set<String> names = new TreeSet<>();
         for (GaussDBMOracleFactory v : values) {
             names.add(v.name());
@@ -122,8 +126,9 @@ class GaussDBMOracleIsolationTest {
 
     @Test
     void oracleImplementationsAreNotAllDelegatedToTlpWhere() {
-        List<Class<?>> impls = Arrays.stream(GaussDBMOracleFactory.values()).map(GaussDBMOracleIsolationTest::expectedImplementationClass)
-                .filter(Objects::nonNull).collect(Collectors.toList());
+        List<Class<?>> impls = Arrays.stream(GaussDBMOracleFactory.values())
+                .map(GaussDBMOracleIsolationTest::expectedImplementationClass).filter(Objects::nonNull)
+                .collect(Collectors.toList());
         assertTrue(impls.stream().anyMatch(c -> !TLPWhereOracle.class.isAssignableFrom(c)));
         long tlpWhereAssignable = impls.stream().filter(TLPWhereOracle.class::isAssignableFrom).count();
         assertEquals(1, tlpWhereAssignable);

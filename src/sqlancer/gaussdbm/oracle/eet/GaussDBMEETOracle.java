@@ -36,7 +36,8 @@ public class GaussDBMEETOracle implements TestOracle<GaussDBMGlobalState> {
     @Override
     public void check() throws SQLException {
         lastReproducer = null;
-        AbstractTables<GaussDBTable, GaussDBColumn> targetTables = TestOracleUtils.getRandomTableNonEmptyTables(state.getSchema());
+        AbstractTables<GaussDBTable, GaussDBColumn> targetTables = TestOracleUtils
+                .getRandomTableNonEmptyTables(state.getSchema());
         GaussDBMExpressionGenerator gen = new GaussDBMExpressionGenerator(state).setTablesAndColumns(targetTables);
         GaussDBExpression root = GaussDBMEETQueryGenerator.generateEETQueryRandomShape(state, gen, targetTables);
 

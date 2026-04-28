@@ -118,7 +118,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
             String[] urlSchemes = { "opengauss" };
 
             for (String scheme : urlSchemes) {
-                jdbcUrl = String.format("jdbc:%s://%s:%d/%s?%s", scheme, host, port, baseConnectionDatabase, baseParams);
+                jdbcUrl = String.format("jdbc:%s://%s:%d/%s?%s", scheme, host, port, baseConnectionDatabase,
+                        baseParams);
                 System.err.println("[INFO] Trying connection URL: " + jdbcUrl);
 
                 Properties props = parseJdbcProperties(options.getJdbcProperties());
@@ -143,7 +144,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         }
 
         if (con == null) {
-            String msg = "Connection failed to GaussDB-M. Last error: " + (lastError != null ? lastError.getMessage() : "null");
+            String msg = "Connection failed to GaussDB-M. Last error: "
+                    + (lastError != null ? lastError.getMessage() : "null");
             msg += "\n\nPossible solutions:";
             msg += "\n1. Ensure lib/opengauss-jdbc.jar is in classpath";
             msg += "\n2. Use --connection-url to specify full JDBC URL (jdbc:opengauss://host:port/database)";
@@ -154,7 +156,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         // Print connection info
         try {
             java.sql.DatabaseMetaData md = con.getMetaData();
-            System.err.println("[INFO] Connected to: " + md.getDatabaseProductName() + " " + md.getDatabaseProductVersion());
+            System.err.println(
+                    "[INFO] Connected to: " + md.getDatabaseProductName() + " " + md.getDatabaseProductVersion());
             System.err.println("[INFO] JDBC Driver: " + md.getDriverName() + " " + md.getDriverVersion());
         } catch (SQLException e) {
             System.err.println("[WARN] Could not get database metadata: " + e.getMessage());
@@ -222,13 +225,14 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
 
         // Verify M-compatibility
         try (Statement s = con.createStatement()) {
-            try (ResultSet rs = s.executeQuery(
-                    "SELECT datcompatibility FROM pg_database WHERE datname = '" + databaseName + "'")) {
+            try (ResultSet rs = s
+                    .executeQuery("SELECT datcompatibility FROM pg_database WHERE datname = '" + databaseName + "'")) {
                 if (rs.next()) {
                     String compat = rs.getString("datcompatibility");
                     System.err.println("[INFO] Verified database compatibility mode: " + compat);
                     if (!"M".equals(compat)) {
-                        System.err.println("[WARN] Database is not M-compatible! Expected 'M' but got '" + compat + "'");
+                        System.err
+                                .println("[WARN] Database is not M-compatible! Expected 'M' but got '" + compat + "'");
                     }
                 }
             }
@@ -279,4 +283,3 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         return true;
     }
 }
-

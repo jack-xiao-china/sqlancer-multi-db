@@ -110,7 +110,8 @@ public class GaussDBMEETTransformer {
         boolean useTrueExpr = choice <= 2;
         GaussDBExpression notRand = new GaussDBUnaryPrefixOperation(randomBool, UnaryPrefixOperator.NOT);
         GaussDBExpression randIsNull = new GaussDBUnaryPostfixOperation(randomBool, UnaryPostfixOperator.IS_NULL);
-        GaussDBExpression randIsNotNull = new GaussDBUnaryPostfixOperation(randomBool, UnaryPostfixOperator.IS_NOT_NULL);
+        GaussDBExpression randIsNotNull = new GaussDBUnaryPostfixOperation(randomBool,
+                UnaryPostfixOperator.IS_NOT_NULL);
 
         if (useTrueExpr) {
             GaussDBExpression part1 = new GaussDBBinaryLogicalOperation(randomBool, notRand,

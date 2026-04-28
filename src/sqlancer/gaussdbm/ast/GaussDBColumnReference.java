@@ -29,4 +29,3 @@ public class GaussDBColumnReference implements GaussDBExpression {
         return value;
     }
 }
-

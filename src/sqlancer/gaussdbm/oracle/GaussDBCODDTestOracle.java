@@ -33,7 +33,8 @@ import sqlancer.gaussdbm.ast.GaussDBSelect;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
 import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
 
-public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState> implements TestOracle<GaussDBMGlobalState> {
+public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
+        implements TestOracle<GaussDBMGlobalState> {
 
     private final GaussDBMSchema s;
     private GaussDBMExpressionGenerator gen;

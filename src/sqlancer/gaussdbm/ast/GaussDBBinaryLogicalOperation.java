@@ -96,4 +96,3 @@ public class GaussDBBinaryLogicalOperation implements GaussDBExpression {
         return op.apply(left.getExpectedValue(), right.getExpectedValue());
     }
 }
-

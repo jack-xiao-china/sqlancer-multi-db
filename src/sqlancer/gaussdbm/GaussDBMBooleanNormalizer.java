@@ -4,15 +4,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Utility for normalizing boolean results in GaussDB M-compatibility mode.
- * In M-compatibility, boolean values can be returned as 't'/'f' (PG style) or 1/0 (MySQL style).
+ * Utility for normalizing boolean results in GaussDB M-compatibility mode. In M-compatibility, boolean values can be
+ * returned as 't'/'f' (PG style) or 1/0 (MySQL style).
  */
 public final class GaussDBMBooleanNormalizer {
 
     /**
-     * Normalize a single result value.
-     * 't' or 'true' -> '1'
-     * 'f' or 'false' -> '0'
+     * Normalize a single result value. 't' or 'true' -> '1' 'f' or 'false' -> '0'
      */
     public static String normalize(String value) {
         if (value == null) {
@@ -35,9 +33,7 @@ public final class GaussDBMBooleanNormalizer {
         if (values == null) {
             return null;
         }
-        return values.stream()
-                .map(GaussDBMBooleanNormalizer::normalize)
-                .collect(Collectors.toList());
+        return values.stream().map(GaussDBMBooleanNormalizer::normalize).collect(Collectors.toList());
     }
 
     /**

@@ -14,7 +14,7 @@ import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
 public class GaussDBJoin implements GaussDBExpression, Join<GaussDBExpression, GaussDBTable, GaussDBColumn> {
 
     public enum JoinType {
-        INNER, LEFT, RIGHT, CROSS;
+        NATURAL, INNER, LEFT, RIGHT, CROSS;
     }
 
     private final GaussDBExpression tableReference;
@@ -51,18 +51,24 @@ public class GaussDBJoin implements GaussDBExpression, Join<GaussDBExpression, G
 
     public static List<GaussDBJoin> getRandomJoinClauses(List<GaussDBTable> tables, GaussDBMGlobalState globalState) {
         List<GaussDBJoin> joinStatements = new ArrayList<>();
-        List<JoinType> options = new ArrayList<>(Arrays.asList(JoinType.INNER, JoinType.LEFT, JoinType.RIGHT,
-                JoinType.CROSS));
+        List<JoinType> options = new ArrayList<>(Arrays.asList(JoinType.values()));
+        List<GaussDBColumn> columns = new ArrayList<>();
         if (tables.size() > 1) {
             int nrJoinClauses = (int) Randomly.getNotCachedInteger(0, tables.size());
-            List<GaussDBColumn> columns = new ArrayList<>();
+            // Natural join is incompatible with other joins
+            // because it needs unique column names
+            // while other joins will produce duplicate column names
+            if (nrJoinClauses > 1) {
+                options.remove(JoinType.NATURAL);
+            }
             for (int i = 0; i < nrJoinClauses; i++) {
                 GaussDBTable table = Randomly.fromList(tables);
                 tables.remove(table);
                 columns.addAll(table.getColumns());
                 GaussDBMExpressionGenerator joinGen = new GaussDBMExpressionGenerator(globalState).setColumns(columns);
                 JoinType selectedOption = Randomly.fromList(options);
-                GaussDBExpression joinClause = selectedOption == JoinType.CROSS ? null : joinGen.generateExpression();
+                GaussDBExpression joinClause = (selectedOption == JoinType.CROSS || selectedOption == JoinType.NATURAL)
+                        ? null : joinGen.generateExpression();
                 GaussDBExpression tableRef = GaussDBTableReference.create(table);
                 joinStatements.add(new GaussDBJoin(tableRef, joinClause, selectedOption));
             }
@@ -70,4 +76,3 @@ public class GaussDBJoin implements GaussDBExpression, Join<GaussDBExpression, G
         return joinStatements;
     }
 }
-

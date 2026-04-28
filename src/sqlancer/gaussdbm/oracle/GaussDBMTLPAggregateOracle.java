@@ -65,8 +65,7 @@ public class GaussDBMTLPAggregateOracle extends GaussDBMTLPBase implements TestO
         String second = normalizeBooleanResult(secondResult);
 
         // Handle 0/NULL equivalence for certain aggregate functions
-        boolean zeroNullEqual = ("0".equals(first) && second == null)
-                || (first == null && "0".equals(second));
+        boolean zeroNullEqual = ("0".equals(first) && second == null) || (first == null && "0".equals(second));
         if (zeroNullEqual) {
             return true;
         }
@@ -213,8 +212,8 @@ public class GaussDBMTLPAggregateOracle extends GaussDBMTLPBase implements TestO
         }
     }
 
-    private GaussDBSelect getSelect(GaussDBAggregate aggregate, List<GaussDBExpression> from, GaussDBExpression whereClause,
-            List<GaussDBJoin> joinList, List<GaussDBExpression> groupByExprs) {
+    private GaussDBSelect getSelect(GaussDBAggregate aggregate, List<GaussDBExpression> from,
+            GaussDBExpression whereClause, List<GaussDBJoin> joinList, List<GaussDBExpression> groupByExprs) {
         GaussDBSelect s = new GaussDBSelect();
         s.setFetchColumns(new ArrayList<>(Arrays.asList(aggregate)));
         s.setFromList(new ArrayList<>(from));

@@ -15,4 +15,3 @@ public class GaussDBMGlobalState extends SQLGlobalState<GaussDBMOptions, GaussDB
         return getDbmsSpecificOptions().oracles.stream().anyMatch(o -> o == GaussDBMOracleFactory.PQS);
     }
 }
-

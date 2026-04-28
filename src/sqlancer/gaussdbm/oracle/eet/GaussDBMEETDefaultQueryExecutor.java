@@ -112,9 +112,7 @@ public class GaussDBMEETDefaultQueryExecutor implements EETQueryExecutor {
             StringBuilder sb = new StringBuilder();
             sb.append("\n=== EET failure stats (skipped queries) ===\n");
             sb.append("total_failures=").append(now).append("\n");
-            counts.entrySet().stream()
-                    .sorted((a, b) -> Long.compare(b.getValue().sum(), a.getValue().sum()))
-                    .limit(10)
+            counts.entrySet().stream().sorted((a, b) -> Long.compare(b.getValue().sum(), a.getValue().sum())).limit(10)
                     .forEach(e -> sb.append(e.getValue().sum()).append("\t").append(e.getKey()).append("\n"));
             try {
                 Files.writeString(out, sb.toString(), StandardCharsets.UTF_8, StandardOpenOption.CREATE,

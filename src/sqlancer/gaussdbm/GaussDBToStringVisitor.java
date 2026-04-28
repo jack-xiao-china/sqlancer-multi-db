@@ -5,25 +5,35 @@ import sqlancer.common.visitor.ToStringVisitor;
 import sqlancer.gaussdbm.ast.GaussDBAggregate;
 import sqlancer.gaussdbm.ast.GaussDBAggregate.GaussDBAggregateFunction;
 import sqlancer.gaussdbm.ast.GaussDBBetweenOperation;
+import sqlancer.gaussdbm.ast.GaussDBBinaryArithmeticOperation;
+import sqlancer.gaussdbm.ast.GaussDBCastOperation;
 import sqlancer.gaussdbm.ast.GaussDBBinaryComparisonOperation;
 import sqlancer.gaussdbm.ast.GaussDBBinaryLogicalOperation;
 import sqlancer.gaussdbm.ast.GaussDBCaseWhen;
 import sqlancer.gaussdbm.ast.GaussDBColumnReference;
+import sqlancer.gaussdbm.ast.GaussDBComputableFunction;
 import sqlancer.gaussdbm.ast.GaussDBConstant;
 import sqlancer.gaussdbm.ast.GaussDBCteDefinition;
 import sqlancer.gaussdbm.ast.GaussDBCteTableReference;
 import sqlancer.gaussdbm.ast.GaussDBDerivedTable;
+import sqlancer.gaussdbm.ast.GaussDBExists;
 import sqlancer.gaussdbm.ast.GaussDBExpression;
 import sqlancer.gaussdbm.ast.GaussDBIfFunction;
+import sqlancer.gaussdbm.ast.GaussDBInOperation;
+import sqlancer.gaussdbm.ast.GaussDBJsonFunction;
 import sqlancer.gaussdbm.ast.GaussDBJoin;
+import sqlancer.gaussdbm.ast.GaussDBManuelPredicate;
 import sqlancer.gaussdbm.ast.GaussDBOracleAlias;
+import sqlancer.gaussdbm.ast.GaussDBPostfixText;
 import sqlancer.gaussdbm.ast.GaussDBPrintedExpression;
 import sqlancer.gaussdbm.ast.GaussDBSelect;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
+import sqlancer.gaussdbm.ast.GaussDBTemporalFunction;
 import sqlancer.gaussdbm.ast.GaussDBText;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPostfixOperation;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPrefixOperation;
 import sqlancer.gaussdbm.ast.GaussDBUnionSelect;
+import sqlancer.gaussdbm.ast.GaussDBWindowFunction;
 import sqlancer.gaussdbm.ast.GaussDBWithSelect;
 
 import java.util.List;
@@ -44,6 +54,8 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
             visit((GaussDBBinaryLogicalOperation) expr);
         } else if (expr instanceof GaussDBBinaryComparisonOperation) {
             visit((GaussDBBinaryComparisonOperation) expr);
+        } else if (expr instanceof GaussDBBinaryArithmeticOperation) {
+            visit((GaussDBBinaryArithmeticOperation) expr);
         } else if (expr instanceof GaussDBBetweenOperation) {
             visit((GaussDBBetweenOperation) expr);
         } else if (expr instanceof GaussDBTableReference) {
@@ -74,6 +86,24 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
             visit((GaussDBCteTableReference) expr);
         } else if (expr instanceof GaussDBOracleAlias) {
             visit((GaussDBOracleAlias) expr);
+        } else if (expr instanceof GaussDBManuelPredicate) {
+            visit((GaussDBManuelPredicate) expr);
+        } else if (expr instanceof GaussDBPostfixText) {
+            visit((GaussDBPostfixText) expr);
+        } else if (expr instanceof GaussDBInOperation) {
+            visit((GaussDBInOperation) expr);
+        } else if (expr instanceof GaussDBExists) {
+            visit((GaussDBExists) expr);
+        } else if (expr instanceof GaussDBWindowFunction) {
+            visit((GaussDBWindowFunction) expr);
+        } else if (expr instanceof GaussDBCastOperation) {
+            visit((GaussDBCastOperation) expr);
+        } else if (expr instanceof GaussDBTemporalFunction) {
+            visit((GaussDBTemporalFunction) expr);
+        } else if (expr instanceof GaussDBComputableFunction) {
+            visit((GaussDBComputableFunction) expr);
+        } else if (expr instanceof GaussDBJsonFunction) {
+            visit((GaussDBJsonFunction) expr);
         } else {
             throw new AssertionError(expr);
         }
@@ -271,6 +301,16 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
         sb.append(")");
     }
 
+    public void visit(GaussDBBinaryArithmeticOperation op) {
+        sb.append("(");
+        visit(op.getLeft());
+        sb.append(" ");
+        sb.append(op.getOp().getTextRepresentation());
+        sb.append(" ");
+        visit(op.getRight());
+        sb.append(")");
+    }
+
     public void visit(GaussDBBetweenOperation op) {
         sb.append("(");
         visit(op.getExpr());
@@ -281,12 +321,31 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
         sb.append(")");
     }
 
+    public void visit(GaussDBInOperation op) {
+        sb.append("(");
+        visit(op.getExpr());
+        if (!op.isTrue()) {
+            sb.append(" NOT");
+        }
+        sb.append(" IN (");
+        for (int i = 0; i < op.getListElements().size(); i++) {
+            if (i != 0) {
+                sb.append(", ");
+            }
+            visit(op.getListElements().get(i));
+        }
+        sb.append("))");
+    }
+
     public void visit(GaussDBTableReference ref) {
         sb.append(ref.getTable().getName());
     }
 
     public void visit(GaussDBJoin join) {
         switch (join.getJoinType()) {
+        case NATURAL:
+            sb.append("NATURAL JOIN ");
+            break;
         case INNER:
             sb.append("JOIN ");
             break;
@@ -303,7 +362,7 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
             throw new AssertionError(join.getJoinType());
         }
         visit(join.getTableReference());
-        if (join.getJoinType() != GaussDBJoin.JoinType.CROSS) {
+        if (join.getJoinType() != GaussDBJoin.JoinType.CROSS && join.getJoinType() != GaussDBJoin.JoinType.NATURAL) {
             sb.append(" ON ");
             visit(join.getOnCondition());
         }
@@ -334,5 +393,97 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
     public static String asExpectedValues(GaussDBExpression expr) {
         return GaussDBExpectedValueVisitor.asExpectedValues(expr);
     }
-}
 
+    public void visit(GaussDBManuelPredicate pred) {
+        sb.append(pred.getString());
+    }
+
+    public void visit(GaussDBPostfixText postfixText) {
+        visit(postfixText.getExpr());
+        sb.append(postfixText.getText());
+    }
+
+    public void visit(GaussDBExists exists) {
+        sb.append("EXISTS (");
+        visit(exists.getExpr());
+        sb.append(")");
+    }
+
+    public void visit(GaussDBWindowFunction window) {
+        sb.append(window.getFunction().getName());
+        sb.append("(");
+        if (window.getExpr() != null) {
+            visit(window.getExpr());
+        }
+        sb.append(") OVER (");
+        if (!window.getPartitionBy().isEmpty()) {
+            sb.append("PARTITION BY ");
+            for (int i = 0; i < window.getPartitionBy().size(); i++) {
+                if (i != 0) {
+                    sb.append(", ");
+                }
+                visit(window.getPartitionBy().get(i));
+            }
+            if (!window.getOrderBy().isEmpty()) {
+                sb.append(" ");
+            }
+        }
+        if (!window.getOrderBy().isEmpty()) {
+            sb.append("ORDER BY ");
+            for (int i = 0; i < window.getOrderBy().size(); i++) {
+                if (i != 0) {
+                    sb.append(", ");
+                }
+                visit(window.getOrderBy().get(i));
+            }
+        }
+        sb.append(")");
+    }
+
+    public void visit(GaussDBCastOperation cast) {
+        sb.append("CAST(");
+        visit(cast.getExpr());
+        sb.append(" AS ");
+        sb.append(cast.getType().getTextRepresentation());
+        sb.append(")");
+    }
+
+    public void visit(GaussDBTemporalFunction func) {
+        sb.append(func.getFunc().getFunctionName());
+        sb.append("(");
+        List<GaussDBExpression> args = func.getArgs();
+        for (int i = 0; i < args.size(); i++) {
+            if (i != 0) {
+                sb.append(", ");
+            }
+            visit(args.get(i));
+        }
+        sb.append(")");
+    }
+
+    public void visit(GaussDBComputableFunction func) {
+        sb.append(func.getFunction().getName());
+        sb.append("(");
+        List<GaussDBExpression> args = func.getArguments();
+        for (int i = 0; i < args.size(); i++) {
+            if (i != 0) {
+                sb.append(", ");
+            }
+            visit(args.get(i));
+        }
+        sb.append(")");
+    }
+
+    public void visit(GaussDBJsonFunction func) {
+        sb.append(func.getFunction().getName());
+        sb.append("(");
+        List<GaussDBExpression> args = func.getArguments();
+        for (int i = 0; i < args.size(); i++) {
+            if (i != 0) {
+                sb.append(", ");
+            }
+            visit(args.get(i));
+        }
+        sb.append(")");
+    }
+}

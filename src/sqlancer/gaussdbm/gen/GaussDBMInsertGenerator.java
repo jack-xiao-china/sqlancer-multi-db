@@ -24,8 +24,7 @@ public final class GaussDBMInsertGenerator {
     public static SQLQueryAdapter insertRow(GaussDBMGlobalState globalState, GaussDBTable table) throws SQLException {
         List<GaussDBColumn> columns = table.getRandomNonEmptyColumnSubset();
         String cols = columns.stream().map(GaussDBColumn::getName).collect(Collectors.joining(", "));
-        String vals = columns.stream().map(c -> getRandomValueForType(c.getType()))
-                .collect(Collectors.joining(", "));
+        String vals = columns.stream().map(c -> getRandomValueForType(c.getType())).collect(Collectors.joining(", "));
         String sql = "INSERT INTO " + table.getName() + "(" + cols + ") VALUES (" + vals + ")";
         return new SQLQueryAdapter(sql);
     }
@@ -44,9 +43,11 @@ public final class GaussDBMInsertGenerator {
         case FLOAT:
             return String.valueOf(Randomly.getNotCachedInteger(-100, 100)) + "." + Randomly.getNotCachedInteger(0, 99);
         case DOUBLE:
-            return String.valueOf(Randomly.getNotCachedInteger(-1000, 1000)) + "." + Randomly.getNotCachedInteger(0, 999);
+            return String.valueOf(Randomly.getNotCachedInteger(-1000, 1000)) + "."
+                    + Randomly.getNotCachedInteger(0, 999);
         case DECIMAL:
-            return String.valueOf(Randomly.getNotCachedInteger(-1000, 1000)) + "." + String.format("%02d", (int) Randomly.getNotCachedInteger(0, 99));
+            return String.valueOf(Randomly.getNotCachedInteger(-1000, 1000)) + "."
+                    + String.format("%02d", (int) Randomly.getNotCachedInteger(0, 99));
         case DATE:
             // Format: YYYY-MM-DD
             int year = (int) Randomly.getNotCachedInteger(1970, 2038);
@@ -85,4 +86,3 @@ public final class GaussDBMInsertGenerator {
         }
     }
 }
-

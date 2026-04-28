@@ -291,4 +291,3 @@ public abstract class GaussDBConstant implements GaussDBExpression {
         }
     }
 }
-

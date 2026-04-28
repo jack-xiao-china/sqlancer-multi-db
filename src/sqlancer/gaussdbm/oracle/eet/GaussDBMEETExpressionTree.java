@@ -66,7 +66,8 @@ public final class GaussDBMEETExpressionTree {
         }
         if (e instanceof GaussDBBinaryLogicalOperation) {
             GaussDBBinaryLogicalOperation b = (GaussDBBinaryLogicalOperation) e;
-            return new GaussDBBinaryLogicalOperation(mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()), b.getOp());
+            return new GaussDBBinaryLogicalOperation(mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()),
+                    b.getOp());
         }
         if (e instanceof GaussDBBinaryComparisonOperation) {
             GaussDBBinaryComparisonOperation b = (GaussDBBinaryComparisonOperation) e;

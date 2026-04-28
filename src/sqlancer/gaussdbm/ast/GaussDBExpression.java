@@ -9,4 +9,3 @@ public interface GaussDBExpression extends Expression<GaussDBColumn> {
         throw new AssertionError("PQS not supported for this operator");
     }
 }
-

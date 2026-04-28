@@ -18,4 +18,3 @@ public class GaussDBTableReference implements GaussDBExpression {
         return table;
     }
 }
-

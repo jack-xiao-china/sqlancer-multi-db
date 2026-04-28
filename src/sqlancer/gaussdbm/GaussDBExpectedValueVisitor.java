@@ -3,18 +3,23 @@ package sqlancer.gaussdbm;
 import sqlancer.IgnoreMeException;
 import sqlancer.gaussdbm.ast.GaussDBAggregate;
 import sqlancer.gaussdbm.ast.GaussDBBetweenOperation;
+import sqlancer.gaussdbm.ast.GaussDBBinaryArithmeticOperation;
 import sqlancer.gaussdbm.ast.GaussDBBinaryComparisonOperation;
 import sqlancer.gaussdbm.ast.GaussDBBinaryLogicalOperation;
 import sqlancer.gaussdbm.ast.GaussDBCaseWhen;
 import sqlancer.gaussdbm.ast.GaussDBColumnReference;
+import sqlancer.gaussdbm.ast.GaussDBComputableFunction;
 import sqlancer.gaussdbm.ast.GaussDBConstant;
 import sqlancer.gaussdbm.ast.GaussDBExpression;
 import sqlancer.gaussdbm.ast.GaussDBIfFunction;
+import sqlancer.gaussdbm.ast.GaussDBInOperation;
+import sqlancer.gaussdbm.ast.GaussDBJsonFunction;
 import sqlancer.gaussdbm.ast.GaussDBJoin;
 import sqlancer.gaussdbm.ast.GaussDBSelect;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPostfixOperation;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPrefixOperation;
+import sqlancer.gaussdbm.ast.GaussDBWindowFunction;
 
 public final class GaussDBExpectedValueVisitor {
 
@@ -69,12 +74,24 @@ public final class GaussDBExpectedValueVisitor {
             print(op);
             visit(op.getLeft());
             visit(op.getRight());
+        } else if (expr instanceof GaussDBBinaryArithmeticOperation) {
+            GaussDBBinaryArithmeticOperation op = (GaussDBBinaryArithmeticOperation) expr;
+            print(op);
+            visit(op.getLeft());
+            visit(op.getRight());
         } else if (expr instanceof GaussDBBetweenOperation) {
             GaussDBBetweenOperation op = (GaussDBBetweenOperation) expr;
             print(op);
             visit(op.getExpr());
             visit(op.getLeft());
             visit(op.getRight());
+        } else if (expr instanceof GaussDBInOperation) {
+            GaussDBInOperation op = (GaussDBInOperation) expr;
+            print(op);
+            visit(op.getExpr());
+            for (GaussDBExpression listElement : op.getListElements()) {
+                visit(listElement);
+            }
         } else if (expr instanceof GaussDBSelect) {
             GaussDBSelect s = (GaussDBSelect) expr;
             for (GaussDBExpression j : s.getJoinList()) {
@@ -103,6 +120,21 @@ public final class GaussDBExpectedValueVisitor {
             visit(c.getWhenExpr());
             visit(c.getThenExpr());
             visit(c.getElseExpr());
+        } else if (expr instanceof GaussDBWindowFunction) {
+            // PQS is currently unsupported for window functions.
+            throw new IgnoreMeException();
+        } else if (expr instanceof GaussDBComputableFunction) {
+            GaussDBComputableFunction func = (GaussDBComputableFunction) expr;
+            print(func);
+            for (GaussDBExpression arg : func.getArguments()) {
+                visit(arg);
+            }
+        } else if (expr instanceof GaussDBJsonFunction) {
+            GaussDBJsonFunction func = (GaussDBJsonFunction) expr;
+            print(func);
+            for (GaussDBExpression arg : func.getArguments()) {
+                visit(arg);
+            }
         } else {
             throw new AssertionError(expr);
         }

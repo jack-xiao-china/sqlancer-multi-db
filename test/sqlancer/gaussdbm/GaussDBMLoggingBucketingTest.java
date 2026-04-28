@@ -24,4 +24,3 @@ class GaussDBMLoggingBucketingTest {
         assertTrue(expected.isDirectory(), "Expected log directory to be created: " + expected);
     }
 }
-

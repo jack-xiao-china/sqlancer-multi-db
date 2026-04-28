@@ -55,8 +55,7 @@ public class GaussDBMTLPGroupByOracle extends GaussDBMTLPBase implements TestOra
     @Override
     List<GaussDBExpression> generateFetchColumns() {
         return Randomly.nonEmptySubset(targetTables.getColumns()).stream()
-                .map(c -> GaussDBColumnReference.create(c, null))
-                .collect(Collectors.toList());
+                .map(c -> GaussDBColumnReference.create(c, null)).collect(Collectors.toList());
     }
 
     @Override

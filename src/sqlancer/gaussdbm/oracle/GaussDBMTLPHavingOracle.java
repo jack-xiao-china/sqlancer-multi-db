@@ -48,8 +48,8 @@ public class GaussDBMTLPHavingOracle extends GaussDBMTLPBase implements TestOrac
         select.setHavingClause(isNullPredicate);
         String thirdQueryString = GaussDBToStringVisitor.asString(select);
         List<String> combinedString = new ArrayList<>();
-        List<String> secondResultSet = ComparatorHelper.getCombinedResultSetNoDuplicates(firstQueryString, secondQueryString,
-                thirdQueryString, combinedString, true, state, errors);
+        List<String> secondResultSet = ComparatorHelper.getCombinedResultSetNoDuplicates(firstQueryString,
+                secondQueryString, thirdQueryString, combinedString, true, state, errors);
         // Normalize boolean values for M-compatibility mode
         secondResultSet = GaussDBMBooleanNormalizer.normalizeList(secondResultSet);
         try {

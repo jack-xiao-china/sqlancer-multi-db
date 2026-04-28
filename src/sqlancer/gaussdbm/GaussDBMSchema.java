@@ -200,7 +200,8 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                             String tableName = rs.getString(1);
                             List<GaussDBColumn> databaseColumns = getTableColumns(con, tableName, databaseName);
                             List<GaussDBIndex> indexes = getIndexes(con, tableName, databaseName);
-                            GaussDBTable t = new GaussDBTable(tableName, databaseColumns, indexes, GaussDBTable.GaussDBEngine.UNKNOWN);
+                            GaussDBTable t = new GaussDBTable(tableName, databaseColumns, indexes,
+                                    GaussDBTable.GaussDBEngine.UNKNOWN);
                             for (GaussDBColumn c : databaseColumns) {
                                 c.setTable(t);
                             }
@@ -215,13 +216,14 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                         String dbNameLower = databaseName.toLowerCase();
                         try {
                             rs = s.executeQuery(
-                                "SELECT TABLE_NAME FROM information_schema.TABLES WHERE LOWER(table_schema) = '"
-                                + dbNameLower + "' OR LOWER(table_schema) = LOWER(DATABASE())");
+                                    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE LOWER(table_schema) = '"
+                                            + dbNameLower + "' OR LOWER(table_schema) = LOWER(DATABASE())");
                             while (rs.next()) {
                                 String tableName = rs.getString("TABLE_NAME");
                                 List<GaussDBColumn> databaseColumns = getTableColumns(con, tableName, databaseName);
                                 List<GaussDBIndex> indexes = getIndexes(con, tableName, databaseName);
-                                GaussDBTable t = new GaussDBTable(tableName, databaseColumns, indexes, GaussDBTable.GaussDBEngine.UNKNOWN);
+                                GaussDBTable t = new GaussDBTable(tableName, databaseColumns, indexes,
+                                        GaussDBTable.GaussDBEngine.UNKNOWN);
                                 for (GaussDBColumn c : databaseColumns) {
                                     c.setTable(t);
                                 }
@@ -230,12 +232,13 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                         } catch (SQLException e2) {
                             // Last resort: try pg_tables for GaussDB
                             rs = s.executeQuery(
-                                "SELECT tablename FROM pg_tables WHERE schemaname = 'public' OR schemaname = current_schema()");
+                                    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' OR schemaname = current_schema()");
                             while (rs.next()) {
                                 String tableName = rs.getString(1);
                                 List<GaussDBColumn> databaseColumns = getTableColumns(con, tableName, databaseName);
                                 List<GaussDBIndex> indexes = getIndexes(con, tableName, databaseName);
-                                GaussDBTable t = new GaussDBTable(tableName, databaseColumns, indexes, GaussDBTable.GaussDBEngine.UNKNOWN);
+                                GaussDBTable t = new GaussDBTable(tableName, databaseColumns, indexes,
+                                        GaussDBTable.GaussDBEngine.UNKNOWN);
                                 for (GaussDBColumn c : databaseColumns) {
                                     c.setTable(t);
                                 }
@@ -272,8 +275,8 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
             } catch (SQLException e) {
                 // Fall back to information_schema
                 try (ResultSet rs = s.executeQuery(String.format(
-                    "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE (TABLE_SCHEMA = '%s' OR TABLE_SCHEMA = DATABASE()) AND TABLE_NAME='%s'",
-                    databaseName, tableName))) {
+                        "SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS WHERE (TABLE_SCHEMA = '%s' OR TABLE_SCHEMA = DATABASE()) AND TABLE_NAME='%s'",
+                        databaseName, tableName))) {
                     while (rs.next()) {
                         String indexName = rs.getString("INDEX_NAME");
                         indexes.add(GaussDBIndex.create(indexName));
@@ -362,15 +365,17 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                 // Use LOWER() for case-insensitive matching
                 String dbNameLower = databaseName.toLowerCase();
                 try (ResultSet rs = s.executeQuery(
-                    "SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION, COLUMN_KEY FROM information_schema.columns WHERE (LOWER(table_schema) = '"
-                    + dbNameLower + "' OR LOWER(table_schema) = LOWER(DATABASE())) AND TABLE_NAME='" + tableName + "'")) {
+                        "SELECT COLUMN_NAME, DATA_TYPE, NUMERIC_PRECISION, COLUMN_KEY FROM information_schema.columns WHERE (LOWER(table_schema) = '"
+                                + dbNameLower + "' OR LOWER(table_schema) = LOWER(DATABASE())) AND TABLE_NAME='"
+                                + tableName + "'")) {
                     while (rs.next()) {
                         String columnName = rs.getString("COLUMN_NAME");
                         String dataType = rs.getString("DATA_TYPE");
                         int precision = rs.getInt("NUMERIC_PRECISION");
                         String columnKey = rs.getString("COLUMN_KEY");
                         boolean isPrimaryKey = columnKey != null && columnKey.equals("PRI");
-                        GaussDBColumn c = new GaussDBColumn(columnName, getColumnType(dataType), isPrimaryKey, precision);
+                        GaussDBColumn c = new GaussDBColumn(columnName, getColumnType(dataType), isPrimaryKey,
+                                precision);
                         columns.add(c);
                     }
                 }
@@ -387,4 +392,3 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
         return new GaussDBTables(Randomly.nonEmptySubset(getDatabaseTables()));
     }
 }
-

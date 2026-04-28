@@ -58,4 +58,3 @@ public class GaussDBBetweenOperation implements GaussDBExpression {
         return GaussDBConstant.createBooleanConstant(!inner.asBooleanNotNull());
     }
 }
-

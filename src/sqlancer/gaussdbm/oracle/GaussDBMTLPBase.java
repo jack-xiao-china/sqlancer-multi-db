@@ -45,7 +45,8 @@ public abstract class GaussDBMTLPBase extends TernaryLogicPartitioningOracleBase
         select = new GaussDBSelect();
         select.setFetchColumns(generateFetchColumns());
         List<GaussDBTable> tables = targetTables.getTables();
-        List<GaussDBExpression> tableList = tables.stream().map(GaussDBTableReference::create).collect(Collectors.toList());
+        List<GaussDBExpression> tableList = tables.stream().map(GaussDBTableReference::create)
+                .collect(Collectors.toList());
         List<GaussDBJoin> joinStatements = GaussDBJoin.getRandomJoinClauses(new java.util.ArrayList<>(tables), state);
         select.setJoinList(joinStatements.stream().map(j -> (GaussDBExpression) j).collect(Collectors.toList()));
         select.setFromList(tableList);

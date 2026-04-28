@@ -36,7 +36,7 @@
   </scm>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <revision>2.0.0</revision>
+    <revision>2.0.25</revision>
   </properties>
   <build>
     <sourceDirectory>src</sourceDirectory>

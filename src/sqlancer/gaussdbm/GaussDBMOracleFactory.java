@@ -18,6 +18,7 @@ import sqlancer.gaussdbm.oracle.GaussDBMDQEOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMDQPOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMFuzzer;
 import sqlancer.gaussdbm.oracle.GaussDBMPivotedQuerySynthesisOracle;
+import sqlancer.gaussdbm.oracle.GaussDBMSonarOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPAggregateOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPDistinctOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPGroupByOracle;
@@ -126,6 +127,12 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    SONAR {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMSonarOracle(globalState);
         }
     },
     QUERY_PARTITIONING {

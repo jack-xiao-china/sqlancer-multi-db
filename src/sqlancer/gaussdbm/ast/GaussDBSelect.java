@@ -45,4 +45,3 @@ public class GaussDBSelect extends SelectBase<GaussDBExpression>
         return GaussDBToStringVisitor.asString(this);
     }
 }
-

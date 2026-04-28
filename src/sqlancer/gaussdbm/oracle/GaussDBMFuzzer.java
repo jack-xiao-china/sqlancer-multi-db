@@ -17,8 +17,8 @@ public class GaussDBMFuzzer implements TestOracle<GaussDBMGlobalState> {
 
     @Override
     public void check() throws Exception {
-        String s = GaussDBToStringVisitor.asString(GaussDBMRandomQuerySynthesizer.generate(globalState,
-                Randomly.smallNumber() + 1)) + ';';
+        String s = GaussDBToStringVisitor
+                .asString(GaussDBMRandomQuerySynthesizer.generate(globalState, Randomly.smallNumber() + 1)) + ';';
         try {
             globalState.executeStatement(new SQLQueryAdapter(s));
             globalState.getManager().incrementSelectQueryCount();

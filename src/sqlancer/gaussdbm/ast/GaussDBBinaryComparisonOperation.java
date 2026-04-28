@@ -1,5 +1,6 @@
 package sqlancer.gaussdbm.ast;
 
+import sqlancer.LikeImplementationHelper;
 import sqlancer.Randomly;
 
 public class GaussDBBinaryComparisonOperation implements GaussDBExpression {
@@ -67,6 +68,28 @@ public class GaussDBBinaryComparisonOperation implements GaussDBExpression {
                 }
                 return l.sqlEquals(r);
             }
+        },
+        LIKE("LIKE") {
+            @Override
+            public GaussDBConstant getExpectedValue(GaussDBConstant l, GaussDBConstant r) {
+                if (l.isNull() || r.isNull()) {
+                    return GaussDBConstant.createNullConstant();
+                }
+                String leftStr;
+                String rightStr;
+                if (l instanceof GaussDBConstant.GaussDBStringConstant) {
+                    leftStr = ((GaussDBConstant.GaussDBStringConstant) l).getValue();
+                } else {
+                    leftStr = l.getTextRepresentation();
+                }
+                if (r instanceof GaussDBConstant.GaussDBStringConstant) {
+                    rightStr = ((GaussDBConstant.GaussDBStringConstant) r).getValue();
+                } else {
+                    rightStr = r.getTextRepresentation();
+                }
+                boolean matches = LikeImplementationHelper.match(leftStr, rightStr, 0, 0, false);
+                return GaussDBConstant.createBooleanConstant(matches);
+            }
         };
 
         private final String textRepr;
@@ -114,4 +137,3 @@ public class GaussDBBinaryComparisonOperation implements GaussDBExpression {
         return op.getExpectedValue(left.getExpectedValue(), right.getExpectedValue());
     }
 }
-
