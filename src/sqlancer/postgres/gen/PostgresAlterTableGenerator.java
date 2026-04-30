@@ -785,6 +785,8 @@ public class PostgresAlterTableGenerator {
         errors.add("not valid");
         errors.add("is not a unique index");
         errors.add("is already associated with a constraint");
+        errors.addRegexString("index.*already.*constraint"); // Locale-independent pattern
+        errors.addRegexString("已被.*约束使用"); // Chinese locale
         errors.add("Cannot create a primary key or unique constraint using such an index");
         errors.add("multiple primary keys for table");
         errors.add("appears twice in unique constraint");

@@ -790,4 +790,72 @@ public class SQLite3ExpressionGenerator implements ExpressionGenerator<SQLite3Ex
 
         return "SELECT SUM(count) FROM (" + select.asString() + ")";
     }
+
+    /**
+     * Generate fetch column expression for SonarOracle.
+     * Creates expressions suitable for use in SELECT fetch columns.
+     */
+    public SQLite3Expression generateFetchColumnExp(SQLite3Column column) {
+        if (column == null) {
+            return SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger());
+        }
+
+        switch (Randomly.fromOptions(0, 1, 2, 3)) {
+        case 0:
+            // Simple column reference
+            return new SQLite3ColumnName(column, null);
+        case 1:
+            // Constant value
+            return SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger());
+        case 2:
+            // Binary arithmetic operation
+            return new Sqlite3BinaryOperation(
+                    new SQLite3ColumnName(column, null),
+                    SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger()),
+                    BinaryOperator.getRandomOperator());
+        case 3:
+            // Binary comparison operation
+            return new BinaryComparisonOperation(
+                    new SQLite3ColumnName(column, null),
+                    SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger()),
+                    BinaryComparisonOperator.getRandomOperator());
+        default:
+            return new SQLite3ColumnName(column, null);
+        }
+    }
+
+    /**
+     * Generate WHERE column expression for SonarOracle based on fetch column alias.
+     */
+    public SQLite3Expression generateWhereColumnExpression(SQLite3Expression.SQLite3Text text) {
+        if (text == null) {
+            return generateExpression();
+        }
+
+        String alias = text.getText();
+        SQLite3Expression aliasExpr = new SQLite3Expression.SQLite3Text(alias, null);
+
+        switch (Randomly.fromOptions(0, 1, 2)) {
+        case 0:
+            // Binary comparison
+            return new BinaryComparisonOperation(
+                    aliasExpr,
+                    SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger()),
+                    BinaryComparisonOperator.getRandomOperator());
+        case 1:
+            // Binary arithmetic operation
+            return new Sqlite3BinaryOperation(
+                    aliasExpr,
+                    SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger()),
+                    BinaryOperator.getRandomOperator());
+        case 2:
+            // Postfix unary operation (IS TRUE)
+            return new SQLite3PostfixUnaryOperation(PostfixUnaryOperator.IS_TRUE, aliasExpr);
+        default:
+            return new BinaryComparisonOperation(
+                    aliasExpr,
+                    SQLite3Constant.createIntConstant(globalState.getRandomly().getInteger()),
+                    BinaryComparisonOperator.getRandomOperator());
+        }
+    }
 }

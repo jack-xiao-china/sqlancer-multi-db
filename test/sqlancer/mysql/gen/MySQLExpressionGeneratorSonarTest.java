@@ -214,15 +214,11 @@ public class MySQLExpressionGeneratorSonarTest {
         for (int i = 0; i < 20; i++) {
             // Create a copy of the list since the method modifies it
             List<MySQLTable> tablesCopy = new ArrayList<>(tables);
-            List<MySQLExpression> joins = generator.getRandomJoinClauses(tablesCopy);
+            List<MySQLJoin> joins = generator.getRandomJoinClauses(tablesCopy);
 
             assertNotNull(joins, "Join list should not be null");
 
-            for (MySQLExpression joinExpr : joins) {
-                assertTrue(joinExpr instanceof MySQLJoin,
-                        "Join expression should be MySQLJoin: " + joinExpr.getClass().getSimpleName());
-
-                MySQLJoin join = (MySQLJoin) joinExpr;
+            for (MySQLJoin join : joins) {
                 assertNotNull(join.getTable(), "Join should have a table");
                 assertNotNull(join.getType(), "Join should have a type");
 
@@ -240,7 +236,7 @@ public class MySQLExpressionGeneratorSonarTest {
     @Test
     public void testGetRandomJoinClausesEmpty() {
         List<MySQLTable> tables = new ArrayList<>();
-        List<MySQLExpression> joins = generator.getRandomJoinClauses(tables);
+        List<MySQLJoin> joins = generator.getRandomJoinClauses(tables);
 
         assertNotNull(joins, "Join list should not be null even with empty tables");
         assertTrue(joins.isEmpty(), "Join list should be empty when no tables provided");
@@ -256,7 +252,7 @@ public class MySQLExpressionGeneratorSonarTest {
         col.setTable(table);
 
         List<MySQLTable> tables = new ArrayList<>(Arrays.asList(table));
-        List<MySQLExpression> joins = generator.getRandomJoinClauses(tables);
+        List<MySQLJoin> joins = generator.getRandomJoinClauses(tables);
 
         assertNotNull(joins, "Join list should not be null");
         // With single table, no joins should be generated (tables.size() > 1 condition)
@@ -283,12 +279,11 @@ public class MySQLExpressionGeneratorSonarTest {
         // Run multiple times to check NATURAL join behavior
         for (int i = 0; i < 50; i++) {
             List<MySQLTable> tablesCopy = new ArrayList<>(tables);
-            List<MySQLExpression> joins = generator.getRandomJoinClauses(tablesCopy);
+            List<MySQLJoin> joins = generator.getRandomJoinClauses(tablesCopy);
 
             // If multiple joins are generated, none should be NATURAL
             if (joins.size() > 1) {
-                for (MySQLExpression joinExpr : joins) {
-                    MySQLJoin join = (MySQLJoin) joinExpr;
+                for (MySQLJoin join : joins) {
                     assertNotEquals(MySQLJoin.JoinType.NATURAL, join.getType(),
                             "NATURAL join should not be present when multiple joins exist");
                 }
@@ -296,7 +291,7 @@ public class MySQLExpressionGeneratorSonarTest {
 
             // Single join could be NATURAL (with null ON clause)
             if (joins.size() == 1) {
-                MySQLJoin join = (MySQLJoin) joins.get(0);
+                MySQLJoin join = joins.get(0);
                 if (join.getType() == MySQLJoin.JoinType.NATURAL) {
                     assertNull(join.getOnClause(), "NATURAL join should have null ON clause");
                 }

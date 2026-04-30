@@ -22,25 +22,34 @@ public class MySQLCaseOperator extends NewCaseOperatorNode<MySQLExpression> impl
 
         if (switchCondition != null) {
             MySQLConstant switchValue = switchCondition.getExpectedValue();
+            if (switchValue == null || switchValue.isNull()) {
+                return MySQLConstant.createNullConstant();
+            }
 
             for (int i = 0; i < nrConditions; i++) {
                 MySQLConstant whenValue = whenExprs.get(i).getExpectedValue();
+                if (whenValue == null) {
+                    continue;
+                }
                 MySQLConstant isConditionMatched = switchValue.isEquals(whenValue);
-                if (!isConditionMatched.isNull() && isConditionMatched.asBooleanNotNull()) {
+                if (isConditionMatched != null && !isConditionMatched.isNull() && isConditionMatched.asBooleanNotNull()) {
                     return thenExprs.get(i).getExpectedValue();
                 }
             }
         } else {
             for (int i = 0; i < nrConditions; i++) {
                 MySQLConstant whenValue = whenExprs.get(i).getExpectedValue();
-                if (!whenValue.isNull() && whenValue.asBooleanNotNull()) {
+                if (whenValue != null && !whenValue.isNull() && whenValue.asBooleanNotNull()) {
                     return thenExprs.get(i).getExpectedValue();
                 }
             }
         }
 
         if (elseExpr != null) {
-            return elseExpr.getExpectedValue();
+            MySQLConstant elseValue = elseExpr.getExpectedValue();
+            if (elseValue != null) {
+                return elseValue;
+            }
         }
 
         return MySQLConstant.createNullConstant();

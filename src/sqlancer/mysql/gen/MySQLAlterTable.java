@@ -56,7 +56,8 @@ public class MySQLAlterTable {
         MODIFY_COLUMN("Cannot convert", "Data truncated", "ALGORITHM=INSTANT is not supported",
                 "ALGORITHM=INPLACE is not supported", "Incorrect column specifier"),
         CHANGE_COLUMN("Cannot convert", "Data truncated", "ALGORITHM=INSTANT is not supported",
-                "ALGORITHM=INPLACE is not supported", "Unknown column", "Incorrect column specifier"),
+                "ALGORITHM=INPLACE is not supported", "Unknown column", "Incorrect column specifier",
+                "has a functional index dependency and cannot be dropped or renamed."),
         ADD_COLUMN("Duplicate column name", "ALGORITHM=INSTANT is not supported", "ALGORITHM=INPLACE is not supported");
 
         private String[] potentialErrors;
@@ -73,6 +74,7 @@ public class MySQLAlterTable {
         errors.add("Data truncated for functional index ");
         errors.add("Compression failed with the following error");
         errors.add("Punch hole not supported by the filesystem");
+        errors.add("For float(M,D), double(M,D) or decimal(M,D), M must be >= D");
         sb.append("ALTER TABLE ");
         MySQLTable table = schema.getRandomTableNoViewOrBailout();
         sb.append(table.getName());
@@ -157,9 +159,10 @@ public class MySQLAlterTable {
                 if (Randomly.getBoolean()) {
                     sb.append("COLUMN ");
                 }
-                sb.append(table.getRandomColumn().getName());
+                MySQLSchema.MySQLColumn modifyCol = table.getRandomColumn();
+                sb.append(modifyCol.getName());
                 sb.append(" ");
-                appendColumnDefinition();
+                appendColumnDefinition(modifyCol.isPrimaryKey());
                 couldAffectSchema = true;
                 break;
             case CHANGE_COLUMN:
@@ -173,7 +176,7 @@ public class MySQLAlterTable {
                 // Generate new column name
                 sb.append("c").append(Randomly.smallNumber());
                 sb.append(" ");
-                appendColumnDefinition();
+                appendColumnDefinition(oldCol.isPrimaryKey());
                 couldAffectSchema = true;
                 break;
             case ADD_COLUMN:
@@ -183,7 +186,7 @@ public class MySQLAlterTable {
                 }
                 sb.append("c").append(Randomly.smallNumber());
                 sb.append(" ");
-                appendColumnDefinition();
+                appendColumnDefinition(false); // New column is not a primary key
                 couldAffectSchema = true;
                 break;
             case RENAME:
@@ -219,14 +222,15 @@ public class MySQLAlterTable {
 
     /**
      * Append a column definition (type and options) for MODIFY/CHANGE/ADD COLUMN operations.
+     * @param isPrimaryKey whether this column is part of a primary key (affects NULL option)
      */
-    private void appendColumnDefinition() {
+    private void appendColumnDefinition(boolean isPrimaryKey) {
         Randomly r = globalState.getRandomly();
         // Generate a random column type
         MySQLSchema.MySQLDataType type = MySQLSchema.MySQLDataType.getRandom(globalState);
         appendColumnType(type, r);
         // Optionally add column options
-        appendAlterColumnOptions(type, r);
+        appendAlterColumnOptions(type, r, isPrimaryKey);
     }
 
     /**
@@ -306,8 +310,8 @@ public class MySQLAlterTable {
         default:
             throw new AssertionError(type);
         }
-        // Add UNSIGNED/ZEROFILL for numeric types
-        if (type.isNumeric() && type != MySQLSchema.MySQLDataType.INT) {
+        // Add UNSIGNED/ZEROFILL for numeric types (BIT does not support these)
+        if (type.isNumeric() && type != MySQLSchema.MySQLDataType.INT && type != MySQLSchema.MySQLDataType.BIT) {
             if (Randomly.getBoolean()) {
                 sb.append(" UNSIGNED");
             }
@@ -319,10 +323,14 @@ public class MySQLAlterTable {
 
     /**
      * Append column options for ALTER TABLE column operations
+     * @param isPrimaryKey whether this column is part of a primary key (must be NOT NULL if true)
      */
-    private void appendAlterColumnOptions(MySQLSchema.MySQLDataType type, Randomly r) {
-        // Add NULL/NOT NULL
-        if (Randomly.getBoolean()) {
+    private void appendAlterColumnOptions(MySQLSchema.MySQLDataType type, Randomly r, boolean isPrimaryKey) {
+        // Add NULL/NOT NULL - PRIMARY KEY columns must be NOT NULL
+        if (isPrimaryKey) {
+            // Primary key columns must be NOT NULL
+            sb.append(" NOT NULL");
+        } else if (Randomly.getBoolean()) {
             sb.append(" ");
             sb.append(Randomly.fromOptions("NULL", "NOT NULL"));
         }
@@ -372,9 +380,12 @@ public class MySQLAlterTable {
     private static void optionallyAddPrecisionAndScale(StringBuilder sb, Randomly r) {
         if (Randomly.getBoolean()) {
             sb.append("(");
-            sb.append(r.getInteger(1, 65));
+            // For decimal(M,D), M must be >= D
+            long m = r.getInteger(1, 65);
+            long d = Math.min(r.getInteger(0, 30), m); // D cannot exceed M
+            sb.append(m);
             sb.append(", ");
-            sb.append(r.getInteger(0, 30));
+            sb.append(d);
             sb.append(")");
         }
     }

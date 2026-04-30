@@ -13,6 +13,8 @@ import sqlancer.common.oracle.NoRECOracle;
 import sqlancer.common.oracle.TLPWhereOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.mysql.oracle.MySQLCODDTestOracle;
+import sqlancer.mysql.oracle.MySQLEDCOracle;
+import sqlancer.mysql.oracle.MySQLSonarOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.mysql.gen.MySQLExpressionGenerator;
@@ -142,6 +144,39 @@ public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    /**
+     * EDC (Equivalent Database Construction) Oracle.
+     * Detects optimizer bugs by comparing query results between:
+     * - Original DB: with constraints (NOT NULL, UNIQUE, FK, CHECK, GENERATED)
+     * - Raw DB: without constraints (pure data copy)
+     */
+    EDC {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLEDCOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // EDC needs tables with data
+        }
+    },
+    /**
+     * SONAR (Select Optimization N-gram Analysis Runtime) Oracle.
+     * Detects optimizer bugs by comparing optimized vs unoptimized query execution.
+     * Uses flag-based filtering in outer query instead of WHERE clause.
+     */
+    SONAR {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLSonarOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // SONAR needs tables with data
         }
     },
     QUERY_PARTITIONING {

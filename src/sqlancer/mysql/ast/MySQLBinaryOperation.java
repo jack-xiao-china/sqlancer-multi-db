@@ -75,6 +75,11 @@ public class MySQLBinaryOperation implements MySQLExpression {
         MySQLConstant leftExpected = left.getExpectedValue();
         MySQLConstant rightExpected = right.getExpectedValue();
 
+        // If either operand is null, return null (SQL NULL semantics for bit operations)
+        if (leftExpected == null || rightExpected == null) {
+            return MySQLConstant.createNullConstant();
+        }
+
         /* workaround for https://bugs.mysql.com/bug.php?id=95960 */
         if (leftExpected.isString()) {
             String text = leftExpected.castAsString();

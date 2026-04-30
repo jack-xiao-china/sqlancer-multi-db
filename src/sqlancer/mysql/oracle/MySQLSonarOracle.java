@@ -112,7 +112,7 @@ public class MySQLSonarOracle extends NoRECBase<MySQLGlobalState> implements Tes
         }
 
         // Set JOIN clauses
-        select.setJoinList(gen.getRandomJoinClauses(targetTables.getTables()));
+        select.setJoinClauses(gen.getRandomJoinClauses(targetTables.getTables()));
 
         // Set FROM list
         List<MySQLSchema.MySQLTable> tables = targetTables.getTables();

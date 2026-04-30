@@ -434,6 +434,19 @@ public class MySQLTableGenerator {
      * Generate DEFAULT value based on column type
      */
     private void appendDefaultValue(MySQLDataType type) {
+        // Skip DEFAULT for temporal types - MySQL has strict requirements for these
+        // and the fsp (fractional seconds precision) matching can cause issues
+        switch (type) {
+        case DATE:
+        case TIME:
+        case DATETIME:
+        case TIMESTAMP:
+        case YEAR:
+            return; // Skip DEFAULT for temporal types
+        default:
+            break;
+        }
+
         sb.append("DEFAULT ");
         switch (type) {
         case INT:
@@ -450,38 +463,6 @@ public class MySQLTableGenerator {
             sb.append("'");
             sb.append(r.getString().replace("'", "\\'").replace("\\", "\\\\"));
             sb.append("'");
-            break;
-        case DATE:
-            sb.append("'");
-            sb.append(String.format("%04d-%02d-%02d", r.getInteger(1901, 2155), r.getInteger(1, 12), r.getInteger(1, 28)));
-            sb.append("'");
-            break;
-        case TIME:
-            sb.append("'");
-            sb.append(String.format("%02d:%02d:%02d", r.getInteger(0, 23), r.getInteger(0, 59), r.getInteger(0, 59)));
-            sb.append("'");
-            break;
-        case DATETIME:
-            sb.append("'");
-            sb.append(String.format("%04d-%02d-%02d %02d:%02d:%02d",
-                    r.getInteger(1901, 2155), r.getInteger(1, 12), r.getInteger(1, 28),
-                    r.getInteger(0, 23), r.getInteger(0, 59), r.getInteger(0, 59)));
-            sb.append("'");
-            break;
-        case TIMESTAMP:
-            // Use CURRENT_TIMESTAMP for TIMESTAMP as it's more common and avoids range issues
-            if (Randomly.getBoolean()) {
-                sb.append("CURRENT_TIMESTAMP");
-            } else {
-                sb.append("'");
-                sb.append(String.format("%04d-%02d-%02d %02d:%02d:%02d",
-                        r.getInteger(1970, 2037), r.getInteger(1, 12), r.getInteger(1, 28),
-                        r.getInteger(0, 23), r.getInteger(0, 59), r.getInteger(0, 59)));
-                sb.append("'");
-            }
-            break;
-        case YEAR:
-            sb.append(r.getInteger(1901, 2155));
             break;
         case BIT:
             sb.append(r.getLong(0, (1L << Math.min(r.getInteger(1, 64), 63))));
@@ -645,10 +626,11 @@ public class MySQLTableGenerator {
             throw new AssertionError(randomType);
         }
         if (randomType.isNumeric()) {
-            if (Randomly.getBoolean() && randomType != MySQLDataType.INT && !MySQLBugs.bug99127) {
+            // UNSIGNED/ZEROFILL are not supported for BIT type in MySQL
+            if (Randomly.getBoolean() && randomType != MySQLDataType.INT && randomType != MySQLDataType.BIT && !MySQLBugs.bug99127) {
                 sb.append(" UNSIGNED");
             }
-            if (Randomly.getBoolean()) {
+            if (Randomly.getBoolean() && randomType != MySQLDataType.BIT) {
                 sb.append(" ZEROFILL");
             }
         }

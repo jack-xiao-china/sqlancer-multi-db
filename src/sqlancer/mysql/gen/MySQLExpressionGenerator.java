@@ -18,6 +18,7 @@ import sqlancer.common.schema.AbstractTables;
 import sqlancer.mysql.MySQLBugs;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLOptions;
+import sqlancer.mysql.MySQLSchema;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
 import sqlancer.mysql.MySQLSchema.MySQLDataType;
 import sqlancer.mysql.MySQLSchema.MySQLRowValue;
@@ -55,6 +56,10 @@ import sqlancer.mysql.ast.MySQLUnaryPrefixOperation.MySQLUnaryPrefixOperator;
 import sqlancer.mysql.ast.MySQLTemporalFunction;
 import sqlancer.mysql.ast.MySQLTemporalFunction.TemporalFunctionKind;
 import sqlancer.mysql.ast.MySQLTemporalUtil.IntervalUnit;
+import sqlancer.mysql.ast.MySQLWindowFunction;
+import sqlancer.mysql.ast.MySQLPostfixText;
+import sqlancer.mysql.ast.MySQLManuelPredicate;
+import sqlancer.mysql.MySQLVisitor;
 
 public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLExpression, MySQLColumn>
         implements NoRECGenerator<MySQLSelect, MySQLJoin, MySQLExpression, MySQLTable, MySQLColumn>,
@@ -695,5 +700,120 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
             select.setWhereClause(newWhere);
             return true;
         }
+    }
+
+    // ==================== SonarOracle Methods ====================
+
+    /**
+     * Generate window function expression for SonarOracle fetch columns.
+     */
+    public MySQLExpression generateWindowFuc() {
+        MySQLWindowFunction.MySQLFunction func = Randomly.fromOptions(
+                MySQLWindowFunction.MySQLFunction.ROW_NUMBER,
+                MySQLWindowFunction.MySQLFunction.RANK,
+                MySQLWindowFunction.MySQLFunction.DENSE_RANK,
+                MySQLWindowFunction.MySQLFunction.SUM,
+                MySQLWindowFunction.MySQLFunction.AVG,
+                MySQLWindowFunction.MySQLFunction.COUNT,
+                MySQLWindowFunction.MySQLFunction.MAX,
+                MySQLWindowFunction.MySQLFunction.MIN);
+
+        MySQLExpression expr = null;
+        if (func.getArgs() > 0 && columns != null && !columns.isEmpty()) {
+            expr = MySQLColumnReference.create(Randomly.fromList(columns), null);
+        }
+
+        MySQLExpression partitionBy = null;
+        if (Randomly.getBoolean() && columns != null && !columns.isEmpty()) {
+            partitionBy = MySQLColumnReference.create(Randomly.fromList(columns), null);
+        }
+
+        return new MySQLWindowFunction(func, expr, partitionBy);
+    }
+
+    /**
+     * Generate fetch column expression for SonarOracle.
+     */
+    public MySQLExpression generateFetchColumnExpression(MySQLSchema.MySQLTables targetTables) {
+        if (targetTables == null || targetTables.getColumns().isEmpty()) {
+            return generateConstant();
+        }
+
+        List<MySQLColumn> targetColumns = targetTables.getColumns();
+        MySQLColumn firstColumn = targetColumns.get(0);
+
+        // Generate various expression types for fetch column
+        switch (Randomly.fromOptions(0, 1, 2, 3)) {
+        case 0:
+            // Simple column reference
+            return MySQLColumnReference.create(firstColumn, null);
+        case 1:
+            // Aggregate function
+            return generateAggregate();
+        case 2:
+            // Binary arithmetic operation
+            return new MySQLBinaryArithmeticOperation(
+                    MySQLColumnReference.create(firstColumn, null),
+                    generateConstant(),
+                    MySQLBinaryArithmeticOperator.getRandom());
+        case 3:
+            // CASE operator
+            int nr = Randomly.smallNumber() + 1;
+            return new MySQLCaseOperator(
+                    generateExpression(),
+                    generateExpressions(nr, 0),
+                    generateExpressions(nr, 0),
+                    generateExpression());
+        default:
+            return MySQLColumnReference.create(firstColumn, null);
+        }
+    }
+
+    /**
+     * Generate WHERE column expression for SonarOracle based on fetch column alias.
+     */
+    public MySQLExpression generateWhereColumnExpression(MySQLPostfixText asText) {
+        if (asText == null) {
+            return generateExpression();
+        }
+
+        String alias = asText.getText();
+        MySQLExpression aliasExpr = new MySQLManuelPredicate(alias);
+
+        // Generate comparison with alias
+        switch (Randomly.fromOptions(0, 1, 2)) {
+        case 0:
+            // Binary comparison
+            return new MySQLBinaryComparisonOperation(
+                    aliasExpr,
+                    generateConstant(),
+                    BinaryComparisonOperator.getRandom());
+        case 1:
+            // IS TRUE/IS FALSE/IS NOT TRUE/IS NOT FALSE (using negate parameter)
+            boolean negate = Randomly.getBoolean();
+            MySQLUnaryPostfixOperation.UnaryPostfixOperator op = Randomly.fromOptions(
+                    MySQLUnaryPostfixOperation.UnaryPostfixOperator.IS_TRUE,
+                    MySQLUnaryPostfixOperation.UnaryPostfixOperator.IS_FALSE);
+            return new MySQLUnaryPostfixOperation(aliasExpr, op, negate);
+        case 2:
+            // Manuel predicate (flag expression)
+            return new MySQLManuelPredicate(alias + " > " + MySQLVisitor.asString(generateConstant()));
+        default:
+            return new MySQLBinaryComparisonOperation(
+                    aliasExpr,
+                    generateConstant(),
+                    BinaryComparisonOperator.EQUALS);
+        }
+    }
+
+    /**
+     * Get random JOIN clauses with explicit table list (for SonarOracle).
+     */
+    public List<MySQLJoin> getRandomJoinClauses(List<MySQLSchema.MySQLTable> tableList) {
+        if (tableList == null || tableList.size() <= 1) {
+            return List.of();
+        }
+        List<MySQLSchema.MySQLTable> tablesCopy = new ArrayList<>(tableList);
+        return MySQLJoin.getRandomJoinClauses(tablesCopy, state);
     }
 }

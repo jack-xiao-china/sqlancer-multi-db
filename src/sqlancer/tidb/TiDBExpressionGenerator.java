@@ -34,7 +34,9 @@ import sqlancer.tidb.ast.TiDBFunctionCall;
 import sqlancer.tidb.ast.TiDBFunctionCall.TiDBFunction;
 import sqlancer.tidb.ast.TiDBJoin;
 import sqlancer.tidb.ast.TiDBJoin.JoinType;
+import sqlancer.tidb.ast.TiDBManuelPredicate;
 import sqlancer.tidb.ast.TiDBOrderingTerm;
+import sqlancer.tidb.ast.TiDBPostfixText;
 import sqlancer.tidb.ast.TiDBRegexOperation;
 import sqlancer.tidb.ast.TiDBRegexOperation.TiDBRegexOperator;
 import sqlancer.tidb.ast.TiDBSelect;
@@ -375,5 +377,67 @@ public class TiDBExpressionGenerator extends UntypedExpressionGenerator<TiDBExpr
             select.setGroupByExpressions(select.getFetchColumns());
         }
         return increase;
+    }
+
+    /**
+     * Generate fetch column expression for SonarOracle.
+     * Creates expressions suitable for use in SELECT fetch columns.
+     */
+    public TiDBExpression generateFetchColumnExpression(TiDBColumn column) {
+        if (column == null) {
+            return generateConstant(TiDBDataType.INT);
+        }
+
+        switch (Randomly.fromOptions(0, 1, 2, 3)) {
+        case 0:
+            // Simple column reference
+            return new TiDBColumnReference(column);
+        case 1:
+            // Constant value
+            return generateConstant(TiDBDataType.INT);
+        case 2:
+            // Binary comparison operation
+            return new TiDBBinaryComparisonOperation(
+                    new TiDBColumnReference(column),
+                    generateConstant(TiDBDataType.INT),
+                    TiDBComparisonOperator.getRandom());
+        case 3:
+            // Cast operation - cast to INT type
+            return new TiDBCastOperation(new TiDBColumnReference(column), "INT");
+        default:
+            return new TiDBColumnReference(column);
+        }
+    }
+
+    /**
+     * Generate WHERE column expression for SonarOracle based on fetch column alias.
+     */
+    public TiDBExpression generateWhereColumnExpression(TiDBPostfixText asText) {
+        if (asText == null) {
+            return generateExpression();
+        }
+
+        String alias = asText.getText();
+        TiDBExpression aliasExpr = new TiDBManuelPredicate(alias);
+
+        switch (Randomly.fromOptions(0, 1, 2)) {
+        case 0:
+            // Binary comparison
+            return new TiDBBinaryComparisonOperation(
+                    aliasExpr,
+                    generateConstant(TiDBDataType.INT),
+                    TiDBComparisonOperator.getRandom());
+        case 1:
+            // Manuel predicate (flag expression)
+            return new TiDBManuelPredicate(alias + " = 1");
+        case 2:
+            // Unary postfix operation (IS NOT NULL)
+            return new TiDBUnaryPostfixOperation(aliasExpr, TiDBUnaryPostfixOperator.IS_NOT_NULL);
+        default:
+            return new TiDBBinaryComparisonOperation(
+                    aliasExpr,
+                    generateConstant(TiDBDataType.INT),
+                    TiDBComparisonOperator.EQUALS);
+        }
     }
 }

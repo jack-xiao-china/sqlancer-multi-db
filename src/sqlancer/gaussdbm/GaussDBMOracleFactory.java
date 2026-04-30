@@ -12,6 +12,7 @@ import sqlancer.common.oracle.TLPWhereOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
+import sqlancer.gaussdbm.oracle.GaussDBMEDCOracle;
 import sqlancer.gaussdbm.oracle.GaussDBCODDTestOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMCERTExplainParser;
 import sqlancer.gaussdbm.oracle.GaussDBMDQEOracle;
@@ -133,6 +134,17 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
         @Override
         public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
             return new GaussDBMSonarOracle(globalState);
+        }
+    },
+    EDC {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMEDCOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
         }
     },
     QUERY_PARTITIONING {

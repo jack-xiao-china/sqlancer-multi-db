@@ -30,7 +30,13 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            return null;
+            // Return null constant instead of null pointer to avoid NPE propagation
+            if (rightVal == null || rightVal.isNull()) {
+                return MySQLConstant.createNullConstant();
+            }
+            // For non-null values, this constant type cannot do proper comparison
+            // Throw IgnoreMeException to skip this comparison path
+            throw new IgnoreMeException();
         }
 
         @Override
@@ -66,6 +72,53 @@ public abstract class MySQLConstant implements MySQLExpression {
                 // seems to not be supported by MySQL
                 throw new IgnoreMeException();
             }
+        }
+
+        @Override
+        public boolean asBooleanNotNull() {
+            // In MySQL, a double is truthy if it's non-zero
+            return val != 0;
+        }
+
+        @Override
+        public MySQLConstant isEquals(MySQLConstant rightVal) {
+            if (rightVal == null || rightVal.isNull()) {
+                return MySQLConstant.createNullConstant();
+            }
+            if (rightVal.isInt()) {
+                return MySQLConstant.createBoolean(val == rightVal.getInt());
+            }
+            // For other types, throw IgnoreMeException
+            throw new IgnoreMeException();
+        }
+
+        @Override
+        public MySQLConstant castAs(CastType type) {
+            if (type == CastType.SIGNED || type == CastType.UNSIGNED) {
+                return MySQLConstant.createIntConstant((long) val, type == CastType.SIGNED);
+            }
+            throw new IgnoreMeException();
+        }
+
+        @Override
+        public String castAsString() {
+            return String.valueOf(val);
+        }
+
+        @Override
+        public MySQLDataType getType() {
+            return MySQLDataType.DOUBLE;
+        }
+
+        @Override
+        protected MySQLConstant isLessThan(MySQLConstant rightVal) {
+            if (rightVal == null || rightVal.isNull()) {
+                return MySQLConstant.createNullConstant();
+            }
+            if (rightVal.isInt()) {
+                return MySQLConstant.createBoolean(val < rightVal.getInt());
+            }
+            throw new IgnoreMeException();
         }
 
         @Override
@@ -123,7 +176,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             } else if (rightVal.isInt()) {
                 checkIfSmallFloatingPointText();
@@ -188,7 +241,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             } else if (rightVal.isInt()) {
                 if (asBooleanNotNull()) {
@@ -257,7 +310,7 @@ public abstract class MySQLConstant implements MySQLExpression {
             if (rightVal.isInt()) {
                 return MySQLConstant.createBoolean(new BigInteger(getStringRepr())
                         .compareTo(new BigInteger(((MySQLIntConstant) rightVal).getStringRepr())) == 0);
-            } else if (rightVal.isNull()) {
+            } else if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             } else if (rightVal.isString()) {
                 if (rightVal.asBooleanNotNull()) {
@@ -319,7 +372,7 @@ public abstract class MySQLConstant implements MySQLExpression {
                             .compareTo(new BigInteger(((MySQLIntConstant) rightVal).getStringRepr())) < 0);
                     // return MySQLConstant.createBoolean(Long.compareUnsigned(value, intVal) < 0);
                 }
-            } else if (rightVal.isNull()) {
+            } else if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             } else if (rightVal.isString()) {
                 if (rightVal.asBooleanNotNull()) {
@@ -428,7 +481,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -445,7 +498,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -503,7 +556,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -520,7 +573,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -585,7 +638,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -602,7 +655,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -667,7 +720,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -684,7 +737,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -724,7 +777,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -741,7 +794,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal.getType() != getType()) {
@@ -789,7 +842,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLBitConstant) {
@@ -810,7 +863,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLBitConstant) {
@@ -861,7 +914,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLEnumConstant) {
@@ -886,7 +939,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLEnumConstant) {
@@ -949,7 +1002,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLSetConstant) {
@@ -974,7 +1027,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLSetConstant) {
@@ -1037,7 +1090,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLJSONConstant) {
@@ -1059,7 +1112,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLJSONConstant) {
@@ -1139,7 +1192,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLBinaryConstant) {
@@ -1166,7 +1219,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLBinaryConstant) {
@@ -1267,7 +1320,7 @@ public abstract class MySQLConstant implements MySQLExpression {
         if (this.isNull()) {
             return MySQLConstant.createBoolean(rightVal.isNull());
         }
-        if (rightVal.isNull()) {
+        if (rightVal == null || rightVal.isNull()) {
             return MySQLConstant.createFalse();
         }
         return this.isEquals(rightVal);
@@ -1345,7 +1398,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         public MySQLConstant isEquals(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLIntervalConstant) {
@@ -1367,7 +1420,7 @@ public abstract class MySQLConstant implements MySQLExpression {
 
         @Override
         protected MySQLConstant isLessThan(MySQLConstant rightVal) {
-            if (rightVal.isNull()) {
+            if (rightVal == null || rightVal.isNull()) {
                 return MySQLConstant.createNullConstant();
             }
             if (rightVal instanceof MySQLIntervalConstant) {

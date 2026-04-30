@@ -15,6 +15,7 @@ import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 import sqlancer.postgres.ast.PostgresSelect.LockingClauseContext;
+import sqlancer.postgres.oracle.PostgresEDCOracle;
 import sqlancer.postgres.oracle.PostgresFuzzer;
 import sqlancer.postgres.oracle.PostgresPivotedQuerySynthesisOracle;
 import sqlancer.postgres.oracle.ext.PostgresCODDTestOracle;
@@ -25,6 +26,7 @@ import sqlancer.postgres.oracle.ext.PostgresTLPGroupByOracle;
 import sqlancer.postgres.oracle.tlp.PostgresTLPAggregateOracle;
 import sqlancer.postgres.oracle.tlp.PostgresTLPHavingOracle;
 import sqlancer.postgres.oracle.ext.eet.PostgresEETOracle;
+import sqlancer.postgres.oracle.PostgresSonarOracle;
 
 public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> {
     NOREC {
@@ -159,6 +161,37 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
             return new PostgresCODDTestOracle(globalState);
+        }
+    },
+    /**
+     * SONAR (Select Optimization N-gram Analysis Runtime) Oracle.
+     * Detects optimizer bugs by comparing optimized vs unoptimized query execution.
+     */
+    SONAR {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresSonarOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * EDC (Equivalent Database Construction) Oracle.
+     * Detects optimizer bugs by comparing query results between original DB (with constraints)
+     * and raw DB (without constraints).
+     */
+    EDC {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresEDCOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
         }
     };
 

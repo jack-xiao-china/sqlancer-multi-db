@@ -30,7 +30,7 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
     public static final String DEFAULT_HOST = "localhost";
     public static final int DEFAULT_PORT = 3306;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE]")
     public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.QUERY_PARTITIONING);
 
     @Parameter(names = "--engines", description = "Comma-separated storage engine names used in CREATE TABLE ENGINE=... (e.g. InnoDB,MyISAM,MyCustomEngine)")

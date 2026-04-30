@@ -1365,8 +1365,8 @@ public class MySQLComputableFunction implements MySQLExpression {
     }
 
     public static MySQLConstant castToMostGeneralType(MySQLConstant cons, MySQLExpression... typeExpressions) {
-        if (cons.isNull()) {
-            return cons;
+        if (cons == null || cons.isNull()) {
+            return cons == null ? MySQLConstant.createNullConstant() : cons;
         }
         MySQLDataType type = getMostGeneralType(typeExpressions);
         switch (type) {

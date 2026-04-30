@@ -8,6 +8,7 @@ import sqlancer.Randomly;
 import sqlancer.common.gen.NoRECGenerator;
 import sqlancer.common.schema.AbstractTables;
 import sqlancer.mariadb.MariaDBProvider;
+import sqlancer.mariadb.MariaDBSchema;
 import sqlancer.mariadb.MariaDBSchema.MariaDBColumn;
 import sqlancer.mariadb.MariaDBSchema.MariaDBDataType;
 import sqlancer.mariadb.MariaDBSchema.MariaDBTable;
@@ -22,6 +23,8 @@ import sqlancer.mariadb.ast.MariaDBFunction;
 import sqlancer.mariadb.ast.MariaDBFunctionName;
 import sqlancer.mariadb.ast.MariaDBInOperation;
 import sqlancer.mariadb.ast.MariaDBJoin;
+import sqlancer.mariadb.ast.MariaDBManuelPredicate;
+import sqlancer.mariadb.ast.MariaDBPostfixText;
 import sqlancer.mariadb.ast.MariaDBPostfixUnaryOperation;
 import sqlancer.mariadb.ast.MariaDBPostfixUnaryOperation.MariaDBPostfixUnaryOperator;
 import sqlancer.mariadb.ast.MariaDBSelectStatement;
@@ -207,5 +210,73 @@ public class MariaDBExpressionGenerator
         select.setSelectType(MariaDBSelectType.ALL);
 
         return "SELECT SUM(count) FROM (" + select.asString() + ") as asdf";
+    }
+
+    /**
+     * Generate fetch column expression for SonarOracle.
+     * Creates expressions suitable for use in SELECT fetch columns.
+     */
+    public MariaDBExpression generateFetchColumnExpression(MariaDBSchema.MariaDBTables targetTables) {
+        if (targetTables == null || targetTables.getColumns().isEmpty()) {
+            return getRandomConstant(r);
+        }
+
+        List<MariaDBColumn> targetColumns = targetTables.getColumns();
+        MariaDBColumn firstColumn = targetColumns.get(0);
+
+        switch (Randomly.fromOptions(0, 1, 2, 3)) {
+        case 0:
+            // Simple column reference
+            return new MariaDBColumnName(firstColumn);
+        case 1:
+            // Aggregate function
+            return new MariaDBAggregate(new MariaDBColumnName(firstColumn), MariaDBAggregateFunction.COUNT);
+        case 2:
+            // Binary arithmetic operation
+            return new MariaDBBinaryOperator(
+                    new MariaDBColumnName(firstColumn),
+                    getRandomConstant(r),
+                    MariaDBBinaryComparisonOperator.getRandom());
+        case 3:
+            // Constant value
+            return getRandomConstant(r);
+        default:
+            return new MariaDBColumnName(firstColumn);
+        }
+    }
+
+    /**
+     * Generate WHERE column expression for SonarOracle based on fetch column alias.
+     */
+    public MariaDBExpression generateWhereColumnExpression(MariaDBPostfixText asText) {
+        if (asText == null) {
+            return getRandomExpression();
+        }
+
+        String alias = asText.getText();
+        MariaDBExpression aliasExpr = new MariaDBManuelPredicate(alias);
+
+        switch (Randomly.fromOptions(0, 1, 2)) {
+        case 0:
+            // Binary comparison
+            return new MariaDBBinaryOperator(
+                    aliasExpr,
+                    getRandomConstant(r),
+                    MariaDBBinaryComparisonOperator.getRandom());
+        case 1:
+            // Manuel predicate (flag expression)
+            return new MariaDBManuelPredicate(alias + " = 1");
+        case 2:
+            // Binary logical operation (AND with constant)
+            return new MariaDBBinaryOperator(
+                    aliasExpr,
+                    getRandomConstant(r),
+                    MariaDBBinaryComparisonOperator.AND);
+        default:
+            return new MariaDBBinaryOperator(
+                    aliasExpr,
+                    getRandomConstant(r),
+                    MariaDBBinaryComparisonOperator.NOT_EQUAL);
+        }
     }
 }

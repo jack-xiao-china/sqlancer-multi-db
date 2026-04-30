@@ -44,7 +44,10 @@ public final class PostgresDropIndexGenerator {
         }
         return new SQLQueryAdapter(sb.toString(),
                 ExpectedErrors.from("cannot drop desired object(s) because other objects depend on them",
-                        "cannot drop index", "does not exist"),
+                        "cannot drop index", "does not exist", "required by a constraint")
+                        .addRegexString("cannot.*drop.*index.*constraint") // Locale-independent
+                        .addRegexString("无法删除.*索引.*约束") // Chinese locale
+                        .addRegexString("constraint.*requires.*index"),
                 true);
     }
 

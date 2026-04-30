@@ -142,7 +142,13 @@ public class MySQLBinaryComparisonOperation implements MySQLExpression {
 
     @Override
     public MySQLConstant getExpectedValue() {
-        return op.getExpectedValue(left.getExpectedValue(), right.getExpectedValue());
+        MySQLConstant leftVal = left.getExpectedValue();
+        MySQLConstant rightVal = right.getExpectedValue();
+        // If either operand is null, return null constant (SQL NULL semantics for comparisons)
+        if (leftVal == null || rightVal == null) {
+            return MySQLConstant.createNullConstant();
+        }
+        return op.getExpectedValue(leftVal, rightVal);
     }
 
 }

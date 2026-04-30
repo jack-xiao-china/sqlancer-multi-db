@@ -79,6 +79,7 @@ import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
 import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation.TemporalBinaryOperator;
 import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresTemporalFunction.TemporalFunctionKind;
+import sqlancer.postgres.ast.PostgresText;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowSpecification;
@@ -1315,6 +1316,78 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
         }
         allowAggregateFunctions = false;
         return fetchColumns;
+    }
+
+    /**
+     * Generate fetch column expression for SonarOracle.
+     * Creates expressions suitable for use in SELECT fetch columns.
+     */
+    public PostgresExpression generateFetchColumnExpression(PostgresColumn column) {
+        if (column == null) {
+            return generateConstant(r, PostgresDataType.INT);
+        }
+
+        switch (Randomly.fromOptions(0, 1, 2, 3)) {
+        case 0:
+            // Simple column value
+            return new PostgresColumnValue(column, null);
+        case 1:
+            // Cast operation
+            return new PostgresCastOperation(
+                    new PostgresColumnValue(column, null),
+                    PostgresCompoundDataType.create(PostgresDataType.INT));
+        case 2:
+            // Binary arithmetic operation
+            return new PostgresBinaryArithmeticOperation(
+                    new PostgresColumnValue(column, null),
+                    generateConstant(r, PostgresDataType.INT),
+                    PostgresBinaryOperator.getRandom());
+        case 3:
+            // Aggregate function (COUNT)
+            return new PostgresAggregate(
+                    List.of(new PostgresColumnValue(column, null)),
+                    PostgresAggregateFunction.COUNT);
+        default:
+            return new PostgresColumnValue(column, null);
+        }
+    }
+
+    /**
+     * Generate WHERE column expression for SonarOracle.
+     * Creates expressions that reference the alias from fetch columns.
+     */
+    public PostgresExpression generateWhereColumnExpression(PostgresPostfixText asText, PostgresColumn column) {
+        if (asText == null) {
+            return generateExpression(PostgresDataType.BOOLEAN);
+        }
+
+        String alias = asText.getText();
+        // Create a reference to the alias (as a text expression)
+        PostgresExpression aliasExpr = new PostgresText(alias.trim().replace(" AS f1", "").replace(" as f1", ""));
+
+        switch (Randomly.fromOptions(0, 1, 2)) {
+        case 0:
+            // Binary comparison with constant
+            return new PostgresBinaryComparisonOperation(
+                    aliasExpr,
+                    generateConstant(r, PostgresDataType.INT),
+                    PostgresBinaryComparisonOperation.PostgresBinaryComparisonOperator.getRandom());
+        case 1:
+            // IS TRUE operation
+            return new PostgresPostfixOperation(
+                    aliasExpr,
+                    PostgresPostfixOperation.PostfixOperator.IS_TRUE);
+        case 2:
+            // Binary arithmetic comparison
+            return new PostgresBinaryArithmeticOperation(
+                    aliasExpr,
+                    generateConstant(r, PostgresDataType.INT),
+                    PostgresBinaryOperator.getRandom());
+        default:
+            return new PostgresPostfixOperation(
+                    aliasExpr,
+                    PostgresPostfixOperation.PostfixOperator.IS_TRUE);
+        }
     }
 
     @Override

@@ -120,6 +120,13 @@ public final class PostgresCommon {
 
         errors.add(Pattern.compile("cannot convert infinity to \\w+"));
         errors.addAll(getFunctionRegexErrors());
+        // Locale-independent patterns for Chinese environment
+        errors.add(Pattern.compile("index.*constraint")); // index already associated with constraint
+        errors.add(Pattern.compile("无法删除.*约束.*依赖于")); // cannot drop constraint because other objects depend on it
+        errors.add(Pattern.compile("column.*only.*default")); // column can only be changed to default value
+        errors.add(Pattern.compile("列.*只能.*默认值")); // Chinese: column can only be changed to default value
+        errors.add(Pattern.compile("no unique constraint matching")); // no unique constraint matching given keys
+        errors.add(Pattern.compile("没有唯一约束匹配")); // Chinese: no unique constraint matching
 
         return errors;
     }

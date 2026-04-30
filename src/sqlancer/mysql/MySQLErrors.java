@@ -21,6 +21,14 @@ public final class MySQLErrors {
         errors.add("Incorrect DATETIME value");
         errors.add("Incorrect DATE value");
         errors.add("Incorrect TIME value");
+        // JSON function errors
+        errors.add("Incorrect parameter count in the call to native function 'JSON_KEYS'");
+        errors.add("Incorrect parameter count in the call to native function 'LOCATE'");
+        errors.add("Invalid JSON path expression");
+        errors.add("Incorrect parameter count in the call to native function");
+        // Packet size errors
+        errors.add("Result of repeat() was larger than max_allowed_packet");
+        errors.add("Packet too large");
         // 视图和 JOIN 相关错误
         errors.add("Not unique table/alias");
         errors.add("VIEW contains invalid column(s)");
@@ -48,6 +56,7 @@ public final class MySQLErrors {
         }
 
         errors.add(Pattern.compile("Unknown column '.*' in 'order clause'"));
+        errors.add(Pattern.compile("Unknown column '.*' in '.*'")); // General unknown column error
 
         return errors;
     }
@@ -86,6 +95,11 @@ public final class MySQLErrors {
         errors.add("The value specified for generated column");
         // 二进制值插入字符串列的字符集错误
         errors.add("Incorrect string value");
+        // Temporal value errors during INSERT/UPDATE
+        errors.add("Incorrect DATE value");
+        errors.add("Incorrect TIME value");
+        errors.add("Incorrect DATETIME value");
+        errors.add("Incorrect TIMESTAMP value");
 
         return errors;
     }
