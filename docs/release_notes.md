@@ -1,5 +1,19 @@
 # SQLancer Release Notes
 
+## v2.0.34 | 2026-04-30
+- Documentation Update: USER_GUIDE.md comprehensive Oracle Reference Guide
+  - Added Oracle Algorithm Comparison Table with core algorithms, problems solved, applicable scenarios, reference papers
+  - Added EDC (Equivalent Database Construction) Oracle deep dive
+  - Added SONAR Oracle deep dive
+  - Added "When to Choose Which Oracle" selection guide
+  - Updated oracle support tables to include EDC and SONAR for MySQL, PostgreSQL, GaussDB-M
+- New Documentation: USER_GUIDE_CN.md - Complete Chinese user guide
+  - Full translation of USER_GUIDE.md including all Oracle documentation
+  - Oracle 算法对比表（中文）
+  - EDC Oracle 深度解析
+  - SONAR Oracle 深度解析
+  - Oracle 选择决策表
+
 ## v2.0.33 | 2026-04-30
 - Regression Test Complete: All 4 DBMS tested successfully
   - MySQL: 14/16 oracles tested, all stable after fixes

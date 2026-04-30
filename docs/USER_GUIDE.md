@@ -1,13 +1,13 @@
 # SQLancer User Guide
 
-**Version**: v0.1.82 (2026-04-25)  
+**Version**: v0.1.84 (2026-04-30)  
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M, and 20+ other DBMS
 
 ## Introduction
 
 SQLancer is a tool for testing database management systems by generating random SQL queries and checking for bugs. This extended version includes:
 
-- **14 Test Oracles** for MySQL and PostgreSQL (including EET, DQE, DQP, CODDTEST)
+- **16 Test Oracles** for MySQL, PostgreSQL, and GaussDB (including EDC, Sonar, EET, DQE, DQP, CODDTEST)
 - **GaussDB Support**: A-compatibility mode (Oracle-style), PG-compatibility mode, and M-compatibility mode (MySQL-style)
 - **Extended Data Types**: JSON, BLOB, temporal types, arrays, enums, spatial types
 - **Internationalization**: Handles non-English server error messages
@@ -56,11 +56,11 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | DBMS | Available Oracles |
 |------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, CODDTEST, EET, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
 | **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
 | CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT |
@@ -113,6 +113,8 @@ java -jar target/sqlancer-2.0.0.jar \
 | DQE | SELECT/UPDATE/DELETE equivalence | ~23 queries/s |
 | EET | Equivalent Expression Transformation | ~340 queries/s |
 | CODDTEST | Constant-driven optimization testing | Moderate |
+| EDC | Equivalent Database Construction (constraint-based testing) | Moderate |
+| SONAR | Optimized vs unoptimized query comparison | Moderate |
 | FUZZER | Random query generation | ~3000 queries/s |
 
 ## MySQL Data Types
@@ -185,6 +187,8 @@ java -jar target/sqlancer-2.0.0.jar \
 | DQE | SELECT/UPDATE/DELETE equivalence | Moderate |
 | EET | Equivalent Expression Transformation | Moderate |
 | CODDTEST | Constant-driven optimization | Moderate |
+| EDC | Equivalent Database Construction (constraint-based testing) | Moderate |
+| SONAR | Optimized vs unoptimized query comparison | Moderate |
 | FUZZER | Random queries | ~3000 queries/s |
 
 ### PQS and CERT Recommended Parameters
@@ -504,6 +508,8 @@ This follows MySQL's database-based isolation pattern.
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
 | CODDTEST | Constant-driven optimization testing |
+| EDC | Equivalent Database Construction (constraint-based testing) |
+| SONAR | Optimized vs unoptimized query comparison |
 | FUZZER | Random query generation |
 
 ## GaussDB-M Options
@@ -706,12 +712,185 @@ java -Xmx4g -jar sqlancer.jar ...
 | DML correctness | DQE |
 | Expression bugs | EET |
 | Semantic correctness | CODDTEST |
+| Optimizer bugs | EDC, SONAR |
 | Crash detection | FUZZER |
-| Comprehensive | QUERY_PARTITIONING + EET + DQE + DQP |
+| Comprehensive | QUERY_PARTITIONING + EET + DQE + DQP + EDC |
+
+---
+
+# Oracle Reference Guide
+
+This section provides detailed information about each oracle's core algorithm, problem-solving approach, applicable scenarios, and reference papers.
+
+## Oracle Algorithm Comparison Table
+
+| Oracle | Core Algorithm | Problem Solved | Applicable Scenarios | Reference Paper |
+|--------|----------------|----------------|----------------------|-----------------|
+| **PQS** | Pivoted Query Synthesis - Randomly selects a pivot row and generates queries whose result should contain it | Logic bugs in query execution (missing rows, incorrect filtering) | General correctness testing; especially effective for WHERE clause bugs | [OSDI 2020](https://arxiv.org/pdf/2001.04174.pdf) |
+| **NoREC** | Non-Optimizing Reference Engine - Compares optimized query results with unoptimized (boolean-expression) results | Optimizer bugs where optimization changes query semantics | Testing WHERE clause optimization; predicate pushdown bugs | [FSE 2020](https://arxiv.org/abs/2007.08292) |
+| **TLP (WHERE/HAVING/AGGREGATE/DISTINCT/GROUP_BY)** | Ternary Logic Partitioning - Divides query into 3 partitions (TRUE/FALSE/NULL) and verifies sum equals original | Logic bugs in various query components | WHERE clauses, HAVING clauses, aggregate functions, DISTINCT, GROUP BY | [OOPSLA 2020](https://www.manuelrigger.at/preprints/TLP.pdf) |
+| **CERT** | Cardinality Estimation Testing - Detects performance issues by comparing estimated vs actual cardinalities | Performance bugs from inaccurate cardinality estimates | Query planning; index usage decisions; join order selection | [ICSE 2024](https://bajinsheng.github.io/assets/pdf/cert_icse24.pdf) |
+| **DQP** | Differential Query Plans - Compares query plans between different DBMS or different configurations | Logic bugs revealed through plan differences | Cross-DBMS comparison; optimizer plan selection bugs | [SIGMOD 2024](https://bajinsheng.github.io/assets/pdf/dqp_sigmod24.pdf) |
+| **DQE** | Differential Query Equivalence - Compares SELECT, UPDATE, DELETE results on same dataset | DML correctness bugs where modifications don't match queries | UPDATE/DELETE correctness; transaction isolation bugs | Internal extension |
+| **EET** | Equivalent Expression Transformation - Tests semantically equivalent expressions | Expression evaluation bugs (e.g., `a AND b` vs `NOT(NOT a OR NOT b)`) | Boolean expression handling; NULL logic; expression simplification bugs | Internal extension |
+| **CODDTEST** | Constant-driven optimization testing - Uses literal constants to trigger specific optimizations | Optimizer behavior with constant expressions | Constant folding; parameterized query optimization | Internal extension |
+| **EDC** | Equivalent Database Construction - Creates raw DB without constraints, compares query results with original | Constraint-related optimizer bugs (constraints ignored or mishandled) | Foreign key, CHECK constraint, UNIQUE constraint testing; constraint-aware optimization | [OSDI 2020] (PQS extension) |
+| **SONAR** | Optimized vs Unoptimized comparison - Uses flag-based filtering to compare execution paths | Optimizer bugs where optimization changes semantics | Index usage bugs; predicate evaluation order bugs; optimization correctness | Internal extension (Sonar paper pending) |
+| **FUZZER** | Random query generation - Generates syntactically valid but semantically random queries | Crash bugs, syntax edge cases, unexpected errors | Stress testing; crash detection; syntax boundary testing | Basic fuzzing approach |
+
+## Oracle Deep Dive
+
+### EDC (Equivalent Database Construction)
+
+**Concept**: EDC detects optimizer bugs by comparing query results between two database states:
+1. **Original DB**: Contains tables with constraints (FK, CHECK, UNIQUE, NOT NULL)
+2. **Raw DB**: Same data but WITHOUT constraints
+
+**Algorithm**:
+- Generate random queries that reference constrained columns
+- Execute query on both DB states
+- Results should be identical because constraints don't change query semantics
+- If different → optimizer bug (constraints incorrectly influenced execution)
+
+**Example Bug Found**: Optimizer uses constraint information to skip certain checks, but this optimization changes query results.
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --oracle EDC --num-tries 100
+java -jar sqlancer.jar postgres --oracle EDC --num-tries 100
+java -jar sqlancer.jar gaussdb-m --oracle EDC --num-tries 100
+```
+
+### SONAR Oracle
+
+**Concept**: SONAR detects optimizer bugs by comparing optimized vs unoptimized query execution using flag-based filtering.
+
+**Algorithm**:
+- Generate a query and execute with optimizer enabled (normal mode)
+- Execute same query with optimizer disabled (forced unoptimized path)
+- Compare results - should be identical
+- If different → optimizer bug where optimization changed semantics
+
+**Example Bug Found**: Index-based optimization incorrectly filters rows, or predicate pushdown changes WHERE clause semantics.
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --oracle SONAR --num-tries 100
+java -jar sqlancer.jar postgres --oracle SONAR --num-tries 100
+java -jar sqlancer.jar gaussdb-m --oracle SONAR --num-tries 100
+```
+
+### TLP (Ternary Logic Partitioning)
+
+**Concept**: TLP uses metamorphic testing by partitioning query results into three logical categories.
+
+**Algorithm**:
+- Original query: `SELECT * FROM t WHERE cond` → result set R
+- Partition queries:
+  - `SELECT * FROM t WHERE cond IS TRUE` → R_true
+  - `SELECT * FROM t WHERE cond IS FALSE` → R_false
+  - `SELECT * FROM t WHERE cond IS NULL` → R_null
+- Verify: R = R_true ∪ R_false ∪ R_null (no overlap)
+
+**Variants**:
+| Variant | Application |
+|---------|-------------|
+| TLP_WHERE | WHERE clause correctness |
+| TLP_HAVING | HAVING clause correctness |
+| TLP_AGGREGATE | Aggregate function correctness |
+| TLP_DISTINCT | DISTINCT handling |
+| TLP_GROUP_BY | GROUP BY expression correctness |
+
+### NoREC (Non-Optimizing Reference Engine)
+
+**Concept**: NoREC detects optimization bugs by comparing optimized vs non-optimized execution paths.
+
+**Algorithm**:
+- Optimized query: `SELECT COUNT(*) FROM t WHERE complex_expr` → count1
+- Non-optimized query: `SELECT SUM(CASE WHEN complex_expr THEN 1 ELSE 0 END) FROM t` → count2
+- count1 should equal count2
+- Difference indicates optimizer incorrectly handled complex_expr
+
+**Best For**: Predicate pushdown bugs, index usage bugs, expression simplification bugs.
+
+### PQS (Pivoted Query Synthesis)
+
+**Concept**: PQS selects a "pivot" row and generates queries that should definitely return this row.
+
+**Algorithm**:
+- Select a random row as pivot row
+- Generate WHERE conditions that definitely match the pivot row
+- Execute query, verify pivot row is in result set
+- If missing → logic bug (row should be included but was filtered out)
+
+**Best For**: WHERE clause logic bugs, NULL handling bugs, type conversion bugs.
+
+### CERT (Cardinality Estimation)
+
+**Concept**: CERT detects performance issues by comparing estimated vs actual row counts.
+
+**Algorithm**:
+- Get optimizer's estimated cardinality for a query plan node
+- Execute query and count actual rows
+- Compare: significant mismatch indicates poor cardinality estimation
+- Poor estimation → wrong index choice, wrong join order
+
+**Best For**: Query planning bugs, index selection bugs, join optimization bugs.
+
+### DQP (Differential Query Plans)
+
+**Concept**: DQP compares query execution between different DBMS or configurations.
+
+**Algorithm**:
+- Execute same query on two different DBMS (e.g., MySQL vs PostgreSQL)
+- Or execute on same DBMS with different settings
+- Compare result sets
+- Difference indicates logic bug in one system
+
+**Best For**: Cross-DBMS correctness verification, optimizer comparison.
+
+### EET (Equivalent Expression Transformation)
+
+**Concept**: EET tests whether semantically equivalent expressions produce identical results.
+
+**Algorithm**:
+- Generate expression E
+- Generate equivalent expression E' (e.g., `a AND b` → `NOT(NOT a OR NOT b)`)
+- Execute queries with both expressions
+- Results should be identical
+- Difference indicates expression evaluation bug
+
+**Best For**: Boolean logic bugs, NULL handling in expressions, DeMorgan's law bugs.
+
+## When to Choose Which Oracle
+
+| Testing Goal | Primary Oracle | Supporting Oracles |
+|--------------|----------------|-------------------|
+| **New DBMS integration** | QUERY_PARTITIONING | PQS, NoREC |
+| **Optimizer regression testing** | EDC, SONAR | NoREC, DQP |
+| **Performance regression** | CERT | NoREC |
+| **Constraint correctness** | EDC | DQE |
+| **Expression handling** | EET | TLP_WHERE |
+| **DML operations** | DQE | QUERY_PARTITIONING |
+| **Cross-version testing** | DQP | EDC |
+| **Stress testing** | FUZZER | NoREC |
+| **Quick bug hunting** | TLP_WHERE + NoREC | PQS |
+| **Comprehensive testing** | QUERY_PARTITIONING + EDC + EET + DQE | All others |
 
 ---
 
 # Version History
+
+## v0.1.84 (2026-04-30)
+- **New Documentation**: Comprehensive Oracle Reference Guide added
+  - Oracle Algorithm Comparison Table: Core algorithm, problem solved, applicable scenarios, reference papers
+  - EDC Oracle deep dive: Equivalent Database Construction concept and usage
+  - SONAR Oracle deep dive: Optimized vs unoptimized query comparison
+  - Oracle Selection Guide: When to choose which oracle for specific testing goals
+- **Oracle Support Update**: EDC and SONAR added to all supported DBMS tables
+  - MySQL: 16 oracles (added EDC, SONAR)
+  - PostgreSQL: 16 oracles (added EDC, SONAR)
+  - GaussDB-M: 16 oracles (added EDC, SONAR)
 
 ## v0.1.83 (2026-04-25)
 - **GaussDB-A/PG**: `--target-database` now REQUIRED
