@@ -25,6 +25,7 @@ import sqlancer.gaussdbm.oracle.GaussDBMTLPDistinctOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPGroupByOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPHavingOracle;
 import sqlancer.gaussdbm.oracle.eet.GaussDBMEETOracle;
+import sqlancer.gaussdbm.oracle.transaction.GaussDBMWriteCheckOracle;
 
 /**
  * GaussDB-M test oracles. Enum declaration order matches {@link sqlancer.mysql.MySQLOracleFactory} for CLI/help
@@ -140,6 +141,21 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
         @Override
         public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
             return new GaussDBMEDCOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * WriteCheck Oracle for transaction isolation level testing.
+     * Detects bugs in transaction execution by comparing schedules.
+     */
+    WRITE_CHECK {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMWriteCheckOracle(globalState);
         }
 
         @Override

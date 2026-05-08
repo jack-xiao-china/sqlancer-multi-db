@@ -1,6 +1,6 @@
 # SQLancer 中文用户指南
 
-**版本**: v0.1.84 (2026-04-30)  
+**版本**: v0.1.85 (2026-05-08)  
 **支持的数据库**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M 等 20+ 种数据库管理系统
 
 ## 简介
@@ -56,14 +56,14 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | 数据库 | 可用的测试 Oracle |
 |--------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, WRITE_CHECK, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
-| CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT |
+| CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT, WRITE_CHECK |
 | DuckDB | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING |
 | MariaDB | NOREC, DQP |
 
@@ -115,6 +115,7 @@ java -jar target/sqlancer-2.0.0.jar \
 | CODDTEST | 常量驱动的优化测试 | 中等 |
 | EDC | 等价数据库构建（约束相关测试） | 中等 |
 | SONAR | 优化与非优化查询对比 | 中等 |
+| WRITE_CHECK | 事务隔离级别正确性 | ~10 调度/秒 |
 | FUZZER | 随机查询生成 | ~3000 查询/秒 |
 
 ## MySQL 支持的数据类型
@@ -189,6 +190,7 @@ java -jar target/sqlancer-2.0.0.jar \
 | CODDTEST | 常量驱动的优化测试 | 中等 |
 | EDC | 等价数据库构建（约束相关测试） | 中等 |
 | SONAR | 优化与非优化查询对比 | 中等 |
+| WRITE_CHECK | 事务隔离级别正确性 | ~10 调度/秒 |
 | FUZZER | 随机查询生成 | ~3000 查询/秒 |
 
 ### PQS 和 CERT 推荐参数
@@ -327,6 +329,7 @@ GaussDB-A 使用 **模式隔离**（而非数据库隔离）：
 | DQP | 差异化查询计划 |
 | DQE | SELECT/UPDATE/DELETE 等价性 |
 | EET | 等价表达式转换 |
+| WRITE_CHECK | 事务隔离级别正确性测试 |
 | FUZZER | 随机查询生成 |
 
 ## GaussDB-A 支持的数据类型
@@ -459,6 +462,7 @@ GaussDB-M 使用 **数据库隔离**：
 | CODDTEST | 常量驱动的优化测试 |
 | EDC | 等价数据库构建（约束相关测试） |
 | SONAR | 优化与非优化查询对比 |
+| WRITE_CHECK | 事务隔离级别正确性测试 |
 | FUZZER | 随机查询生成 |
 
 ## GaussDB 兼容模式对比
@@ -548,6 +552,73 @@ java -jar sqlancer.jar gaussdb-m --oracle SONAR --num-tries 100
 
 ---
 
+## WRITE_CHECK Oracle
+
+### 概念
+
+WRITE_CHECK 是事务级别的测试 Oracle，用于检测数据库事务隔离级别实现中的 Bug。
+
+### 算法流程
+
+- 生成多个并发事务，包含 INSERT/UPDATE/DELETE 操作
+- 生成随机事务调度（语句交错执行顺序）
+- 使用指定隔离级别执行调度（SERIALIZABLE、REPEATABLE_READ、READ_COMMITTED）
+- 重放相同调度并比较最终数据库状态
+- 如果状态不同 → 隔离级别实现 Bug
+
+### 关键特性
+
+- 测试并发事务正确性
+- 检测幻读、不可重复读、脏读
+- 验证 COMMIT/ROLLBACK 语义
+- 随机调度生成测试不同交错场景
+
+### 可发现的 Bug 示例
+
+GaussDB-M SERIALIZABLE 隔离级别 Bug - 并发事务导致数据重复（预期 8 行，实际执行后 16 行）。
+
+### 使用方法
+
+```bash
+# MySQL WRITE_CHECK
+java -jar sqlancer.jar mysql --oracle WRITE_CHECK --num-tries 50
+
+# PostgreSQL WRITE_CHECK
+java -jar sqlancer.jar postgres --oracle WRITE_CHECK --num-tries 50
+
+# GaussDB-M WRITE_CHECK（已检测到隔离级别 Bug）
+java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=19995 \
+    gaussdb-m --oracle WRITE_CHECK --num-threads=1 --num-tries=10
+
+# GaussDB-A WRITE_CHECK
+java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=8000 \
+    gaussdb-a --target-database gaussdb_a_test --oracle WRITE_CHECK --num-tries=10
+```
+
+### 支持的隔离级别
+
+| 数据库 | 支持的隔离级别 |
+|--------|----------------|
+| MySQL | READ_UNCOMMITTED, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| PostgreSQL | READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| GaussDB-M | READ_UNCOMMITTED, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| GaussDB-A | READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| CockroachDB | SERIALIZABLE |
+
+### 事务选项（仅 CockroachDB）
+
+| 选项 | 默认值 | 说明 |
+|------|--------|------|
+| `--use-fixed-num-transaction` | false | 使用固定事务数量 |
+| `--num-transaction` | 2 | 生成的事务数量 |
+| `--num-schedule` | 10 | 测试的调度数量 |
+
+### 最佳应用场景
+
+隔离级别 Bug、并发 Bug、事务回滚 Bug、幻读检测。
+
+---
+
 ## TLP (三元逻辑分区)
 
 ### 概念
@@ -628,7 +699,9 @@ WHERE 子句逻辑 Bug、NULL 处理 Bug、类型转换 Bug。
 | **跨版本测试** | DQP | EDC |
 | **压力测试** | FUZZER | NoREC |
 | **快速 Bug 发现** | TLP_WHERE + NoREC | PQS |
-| **全面综合测试** | QUERY_PARTITIONING + EDC + EET + DQE | 所有其他 Oracle |
+| **事务隔离测试** | WRITE_CHECK | DQE |
+| **并发 Bug 检测** | WRITE_CHECK | CERT |
+| **全面综合测试** | QUERY_PARTITIONING + EDC + EET + DQE + WRITE_CHECK | 所有其他 Oracle |
 
 ---
 
@@ -808,6 +881,15 @@ java -Xmx4g -jar sqlancer.jar ...
 ---
 
 # 版本历史
+
+## v0.1.85 (2026-05-08)
+- **新增 Oracle**: WRITE_CHECK 事务级别测试 Oracle
+  - 通过并发调度测试检测事务隔离级别 Bug
+  - 支持 MySQL、PostgreSQL、GaussDB-M、GaussDB-A、CockroachDB
+  - 测试 SERIALIZABLE、REPEATABLE_READ、READ_COMMITTED、READ_UNCOMMITTED 隔离级别
+  - 成功检测到 GaussDB-M SERIALIZABLE 隔离级别 Bug（数据重复）
+- **Bug 修复**: BigDecimal 处理以兼容 GaussDB-M JDBC 驱动
+- **文档更新**: USER_GUIDE_CN.md 添加 WRITE_CHECK Oracle 章节
 
 ## v0.1.84 (2026-04-30)
 - **新增文档**：全面的 Oracle 参考指南

@@ -20,6 +20,7 @@ import sqlancer.gaussdba.oracle.ext.GaussDBATLPDistinctOracle;
 import sqlancer.gaussdba.oracle.ext.GaussDBATLPGroupByOracle;
 import sqlancer.gaussdba.oracle.tlp.GaussDBATLPAggregateOracle;
 import sqlancer.gaussdba.oracle.tlp.GaussDBATLPHavingOracle;
+import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckOracle;
 
 public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> {
 
@@ -127,5 +128,20 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
             return new GaussDBAFuzzer(globalState);
         }
-    }
+    },
+    /**
+     * WriteCheck Oracle for transaction isolation level testing.
+     * Detects bugs in transaction execution by comparing schedules.
+     */
+    WRITE_CHECK {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAWriteCheckOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    };
 }

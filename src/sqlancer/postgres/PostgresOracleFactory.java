@@ -27,6 +27,7 @@ import sqlancer.postgres.oracle.tlp.PostgresTLPAggregateOracle;
 import sqlancer.postgres.oracle.tlp.PostgresTLPHavingOracle;
 import sqlancer.postgres.oracle.ext.eet.PostgresEETOracle;
 import sqlancer.postgres.oracle.PostgresSonarOracle;
+import sqlancer.postgres.oracle.transaction.PostgresWriteCheckOracle;
 
 public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> {
     NOREC {
@@ -187,6 +188,21 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
             return new PostgresEDCOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * WriteCheck Oracle for transaction isolation level testing.
+     * Detects bugs in transaction execution by comparing schedules.
+     */
+    WRITE_CHECK {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresWriteCheckOracle(globalState);
         }
 
         @Override

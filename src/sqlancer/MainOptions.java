@@ -169,6 +169,21 @@ public class MainOptions {
     @Parameter(names = "--canonicalize-sql-strings", description = "Should canonicalize query string (add ';' at the end", arity = 1)
     private boolean canonicalizeSqlString = true; // NOPMD
 
+    @Parameter(names = "--use-fixed-num-transaction", description = "Specifies whether the fixed number of transactions is generated", arity = 1)
+    private boolean useFixedNumTransaction = false; // NOPMD
+
+    @Parameter(names = "--num-transaction", description = "Specifies the number of transactions to be generated for a database")
+    private int nrTransactions = 2; // NOPMD
+
+    @Parameter(names = "--num-schedule", description = "Specifies the number of schedules to be generated for a group of transactions")
+    private int nrSchedules = 10; // NOPMD
+
+    @Parameter(names = "--set-case", description = "Whether use a specified case", arity = 1)
+    private boolean setCase = false; // NOPMD
+
+    @Parameter(names = "--case-file", description = "Specifies the input file of the specified case")
+    private String caseFile = ""; // NOPMD
+
     public int getMaxExpressionDepth() {
         return maxExpressionDepth;
     }
@@ -380,6 +395,26 @@ public class MainOptions {
 
     public boolean canonicalizeSqlString() {
         return canonicalizeSqlString;
+    }
+
+    public boolean useFixedNumTransaction() {
+        return useFixedNumTransaction;
+    }
+
+    public int getNrTransactions() {
+        return nrTransactions;
+    }
+
+    public int getNrSchedules() {
+        return nrSchedules;
+    }
+
+    public boolean isSetCase() {
+        return setCase;
+    }
+
+    public String getCaseFile() {
+        return caseFile;
     }
 
 }

@@ -170,7 +170,8 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
         String createDbSql = "CREATE DATABASE " + databaseName + " DBCOMPATIBILITY 'M'";
         globalState.getState().logStatement(createDbSql);
-        globalState.getState().logStatement("USE " + databaseName);
+        // Note: GaussDB-M (PostgreSQL-based) does not support MySQL's "USE database" syntax
+        // We reconnect to the new database instead
 
         try (Statement s = con.createStatement()) {
             try {

@@ -13,6 +13,8 @@ import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPDistinctOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPExtendedWhereOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPGroupByOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPHavingOracle;
+import sqlancer.cockroachdb.oracle.transaction.CockroachDBWriteCheckOracle;
+import sqlancer.cockroachdb.oracle.transaction.CockroachDBWriteCheckReproduceOracle;
 import sqlancer.common.oracle.CERTOracle;
 import sqlancer.common.oracle.CompositeTestOracle;
 import sqlancer.common.oracle.NoRECOracle;
@@ -132,6 +134,20 @@ public enum CockroachDBOracleFactory implements OracleFactory<CockroachDBProvide
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    WRITE_CHECK {
+        @Override
+        public TestOracle<CockroachDBProvider.CockroachDBGlobalState> create(
+                CockroachDBProvider.CockroachDBGlobalState globalState) throws SQLException {
+            return new CockroachDBWriteCheckOracle(globalState);
+        }
+    },
+    WRITE_CHECK_REPRODUCE {
+        @Override
+        public TestOracle<CockroachDBProvider.CockroachDBGlobalState> create(
+                CockroachDBProvider.CockroachDBGlobalState globalState) throws SQLException {
+            return new CockroachDBWriteCheckReproduceOracle(globalState);
         }
     };
 

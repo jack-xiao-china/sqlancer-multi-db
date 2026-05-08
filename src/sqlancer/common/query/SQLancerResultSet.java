@@ -71,6 +71,10 @@ public class SQLancerResultSet implements Closeable {
         return rs.getMetaData();
     }
 
+    public ResultSet getRs() {
+        return rs;
+    }
+
     public void registerEpilogue(Runnable runnableEpilogue) {
         this.runnableEpilogue = runnableEpilogue;
     }

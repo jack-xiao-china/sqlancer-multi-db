@@ -1,5 +1,36 @@
 # SQLancer Release Notes
 
+## v2.0.36 | 2026-05-08
+- Bug Fix [WriteCheck Oracle]: Fixed BigDecimal handling in QueryResultUtil for GaussDB-M JDBC compatibility
+  - Root Cause: openGauss JDBC driver throws PSQLException when getObject() on DECIMAL columns with scale mismatch
+  - Error: "错误的转换值 BigDecimal : 17.59"
+  - Fix: Added DECIMAL/NUMERIC type detection with fallback to getString() for BigDecimal handling
+  - Affected: GaussDB-M WriteCheck Oracle when table contains DECIMAL columns
+- WriteCheck Oracle Integration Complete: All 4 DBMS tested successfully
+  - MySQL: WRITE_CHECK registered and functional
+  - PostgreSQL: WRITE_CHECK registered and functional
+  - GaussDB-M: WRITE_CHECK registered and functional (detects isolation level bugs)
+  - GaussDB-A: WRITE_CHECK registered and functional
+- Bug Detection: GaussDB-M WriteCheck successfully detected SERIALIZABLE isolation level bug
+  - Bug Report: Data duplication (8 rows expected, 16 rows actual) after transaction schedule execution
+  - Reproduction: See `docs/gaussdbm_serializable_bug_reproduce.sql` for minimal reproduction case
+
+## v2.0.35 | 2026-05-07
+- New Oracle Integration: WRITE_CHECK Transaction Oracle for CockroachDB
+  - Added transaction-level testing framework (`sqlancer.common.transaction` package)
+  - Added `TxBase` oracle base class for transaction oracles
+  - Added `CockroachDBWriteCheckOracle` - detects transaction isolation bugs
+  - Added `CockroachDBWriteCheckReproduceOracle` - reproduce specific test cases from file
+  - Supports concurrent transaction schedule generation and execution
+  - Detects bugs in SERIALIZABLE isolation level implementation
+- New Command-line Options for Transaction Testing:
+  - `--use-fixed-num-transaction`: Use fixed number of transactions per database
+  - `--num-transaction`: Number of transactions to generate (default: 2)
+  - `--num-schedule`: Number of schedules to test (default: 10)
+  - `--set-case`: Use specified test case from file
+  - `--case-file`: Path to test case file for reproduction
+- Compatibility: Fully compatible with existing oracles, no impact on current functionality
+
 ## v2.0.34 | 2026-04-30
 - Documentation Update: USER_GUIDE.md comprehensive Oracle Reference Guide
   - Added Oracle Algorithm Comparison Table with core algorithms, problems solved, applicable scenarios, reference papers

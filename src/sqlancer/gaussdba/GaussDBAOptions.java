@@ -14,7 +14,7 @@ public class GaussDBAOptions implements DBMSSpecificOptions<GaussDBAOracleFactor
     @Parameter(names = { "--help", "-h" }, description = "Lists all supported options for GaussDB A", help = true, hidden = true)
     public boolean help;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, DISTINCT, DQE, DQP, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, DISTINCT, DQE, DQP, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE, WRITE_CHECK]")
     public List<GaussDBAOracleFactory> oracles = Arrays.asList(GaussDBAOracleFactory.QUERY_PARTITIONING);
 
     @Parameter(names = "--enable-clob-blob", description = "Enable CLOB/BLOB types")

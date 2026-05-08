@@ -26,6 +26,7 @@ import sqlancer.mysql.oracle.MySQLTLPAggregateOracle;
 import sqlancer.mysql.oracle.MySQLTLPDistinctOracle;
 import sqlancer.mysql.oracle.MySQLTLPGroupByOracle;
 import sqlancer.mysql.oracle.MySQLTLPHavingOracle;
+import sqlancer.mysql.oracle.transaction.MySQLWriteCheckOracle;
 import sqlancer.mysql.oracle.eet.MySQLEETOracle;
 
 public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
@@ -177,6 +178,12 @@ public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true; // SONAR needs tables with data
+        }
+    },
+    WRITE_CHECK {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLWriteCheckOracle(globalState);
         }
     },
     QUERY_PARTITIONING {

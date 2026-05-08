@@ -1,6 +1,6 @@
 # SQLancer User Guide
 
-**Version**: v0.1.84 (2026-04-30)  
+**Version**: v0.1.85 (2026-05-08)  
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M, and 20+ other DBMS
 
 ## Introduction
@@ -56,14 +56,14 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | DBMS | Available Oracles |
 |------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, WRITE_CHECK, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
-| CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT |
+| CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT, WRITE_CHECK |
 | DuckDB | NOREC, WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, QUERY_PARTITIONING |
 | MariaDB | NOREC, DQP |
 
@@ -115,6 +115,7 @@ java -jar target/sqlancer-2.0.0.jar \
 | CODDTEST | Constant-driven optimization testing | Moderate |
 | EDC | Equivalent Database Construction (constraint-based testing) | Moderate |
 | SONAR | Optimized vs unoptimized query comparison | Moderate |
+| WRITE_CHECK | Transaction isolation level correctness | ~10 schedules/s |
 | FUZZER | Random query generation | ~3000 queries/s |
 
 ## MySQL Data Types
@@ -189,6 +190,7 @@ java -jar target/sqlancer-2.0.0.jar \
 | CODDTEST | Constant-driven optimization | Moderate |
 | EDC | Equivalent Database Construction (constraint-based testing) | Moderate |
 | SONAR | Optimized vs unoptimized query comparison | Moderate |
+| WRITE_CHECK | Transaction isolation level correctness | ~10 schedules/s |
 | FUZZER | Random queries | ~3000 queries/s |
 
 ### PQS and CERT Recommended Parameters
@@ -334,6 +336,7 @@ This follows Oracle's schema-based isolation pattern.
 | DQP | Differential Query Plans |
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
+| WRITE_CHECK | Transaction isolation level correctness |
 | FUZZER | Random query generation |
 
 ## GaussDB-A Data Types
@@ -510,6 +513,7 @@ This follows MySQL's database-based isolation pattern.
 | CODDTEST | Constant-driven optimization testing |
 | EDC | Equivalent Database Construction (constraint-based testing) |
 | SONAR | Optimized vs unoptimized query comparison |
+| WRITE_CHECK | Transaction isolation level correctness |
 | FUZZER | Random query generation |
 
 ## GaussDB-M Options
@@ -780,6 +784,60 @@ java -jar sqlancer.jar postgres --oracle SONAR --num-tries 100
 java -jar sqlancer.jar gaussdb-m --oracle SONAR --num-tries 100
 ```
 
+### WRITE_CHECK Oracle
+
+**Concept**: WRITE_CHECK is a transaction-level test oracle that detects bugs in database transaction isolation level implementations.
+
+**Algorithm**:
+- Generate multiple concurrent transactions with INSERT/UPDATE/DELETE operations
+- Generate random transaction schedules (statement interleaving order)
+- Execute schedule with specified isolation level (SERIALIZABLE, REPEATABLE_READ, READ_COMMITTED)
+- Replay the same schedule and compare final database states
+- If states differ → isolation level implementation bug
+
+**Key Features**:
+- Tests concurrent transaction correctness
+- Detects phantom reads, non-repeatable reads, dirty reads
+- Validates COMMIT/ROLLBACK semantics
+- Random schedule generation tests different interleaving scenarios
+
+**Example Bug Found**: GaussDB-M SERIALIZABLE isolation level bug - concurrent transactions cause data duplication (8 rows expected, 16 rows actual after schedule execution).
+
+**Usage**:
+```bash
+# MySQL WRITE_CHECK
+java -jar sqlancer.jar mysql --oracle WRITE_CHECK --num-tries 50
+
+# PostgreSQL WRITE_CHECK
+java -jar sqlancer.jar postgres --oracle WRITE_CHECK --num-tries 50
+
+# GaussDB-M WRITE_CHECK (detected isolation bug)
+java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=19995 \
+    gaussdb-m --oracle WRITE_CHECK --num-threads=1 --num-tries=10
+
+# GaussDB-A WRITE_CHECK
+java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=8000 \
+    gaussdb-a --target-database gaussdb_a_test --oracle WRITE_CHECK --num-tries=10
+```
+
+**Supported Isolation Levels**:
+| DBMS | Supported Isolation Levels |
+|------|---------------------------|
+| MySQL | READ_UNCOMMITTED, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| PostgreSQL | READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| GaussDB-M | READ_UNCOMMITTED, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| GaussDB-A | READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE |
+| CockroachDB | SERIALIZABLE |
+
+**Transaction Options** (CockroachDB only):
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--use-fixed-num-transaction` | false | Use fixed number of transactions per test |
+| `--num-transaction` | 2 | Number of transactions to generate |
+| `--num-schedule` | 10 | Number of schedules to test |
+
+**Best For**: Isolation level bugs, concurrency bugs, transaction rollback bugs, phantom read detection.
+
 ### TLP (Ternary Logic Partitioning)
 
 **Concept**: TLP uses metamorphic testing by partitioning query results into three logical categories.
@@ -875,11 +933,22 @@ java -jar sqlancer.jar gaussdb-m --oracle SONAR --num-tries 100
 | **Cross-version testing** | DQP | EDC |
 | **Stress testing** | FUZZER | NoREC |
 | **Quick bug hunting** | TLP_WHERE + NoREC | PQS |
-| **Comprehensive testing** | QUERY_PARTITIONING + EDC + EET + DQE | All others |
+| **Transaction isolation testing** | WRITE_CHECK | DQE |
+| **Concurrency bug detection** | WRITE_CHECK | CERT |
+| **Comprehensive testing** | QUERY_PARTITIONING + EDC + EET + DQE + WRITE_CHECK | All others |
 
 ---
 
 # Version History
+
+## v0.1.85 (2026-05-08)
+- **New Oracle**: WRITE_CHECK transaction-level test oracle
+  - Detects transaction isolation level bugs through concurrent schedule testing
+  - Supports MySQL, PostgreSQL, GaussDB-M, GaussDB-A, CockroachDB
+  - Tests SERIALIZABLE, REPEATABLE_READ, READ_COMMITTED, READ_UNCOMMITTED isolation levels
+  - Successfully detected GaussDB-M SERIALIZABLE isolation bug (data duplication)
+- **Bug Fix**: BigDecimal handling for GaussDB-M JDBC driver compatibility
+- **Documentation**: Updated USER_GUIDE.md with WRITE_CHECK Oracle section
 
 ## v0.1.84 (2026-04-30)
 - **New Documentation**: Comprehensive Oracle Reference Guide added
