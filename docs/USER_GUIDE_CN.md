@@ -1,14 +1,15 @@
 # SQLancer 中文用户指南
 
-**版本**: v0.1.85 (2026-05-08)  
+**版本**: v2.0.37 (2026-05-12)  
 **支持的数据库**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M 等 20+ 种数据库管理系统
 
 ## 简介
 
 SQLancer 是一款通过生成随机 SQL 查询来测试数据库管理系统并发现 Bug 的工具。本扩展版本包含：
 
-- **16 种测试 Oracle**：支持 MySQL、PostgreSQL 和 GaussDB（包括 EDC、Sonar、EET、DQE、DQP、CODDTEST）
+- **17 种测试 Oracle**：支持 MySQL、PostgreSQL 和 GaussDB（包括 EDC、Sonar、EET、DQE、DQP、CODDTEST、QPG）
 - **GaussDB 全面支持**：A 兼容模式（Oracle 风格）、PG 兼容模式、M 兼容模式（MySQL 风格）
+- **QPG Oracle**：查询计划引导测试，支持 MySQL、PostgreSQL、GaussDB-M、GaussDB-A
 - **扩展数据类型**：JSON、BLOB、时间类型、数组、枚举、空间类型
 - **国际化支持**：处理非英文服务器错误消息
 - **单 Jar 包封装**：所有依赖打包，直接运行 `java -jar`
@@ -619,6 +620,71 @@ java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=8000 \
 
 ---
 
+## QPG Oracle (Query Plan Guidance)
+
+### 概念
+
+QPG (Query Plan Guidance) 是一种基于查询计划的测试引导方法，通过探索未见过的查询计划类型来提高测试覆盖率。
+
+### 算法流程
+
+- 生成随机数据库状态（表、索引、数据）
+- 使用 EXPLAIN 获取查询计划
+- 解析查询计划提取操作类型（Seq Scan、Index Scan、Hash Join 等）
+- 使用强化学习奖励机制引导生成探索新的查询计划
+- 遇到新的查询计划类型 → 增加测试权重
+
+### 支持的数据库
+
+| 数据库 | EXPLAIN 格式 | 解析方式 |
+|--------|--------------|----------|
+| MySQL | `EXPLAIN FORMAT=JSON` | 解析 query_block.access_type |
+| PostgreSQL | `EXPLAIN (FORMAT JSON)` | BFS 遍历 Node Type |
+| GaussDB-M | `EXPLAIN (FORMAT JSON)` | PostgreSQL 风格 JSON 解析 |
+| GaussDB-A | `EXPLAIN (FORMAT JSON)` | PostgreSQL 风格 JSON 解析 |
+
+### 使用方法
+
+```bash
+# MySQL QPG 测试
+java -jar sqlancer.jar mysql --qpg-enable true --oracle NOREC --num-queries 100
+
+# PostgreSQL QPG 测试
+java -jar sqlancer.jar postgres --qpg-enable true --oracle NOREC --num-queries 100
+
+# GaussDB-M QPG 测试
+java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=xxx \
+    gaussdb-m --qpg-enable true --oracle NOREC --num-queries 100
+
+# GaussDB-A QPG 测试
+java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=xxx \
+    gaussdb-a --target-database gaussdb_a_test \
+    --qpg-enable true --oracle NOREC --num-queries 100
+```
+
+### QPG Actions
+
+QPG 通过执行以下 Actions 来修改数据库状态，引导生成不同的查询计划：
+
+| Action | 说明 |
+|--------|------|
+| INSERT | 插入数据行 |
+| UPDATE | 更新数据行 |
+| DELETE | 删除数据行 |
+| CREATE_INDEX | 创建索引（引导使用 Index Scan） |
+| DROP_INDEX | 删除索引（引导使用 Seq Scan） |
+| ALTER_TABLE | 修改表结构 |
+| ANALYZE_TABLE | 分析表统计信息 |
+| TRUNCATE | 清空表 |
+
+### 最佳应用场景
+
+- 优化器测试：引导生成不同查询计划
+- 索引测试：通过创建/删除索引测试不同访问路径
+- 综合测试：提高查询计划覆盖率
+
+---
+
 ## TLP (三元逻辑分区)
 
 ### 概念
@@ -881,6 +947,21 @@ java -Xmx4g -jar sqlancer.jar ...
 ---
 
 # 版本历史
+
+## v2.0.37 (2026-05-12)
+- **新增 QPG Oracle**: 查询计划引导测试
+  - 支持 MySQL、PostgreSQL、GaussDB-M、GaussDB-A
+  - MySQL 使用 `EXPLAIN FORMAT=JSON` + query_block 解析
+  - PostgreSQL/GaussDB 使用 `EXPLAIN (FORMAT JSON)` + Node Type BFS 解析
+  - 通过 Actions（INSERT/UPDATE/DELETE/CREATE_INDEX 等）引导查询计划生成
+- **Bug 修复**: QPG Action IgnoreMeException 处理
+  - GaussDBMDropIndexGenerator/GaussDBADropIndexGenerator 使用 getRandomTableOrBailout
+  - ANALYZE_TABLE/TRUNCATE 使用 getRandomTableNoViewOrBailout
+- **集成测试**: 所有数据库 QPG 功能验证通过
+  - MySQL: 21 queries, NoREC bug detected
+  - PostgreSQL: 成功运行
+  - GaussDB-M: 192 queries, 84% success rate
+  - GaussDB-A: 5785 queries, 21% success rate
 
 ## v0.1.85 (2026-05-08)
 - **新增 Oracle**: WRITE_CHECK 事务级别测试 Oracle

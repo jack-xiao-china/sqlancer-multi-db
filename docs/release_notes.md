@@ -1,5 +1,31 @@
 # SQLancer Release Notes
 
+## v2.0.37 | 2026-05-12
+- New Feature [QPG Oracle]: Query Plan Guidance support for MySQL, GaussDB-M, GaussDB-A
+  - MySQL: Added `getQueryPlan()`, `initializeWeightedAverageReward()`, `executeMutator()` methods
+    - Uses `EXPLAIN FORMAT=JSON` with MySQL-specific JSON structure parsing
+    - Parses `access_type` fields: ALL, index, range, ref, eq_ref, const
+  - GaussDB-M: Full QPG implementation with Action enumeration and DDL generators
+    - Uses PostgreSQL-style `EXPLAIN (FORMAT JSON)` for query plan extraction
+    - New generators: GaussDBMIndexGenerator, GaussDBMDropIndexGenerator, GaussDBMAlterTable
+    - Actions: INSERT, UPDATE, DELETE, CREATE_INDEX, DROP_INDEX, ALTER_TABLE, ANALYZE_TABLE, TRUNCATE
+  - GaussDB-A: QPG implementation for Oracle compatibility mode
+    - Uses PostgreSQL-style `EXPLAIN (FORMAT JSON)` (verified on actual GaussDB-A instance)
+    - New generators: GaussDBAIndexGenerator, GaussDBADropIndexGenerator, GaussDBAAlterTable
+    - Actions: INSERT, UPDATE, DELETE, CREATE_INDEX, DROP_INDEX, ALTER_TABLE, ANALYZE, TRUNCATE
+  - Usage: `java -jar sqlancer.jar mysql --qpg-enable true --oracle NOREC`
+  - Testing: New test files in `test/sqlancer/qpg/mysql/`, `test/sqlancer/qpg/gaussdbm/`, `test/sqlancer/qpg/gaussdba/`
+- Bug Fix [QPG Integration]: Fixed IgnoreMeException handling in GaussDB-M/A Action generators
+  - Issue: GaussDBMDropIndexGenerator used `getRandomTable(predicate)` which threw IllegalArgumentException on empty list
+  - Fix: Changed to `getRandomTableOrBailout(predicate)` to properly throw IgnoreMeException
+  - Issue: ANALYZE_TABLE/TRUNCATE actions used `getRandomTable()` without bailout handling
+  - Fix: Changed to `getRandomTableNoViewOrBailout()` for proper error handling
+  - Integration Test Results:
+    - MySQL: QPG working, 21 queries executed, detected NoREC bug
+    - PostgreSQL: QPG working successfully
+    - GaussDB-M: QPG working, 192 queries executed, 84% success rate
+    - GaussDB-A: QPG working, 5785 queries executed, 21% success rate
+
 ## v2.0.36 | 2026-05-08
 - Bug Fix [WriteCheck Oracle]: Fixed BigDecimal handling in QueryResultUtil for GaussDB-M JDBC compatibility
   - Root Cause: openGauss JDBC driver throws PSQLException when getObject() on DECIMAL columns with scale mismatch

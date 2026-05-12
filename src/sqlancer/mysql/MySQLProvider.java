@@ -1,12 +1,16 @@
 package sqlancer.mysql;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auto.service.AutoService;
 
 import sqlancer.AbstractAction;
@@ -21,11 +25,13 @@ import sqlancer.common.DBMSCommon;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLQueryProvider;
+import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
 import sqlancer.mysql.MySQLSchema.MySQLTable;
 import sqlancer.mysql.gen.MySQLAlterTable;
 import sqlancer.mysql.gen.MySQLDeleteGenerator;
 import sqlancer.mysql.gen.MySQLDropIndex;
+import sqlancer.mysql.gen.MySQLExplainGenerator;
 import sqlancer.mysql.gen.MySQLInsertGenerator;
 import sqlancer.mysql.gen.MySQLSetGenerator;
 import sqlancer.mysql.gen.MySQLTableGenerator;
@@ -246,6 +252,120 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
             globalState.executeStatement(queryAddRows);
         }
         return true;
+    }
+
+    // ==================== QPG (Query Plan Guidance) Methods ====================
+
+    @Override
+    public String getQueryPlan(String selectStr, MySQLGlobalState globalState) throws Exception {
+        String queryPlan = "";
+        if (globalState.getOptions().logEachSelect()) {
+            globalState.getLogger().writeCurrent(selectStr);
+            try {
+                globalState.getLogger().getCurrentFileWriter().flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        SQLQueryAdapter q = new SQLQueryAdapter(MySQLExplainGenerator.explain(selectStr), null);
+        try (SQLancerResultSet rs = q.executeAndGet(globalState)) {
+            if (rs != null) {
+                while (rs.next()) {
+                    queryPlan += rs.getString(1);
+                }
+            }
+        } catch (SQLException | AssertionError e) {
+            queryPlan = "";
+        }
+        return formatQueryPlan(queryPlan);
+    }
+
+    @Override
+    protected double[] initializeWeightedAverageReward() {
+        return new double[Action.values().length];
+    }
+
+    @Override
+    protected void executeMutator(int index, MySQLGlobalState globalState) throws Exception {
+        SQLQueryAdapter queryMutateTable = Action.values()[index].getQuery(globalState);
+        globalState.executeStatement(queryMutateTable);
+    }
+
+    /**
+     * Format MySQL EXPLAIN JSON output into a simplified string of operation types.
+     * MySQL JSON structure differs from PostgreSQL:
+     * - Root node: "query_block"
+     * - Table access: "table" node with "access_type" field
+     * - Join: "nested_loop" node
+     * - Sorting: "ordering_operation" node
+     * - Grouping: "grouping_operation" node
+     *
+     * @param queryPlan the raw JSON string from EXPLAIN FORMAT=JSON
+     * @return formatted query plan string
+     */
+    public String formatQueryPlan(String queryPlan) throws IOException {
+        if (queryPlan == null || queryPlan.isEmpty()) {
+            return "";
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(queryPlan);
+        List<String> nodeTypes = extractMySQLNodeTypes(root);
+        return String.join(" ", nodeTypes);
+    }
+
+    /**
+     * Extract node types from MySQL EXPLAIN JSON using recursive traversal.
+     */
+    private List<String> extractMySQLNodeTypes(JsonNode node) {
+        List<String> result = new ArrayList<>();
+        if (node.has("query_block")) {
+            extractMySQLNodeTypesRecursive(node.get("query_block"), result);
+        }
+        return result;
+    }
+
+    /**
+     * Recursively extract operation types from MySQL EXPLAIN JSON nodes.
+     */
+    private void extractMySQLNodeTypesRecursive(JsonNode node, List<String> result) {
+        if (node == null) {
+            return;
+        }
+        // Extract table access type
+        if (node.has("table")) {
+            JsonNode table = node.get("table");
+            if (table.has("access_type")) {
+                result.add(table.get("access_type").asText());
+            }
+        }
+        // Handle nested loop (join operations)
+        if (node.has("nested_loop")) {
+            result.add("nested_loop");
+            JsonNode nestedLoop = node.get("nested_loop");
+            if (nestedLoop.isArray()) {
+                for (JsonNode child : nestedLoop) {
+                    extractMySQLNodeTypesRecursive(child, result);
+                }
+            }
+        }
+        // Handle ordering operation
+        if (node.has("ordering_operation")) {
+            result.add("ordering_operation");
+            extractMySQLNodeTypesRecursive(node.get("ordering_operation"), result);
+        }
+        // Handle grouping operation
+        if (node.has("grouping_operation")) {
+            result.add("grouping_operation");
+            extractMySQLNodeTypesRecursive(node.get("grouping_operation"), result);
+        }
+        // Handle distinct operation
+        if (node.has("duplicates_removal")) {
+            result.add("duplicates_removal");
+        }
+        // Handle materialized subqueries
+        if (node.has("materialized_from_subquery")) {
+            result.add("materialized_from_subquery");
+        }
     }
 
 }

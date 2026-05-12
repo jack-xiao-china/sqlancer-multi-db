@@ -1,12 +1,19 @@
 package sqlancer.gaussdba;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 import java.util.Properties;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.auto.service.AutoService;
 
 import sqlancer.DatabaseProvider;
@@ -14,9 +21,16 @@ import sqlancer.MainOptions;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.SQLProviderAdapter;
+import sqlancer.AbstractAction;
 import sqlancer.common.DBMSCommon;
 import sqlancer.common.query.SQLQueryAdapter;
+import sqlancer.common.query.SQLQueryProvider;
+import sqlancer.common.query.SQLancerResultSet;
+import sqlancer.gaussdba.gen.GaussDBAAlterTable;
 import sqlancer.gaussdba.gen.GaussDBADeleteGenerator;
+import sqlancer.gaussdba.gen.GaussDBADropIndexGenerator;
+import sqlancer.gaussdba.gen.GaussDBAExplainGenerator;
+import sqlancer.gaussdba.gen.GaussDBAIndexGenerator;
 import sqlancer.gaussdba.gen.GaussDBAInsertGenerator;
 import sqlancer.gaussdba.gen.GaussDBATableGenerator;
 import sqlancer.gaussdba.gen.GaussDBAUpdateGenerator;
@@ -28,6 +42,63 @@ public class GaussDBAProvider extends SQLProviderAdapter<GaussDBAGlobalState, Ga
 
     public GaussDBAProvider() {
         super(GaussDBAGlobalState.class, GaussDBAOptions.class);
+    }
+
+    // ==================== Action Enumeration for QPG ====================
+    public enum Action implements AbstractAction<GaussDBAGlobalState> {
+        INSERT(GaussDBAInsertGenerator::insertRow),
+        UPDATE((g) -> GaussDBAUpdateGenerator.create(g)),
+        DELETE((g) -> GaussDBADeleteGenerator.create(g)),
+        CREATE_INDEX(GaussDBAIndexGenerator::create),
+        DROP_INDEX(GaussDBADropIndexGenerator::generate),
+        ALTER_TABLE(GaussDBAAlterTable::create),
+        ANALYZE((g) -> new SQLQueryAdapter("ANALYZE " + g.getSchema().getRandomTableNoViewOrBailout().getName())),
+        TRUNCATE((g) -> new SQLQueryAdapter("TRUNCATE TABLE " + g.getSchema().getRandomTableNoViewOrBailout().getName()));
+
+        private final SQLQueryProvider<GaussDBAGlobalState> sqlQueryProvider;
+
+        Action(SQLQueryProvider<GaussDBAGlobalState> sqlQueryProvider) {
+            this.sqlQueryProvider = sqlQueryProvider;
+        }
+
+        @Override
+        public SQLQueryAdapter getQuery(GaussDBAGlobalState globalState) throws Exception {
+            return sqlQueryProvider.getQuery(globalState);
+        }
+    }
+
+    // Map actions to number of executions per database generation (used by QPG)
+    @SuppressWarnings("unused")
+    private static int mapActions(GaussDBAGlobalState globalState, Action a) {
+        Randomly r = globalState.getRandomly();
+        int nrPerformed;
+        switch (a) {
+        case INSERT:
+            nrPerformed = r.getInteger(1, globalState.getOptions().getMaxNumberInserts());
+            break;
+        case UPDATE:
+        case DELETE:
+            nrPerformed = r.getInteger(0, 10);
+            break;
+        case CREATE_INDEX:
+            nrPerformed = r.getInteger(0, 5);
+            break;
+        case DROP_INDEX:
+            nrPerformed = r.getInteger(0, 2);
+            break;
+        case ALTER_TABLE:
+            nrPerformed = r.getInteger(0, 5);
+            break;
+        case ANALYZE:
+            nrPerformed = r.getInteger(0, 2);
+            break;
+        case TRUNCATE:
+            nrPerformed = r.getInteger(0, 1);
+            break;
+        default:
+            throw new AssertionError(a);
+        }
+        return nrPerformed;
     }
 
     private static synchronized void loadDriver() {
@@ -252,6 +323,83 @@ public class GaussDBAProvider extends SQLProviderAdapter<GaussDBAGlobalState, Ga
             }
         }
         return true;
+    }
+
+    // ==================== QPG (Query Plan Guidance) Methods ====================
+
+    @Override
+    public String getQueryPlan(String selectStr, GaussDBAGlobalState globalState) throws Exception {
+        String queryPlan = "";
+        if (globalState.getOptions().logEachSelect()) {
+            globalState.getLogger().writeCurrent(selectStr);
+            try {
+                globalState.getLogger().getCurrentFileWriter().flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        SQLQueryAdapter q = new SQLQueryAdapter(GaussDBAExplainGenerator.explain(selectStr), null);
+        try (SQLancerResultSet rs = q.executeAndGet(globalState)) {
+            if (rs != null) {
+                while (rs.next()) {
+                    queryPlan += rs.getString(1);
+                }
+            }
+        } catch (SQLException | AssertionError e) {
+            queryPlan = "";
+        }
+        return formatQueryPlan(queryPlan);
+    }
+
+    @Override
+    protected double[] initializeWeightedAverageReward() {
+        return new double[Action.values().length];
+    }
+
+    @Override
+    protected void executeMutator(int index, GaussDBAGlobalState globalState) throws Exception {
+        SQLQueryAdapter queryMutateTable = Action.values()[index].getQuery(globalState);
+        globalState.executeStatement(queryMutateTable);
+    }
+
+    /**
+     * Format PostgreSQL-style EXPLAIN JSON output into a simplified string of node types.
+     * Uses BFS traversal to extract "Node Type" from each plan node.
+     * Note: This assumes GaussDB-A supports PostgreSQL-style EXPLAIN (FORMAT JSON).
+     * If Oracle compatibility mode requires different syntax, this needs adjustment.
+     *
+     * @param queryPlan the raw JSON string from EXPLAIN (FORMAT JSON)
+     * @return formatted query plan string
+     */
+    public String formatQueryPlan(String queryPlan) throws IOException {
+        if (queryPlan == null || queryPlan.isEmpty()) {
+            return "";
+        }
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(queryPlan).get(0).get("Plan");
+        List<String> nodeTypes = extractNodeTypesIterative(root);
+        return String.join(" ", nodeTypes);
+    }
+
+    /**
+     * BFS algorithm for traversing the Json Query Plan.
+     */
+    private static List<String> extractNodeTypesIterative(JsonNode root) {
+        List<String> result = new ArrayList<>();
+        Queue<JsonNode> queue = new LinkedList<>();
+        queue.add(root);
+        while (!queue.isEmpty()) {
+            JsonNode node = queue.poll();
+            if (node.has("Node Type")) {
+                result.add(node.get("Node Type").asText());
+            }
+            if (node.has("Plans") && node.get("Plans").isArray()) {
+                for (JsonNode plan : node.get("Plans")) {
+                    queue.add(plan);
+                }
+            }
+        }
+        return result;
     }
 
     public static void printOracleHelp() {
