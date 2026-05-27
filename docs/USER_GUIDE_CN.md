@@ -57,11 +57,11 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | 数据库 | 可用的测试 Oracle |
 |--------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, WRITE_CHECK, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, TX_INFER, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, WRITE_CHECK, FUCCI, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, TX_INFER, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
 | CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT, WRITE_CHECK |
@@ -748,6 +748,79 @@ PQS 选择一个 "pivot" 行并生成应该明确返回该行的查询。
 
 WHERE 子句逻辑 Bug、NULL 处理 Bug、类型转换 Bug。
 
+### EET 变体（DML 操作）
+
+EET 有三个变体，将等价表达式变换应用于 DML 语句而非 SELECT 查询：
+
+**EET_UPDATE**: 测试 UPDATE 使用等价 WHERE  predicates 时是否产生相同的行修改。
+**EET_DELETE**: 测试 DELETE 使用等价 WHERE predicates 时是否删除相同的行。
+**EET_INSERT_SELECT**: 测试 INSERT...SELECT 使用等价表达式时是否插入相同的数据。
+
+**算法**（所有变体共享）：
+- 在 predicate/选择列表中生成包含表达式 E 的 DML 语句
+- 应用 EET 变换生成等价表达式 E'
+- 在数据库的相同副本上执行两个 DML 语句
+- 比较结果表状态 — 差异表示表达式求值 Bug
+
+**支持数据库**：MySQL、PostgreSQL、GaussDB-A、GaussDB-M
+
+**使用示例**：
+```bash
+java -jar sqlancer.jar mysql --oracle EET_UPDATE --num-queries 50
+java -jar sqlancer.jar postgres --oracle EET_DELETE --num-queries 50
+java -jar sqlancer.jar gaussdba --oracle EET_INSERT_SELECT --num-queries 50 --target-database gaussdb_a_test
+```
+
+**最适用于**：DML 特定表达式 Bug、UPDATE/DELETE predicate 中的优化器 Bug、INSERT...SELECT 求值 Bug。
+
+### TX_INFER（MVCC 版本推断）
+
+**概念**：TX_INFER 使用辅助版本跟踪表来推断特定隔离级别下的预期事务结果，检测 MVCC（多版本并发控制）实现 Bug。
+
+**算法**：
+- 创建版本跟踪表，记录行修改
+- 在特定隔离级别下执行并发事务
+- 使用版本数据计算每个事务的预期结果
+- 将实际 DBMS 结果与推断预期进行比较
+- 差异表示隔离级别或 MVCC 实现 Bug
+
+**支持数据库**：MySQL、GaussDB-M
+
+**使用示例**：
+```bash
+java -jar sqlancer.jar mysql --oracle TX_INFER --num-queries 100
+java -jar sqlancer.jar gaussdbm --oracle TX_INFER --num-queries 100
+```
+
+**最适用于**：MVCC Bug、隔离级别违反、并发事务异常。
+
+### FUCCI（MVCC 测试）
+
+**概念**：FUCCI 结合三种 MVCC 测试方法 — 差分测试（DT）、蜕变测试（MT）和约束求解（CS） — 检测并发和隔离 Bug。
+
+**算法**（取决于变体）：
+- **DT**：比较相同调度在不同隔离级别下的结果
+- **MT**：比较等价但重排序的调度结果
+- **CS**：使用约束求解验证调度属性
+- **ALL**：运行所有三种变体
+
+**支持数据库**：MySQL、PostgreSQL、GaussDB-A、GaussDB-M
+
+**选项**：
+| 选项 | 值 | 说明 |
+|------|-----|------|
+| `--fucci-oracle-type` | DT, MT, CS, ALL | 使用哪种 FUCCI 变体 |
+| `--fucci-isolation-level` | RANDOM, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE | 调度的隔离级别 |
+| `--fucci-schedule-count` | 任意整数 | 每次测试的调度数量（默认: 10） |
+
+**使用示例**：
+```bash
+java -jar sqlancer.jar mysql --oracle FUCCI --fucci-oracle-type DT --fucci-isolation-level SERIALIZABLE
+java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-schedule-count 20
+```
+
+**最适用于**：隔离级别 Bug、并发异常、调度依赖 Bug。
+
 ---
 
 ## Oracle 选择决策表
@@ -761,12 +834,15 @@ WHERE 子句逻辑 Bug、NULL 处理 Bug、类型转换 Bug。
 | **性能回归测试** | CERT | NoREC |
 | **约束正确性测试** | EDC | DQE |
 | **表达式处理测试** | EET | TLP_WHERE |
+| **DML 表达式处理** | EET_UPDATE, EET_DELETE | EET, DQE |
 | **DML 操作测试** | DQE | QUERY_PARTITIONING |
 | **跨版本测试** | DQP | EDC |
 | **压力测试** | FUZZER | NoREC |
 | **快速 Bug 发现** | TLP_WHERE + NoREC | PQS |
 | **事务隔离测试** | WRITE_CHECK | DQE |
-| **并发 Bug 检测** | WRITE_CHECK | CERT |
+| **并发 Bug 检测** | WRITE_CHECK, FUCCI | CERT |
+| **MVCC 版本追踪** | TX_INFER | WRITE_CHECK |
+| **优化器覆盖率** | QPG | CERT, EET |
 | **全面综合测试** | QUERY_PARTITIONING + EDC + EET + DQE + WRITE_CHECK | 所有其他 Oracle |
 
 ---
@@ -947,6 +1023,18 @@ java -Xmx4g -jar sqlancer.jar ...
 ---
 
 # 版本历史
+
+## v2.0.60 (2026-05-27)
+- **GaussDB-M EET 对齐**：ExpressionTree 从16种扩展到32种节点类型，匹配 MySQL 覆盖水平
+  - 新增14种表达式级节点（BinaryArithmetic, Cast, ComputableFunction, JsonFunction, TemporalFunction, WindowFunction, PostfixText, ScalarSubquery, IfFunction, OracleAlias, OracleExpressionBag, Join, DerivedTable）
+  - 新增 ManuelPredicate 叶节点
+  - 实现 createCoalesce, isCoalesce, getCoalesceArguments
+- **文档更新**：添加 EET 变体（EET_UPDATE/EET_DELETE/EET_INSERT_SELECT）、TX_INFER、FUCCI 深度解析章节
+
+## v2.0.59 (2026-05-27)
+- **EET Oracle 对齐原生工具**：IN→EXISTS 变换支持 UNION 子查询（全方言）
+- **isQueryLevelNode 机制**：查询级节点递归变换内部表达式但不做 CASE WHEN wrapping
+- **GaussDB-A EET 扩展**：Rules 1-6 wrapping transforms, ExpressionTree 12→24+, MINUS→NOT EXISTS, IN→EXISTS UNION, createCoalesce 实现
 
 ## v2.0.37 (2026-05-12)
 - **新增 QPG Oracle**: 查询计划引导测试

@@ -17,14 +17,19 @@ import sqlancer.gaussdbm.ast.GaussDBBinaryLogicalOperation;
 import sqlancer.gaussdbm.ast.GaussDBBinaryLogicalOperation.GaussDBBinaryLogicalOperator;
 import sqlancer.gaussdbm.ast.GaussDBCaseWhen;
 import sqlancer.gaussdbm.ast.GaussDBColumnReference;
+import sqlancer.gaussdbm.ast.GaussDBComputableFunction;
+import sqlancer.gaussdbm.ast.GaussDBComputableFunction.GaussDBFunction;
 import sqlancer.gaussdbm.ast.GaussDBConstant;
 import sqlancer.gaussdbm.ast.GaussDBExists;
 import sqlancer.gaussdbm.ast.GaussDBExpression;
 import sqlancer.gaussdbm.ast.GaussDBInOperation;
+import sqlancer.gaussdbm.ast.GaussDBManuelPredicate;
 import sqlancer.gaussdbm.ast.GaussDBPrintedExpression;
 import sqlancer.gaussdbm.ast.GaussDBSelect;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
 import sqlancer.gaussdbm.ast.GaussDBText;
+import sqlancer.gaussdbm.ast.GaussDBUnionSelect;
+import sqlancer.gaussdbm.ast.GaussDBWithSelect;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPostfixOperation;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPostfixOperation.UnaryPostfixOperator;
 import sqlancer.gaussdbm.ast.GaussDBUnaryPrefixOperation;
@@ -138,12 +143,20 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
     public boolean isBooleanLike(GaussDBExpression expr) {
         return expr instanceof GaussDBBinaryLogicalOperation || expr instanceof GaussDBBinaryComparisonOperation
                 || expr instanceof GaussDBUnaryPrefixOperation || expr instanceof GaussDBUnaryPostfixOperation
-                || expr instanceof GaussDBInOperation || expr instanceof GaussDBExists;
+                || expr instanceof GaussDBInOperation || expr instanceof GaussDBExists
+                || expr instanceof GaussDBBetweenOperation;
     }
 
     @Override
     public boolean isRule7NoChange(GaussDBExpression expr) {
-        return expr instanceof GaussDBTableReference || expr instanceof GaussDBText;
+        return expr instanceof GaussDBTableReference || expr instanceof GaussDBText
+                || expr instanceof GaussDBManuelPredicate;
+    }
+
+    @Override
+    public boolean isQueryLevelNode(GaussDBExpression expr) {
+        return expr instanceof GaussDBUnionSelect || expr instanceof GaussDBWithSelect
+                || expr instanceof GaussDBSelect;
     }
 
     @Override
@@ -271,6 +284,42 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
             return null;
         }
         GaussDBExpression subquery = in.getListElements().get(0);
+        GaussDBExpression lhs = in.getExpr();
+
+        // Handle UNION subquery (matching native EET in_query.cc lines 108-139)
+        if (subquery instanceof GaussDBUnionSelect) {
+            GaussDBUnionSelect union = (GaussDBUnionSelect) subquery;
+            List<GaussDBSelect> modifiedBranches = new java.util.ArrayList<>();
+            for (GaussDBSelect branch : union.getBranches()) {
+                if (branch.getFetchColumns() == null || branch.getFetchColumns().isEmpty()) {
+                    return null;
+                }
+                GaussDBExpression branchSelected = branch.getFetchColumns().get(0);
+                GaussDBExpression eqExpr = new GaussDBBinaryComparisonOperation(branchSelected, lhs,
+                        BinaryComparisonOperator.EQUALS);
+                GaussDBExpression branchPredicate = branch.getWhereClause();
+                GaussDBExpression newPredicate;
+                if (branchPredicate != null) {
+                    newPredicate = new GaussDBBinaryLogicalOperation(eqExpr, branchPredicate,
+                            GaussDBBinaryLogicalOperator.AND);
+                } else {
+                    newPredicate = eqExpr;
+                }
+                GaussDBSelect modifiedBranch = shallowCopyGaussDBSelect(branch);
+                modifiedBranch.setWhereClause(newPredicate);
+                modifiedBranches.add(modifiedBranch);
+            }
+            GaussDBExpression modifiedUnion = new GaussDBUnionSelect(modifiedBranches, union.isUnionAll());
+            GaussDBExpression existsExpr = new GaussDBExists(modifiedUnion);
+            // CASE WHEN (lhs IN subquery) IS NOT NULL THEN EXISTS ELSE NULL END
+            GaussDBExpression originalIn = new GaussDBInOperation(lhs, List.of(subquery), in.isTrue());
+            GaussDBExpression isNotNull = new GaussDBUnaryPostfixOperation(originalIn,
+                    UnaryPostfixOperator.IS_NOT_NULL);
+            GaussDBExpression nullVal = GaussDBConstant.createNullConstant();
+            return new GaussDBCaseWhen(isNotNull, existsExpr, nullVal);
+        }
+
+        // Handle simple SELECT subquery
         if (!(subquery instanceof GaussDBSelect)) {
             return null;
         }
@@ -279,7 +328,6 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
             return null;
         }
         GaussDBExpression selected = select.getFetchColumns().get(0);
-        GaussDBExpression lhs = in.getExpr();
         GaussDBExpression predicate = select.getWhereClause();
         // (selected = lhs) AND predicate
         GaussDBExpression eqExpr = new GaussDBBinaryComparisonOperation(selected, lhs,
@@ -457,7 +505,21 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
 
     @Override
     public GaussDBExpression createCoalesce(GaussDBExpression[] args) {
-        return null; // Stub
+        // COALESCE(a,b) → CASE WHEN a IS NOT NULL THEN a ELSE b END
+        // COALESCE(a,b,c) → CASE WHEN a IS NOT NULL THEN a ELSE COALESCE(b,c)
+        if (args == null || args.length < 2) {
+            return null;
+        }
+        if (args.length == 2) {
+            GaussDBExpression isNotNull = new GaussDBUnaryPostfixOperation(args[0], UnaryPostfixOperator.IS_NOT_NULL);
+            return new GaussDBCaseWhen(isNotNull, args[0], args[1]);
+        }
+        // Recursive: CASE WHEN args[0] IS NOT NULL THEN args[0] ELSE COALESCE(args[1..n])
+        GaussDBExpression[] remaining = new GaussDBExpression[args.length - 1];
+        System.arraycopy(args, 1, remaining, 0, remaining.length);
+        GaussDBExpression innerCoalesce = createCoalesce(remaining);
+        GaussDBExpression isNotNull = new GaussDBUnaryPostfixOperation(args[0], UnaryPostfixOperator.IS_NOT_NULL);
+        return new GaussDBCaseWhen(isNotNull, args[0], innerCoalesce);
     }
 
     @Override
@@ -471,16 +533,23 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
 
     @Override
     public boolean isCoalesce(GaussDBExpression expr) {
-        return false; // Stub
+        if (expr instanceof GaussDBComputableFunction) {
+            return ((GaussDBComputableFunction) expr).getFunction() == GaussDBFunction.COALESCE;
+        }
+        return false;
     }
 
     @Override
     public boolean isNullif(GaussDBExpression expr) {
-        return false; // Stub
+        return false; // GaussDB-M has no separate NULLIF AST node
     }
 
     @Override
     public GaussDBExpression[] getCoalesceArguments(GaussDBExpression expr) {
+        if (expr instanceof GaussDBComputableFunction
+                && ((GaussDBComputableFunction) expr).getFunction() == GaussDBFunction.COALESCE) {
+            return ((GaussDBComputableFunction) expr).getArguments().toArray(new GaussDBExpression[0]);
+        }
         return null;
     }
 

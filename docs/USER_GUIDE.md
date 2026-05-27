@@ -56,11 +56,11 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | DBMS | Available Oracles |
 |------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, WRITE_CHECK, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, TX_INFER, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, WRITE_CHECK, FUCCI, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, CODDTEST, EDC, SONAR, WRITE_CHECK, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, TX_INFER, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
 | CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT, WRITE_CHECK |
@@ -289,8 +289,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO root;
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 8000 \
-    --username root --password password \
-    --password your_password \
+    --username root --password your_password \
     gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 ```
 
@@ -366,8 +365,7 @@ This follows Oracle's schema-based isolation pattern.
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 8000 \
-    --username root --password password \
-    --username root --password password \
+    --username root --password your_password \
     --num-tries 10 \
     --timeout-seconds 300 \
     gaussdb-a \
@@ -400,8 +398,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 8000 \
-    --username root --password password \
-    --password your_password \
+    --username root --password your_password \
     gaussdb-pg --target-database gaussdb_pg_test --oracle QUERY_PARTITIONING
 ```
 
@@ -456,8 +453,7 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 java -jar target/sqlancer-2.0.0.jar \
     --host localhost \
     --port 8000 \
-    --username root --password password \
-    --username root --password password \
+    --username root --password your_password \
     gaussdb-pg \
     --target-database gaussdb_pg_test \
     --enable-time-types \
@@ -920,6 +916,113 @@ java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=8000 \
 
 **Best For**: Boolean logic bugs, NULL handling in expressions, DeMorgan's law bugs.
 
+### EET Variants (DML Operations)
+
+EET has three variants that apply equivalent expression transformation to DML statements rather than SELECT queries:
+
+**EET_UPDATE**: Tests whether UPDATE with equivalent WHERE predicates produces identical row modifications.
+**EET_DELETE**: Tests whether DELETE with equivalent WHERE predicates removes identical rows.
+**EET_INSERT_SELECT**: Tests whether INSERT...SELECT with equivalent expressions inserts identical data.
+
+**Algorithm** (shared by all variants):
+- Generate DML statement with expression E in predicate/select list
+- Apply EET transformation to produce equivalent expression E'
+- Execute both DML statements on identical copies of the database
+- Compare resulting table states — differences indicate an expression evaluation bug
+
+**Supported DBMS**: MySQL, PostgreSQL, GaussDB-A, GaussDB-M
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --oracle EET_UPDATE --num-queries 50
+java -jar sqlancer.jar postgres --oracle EET_DELETE --num-queries 50
+java -jar sqlancer.jar gaussdba --oracle EET_INSERT_SELECT --num-queries 50 --target-database gaussdb_a_test
+```
+
+**Best For**: DML-specific expression bugs, optimizer bugs in UPDATE/DELETE predicates, INSERT...SELECT evaluation bugs.
+
+### QPG (Query Plan Guidance)
+
+**Concept**: QPG is an experimental feature that guides test generation toward achieving diverse query execution plans, improving the coverage of database optimizer code paths.
+
+**Algorithm**:
+- Track query execution plans (using EXPLAIN) for each generated query
+- Compute a weighted average reward based on plan novelty
+- When no new plans are discovered for `--qpg-max-interval` iterations, mutate tables (INSERT, UPDATE, DELETE, CREATE INDEX, etc.) to create new data/index distributions
+- Balance exploration (random mutator selection with probability `--qpg-selection-probability`) vs exploitation (reward-weighted selection)
+
+**QPG Actions**:
+| Action | Description |
+|--------|-------------|
+| INSERT | Insert new rows to change data distribution |
+| UPDATE | Update existing rows |
+| DELETE | Delete rows from tables |
+| CREATE_INDEX | Create new indexes to enable different plan choices |
+| DROP_INDEX | Remove indexes to force alternative plans |
+| ALTER_TABLE | Modify table structure |
+| ANALYZE_TABLE | Update statistics for optimizer |
+| TRUNCATE | Clear all table data |
+
+**Supported DBMS**: MySQL, PostgreSQL, GaussDB-M, GaussDB-A
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --qpg-enable --qpg-log-query-plan --num-queries 1000
+java -jar sqlancer.jar postgres --qpg-enable --qpg-selection-probability 0.8 --num-queries 500
+java -jar sqlancer.jar gaussdbm --qpg-enable --qpg-max-interval 500 --num-queries 1000
+java -jar sqlancer.jar gaussdba --qpg-enable --target-database gaussdb_a_test --num-queries 500
+```
+
+**Best For**: Optimizer coverage improvement, plan diversity testing, index selection bugs.
+
+### TX_INFER (MVCC Version Inference)
+
+**Concept**: TX_INFER uses auxiliary version-tracking tables to infer expected transaction results under specific isolation levels, detecting MVCC (Multi-Version Concurrency Control) implementation bugs.
+
+**Algorithm**:
+- Create version-tracking tables that record row modifications
+- Execute concurrent transactions under a specific isolation level
+- Use version data to compute the expected result for each transaction
+- Compare actual DBMS results with inferred expectations
+- Differences indicate isolation level or MVCC implementation bugs
+
+**Supported DBMS**: MySQL, GaussDB-M
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --oracle TX_INFER --num-queries 100
+java -jar sqlancer.jar gaussdbm --oracle TX_INFER --num-queries 100
+```
+
+**Best For**: MVCC bugs, isolation level violations, concurrent transaction anomalies.
+
+### FUCCI (MVCC-based Testing)
+
+**Concept**: FUCCI combines three MVCC testing approaches — Differential Testing (DT), Metamorphic Testing (MT), and Constraint Solving (CS) — to detect concurrency and isolation bugs.
+
+**Algorithm** (depends on variant):
+- **DT**: Compare results of the same schedule across different isolation levels
+- **MT**: Compare results of equivalent but reordered schedules
+- **CS**: Use constraint solving to verify schedule properties
+- **ALL**: Run all three variants
+
+**Supported DBMS**: MySQL, PostgreSQL, GaussDB-A, GaussDB-M
+
+**Options**:
+| Option | Values | Description |
+|--------|--------|-------------|
+| `--fucci-oracle-type` | DT, MT, CS, ALL | Which FUCCI variant to use |
+| `--fucci-isolation-level` | RANDOM, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE | Isolation level for schedules |
+| `--fucci-schedule-count` | Any integer | Number of schedules per test (default: 10) |
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --oracle FUCCI --fucci-oracle-type DT --fucci-isolation-level SERIALIZABLE
+java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-schedule-count 20
+```
+
+**Best For**: Isolation level bugs, concurrency anomalies, schedule-dependent bugs.
+
 ## When to Choose Which Oracle
 
 | Testing Goal | Primary Oracle | Supporting Oracles |
@@ -929,17 +1032,33 @@ java -jar sqlancer.jar --username=xxx --password=xxx --host=xxx --port=8000 \
 | **Performance regression** | CERT | NoREC |
 | **Constraint correctness** | EDC | DQE |
 | **Expression handling** | EET | TLP_WHERE |
+| **DML expression handling** | EET_UPDATE, EET_DELETE | EET, DQE |
 | **DML operations** | DQE | QUERY_PARTITIONING |
 | **Cross-version testing** | DQP | EDC |
 | **Stress testing** | FUZZER | NoREC |
 | **Quick bug hunting** | TLP_WHERE + NoREC | PQS |
 | **Transaction isolation testing** | WRITE_CHECK | DQE |
-| **Concurrency bug detection** | WRITE_CHECK | CERT |
+| **Concurrency bug detection** | WRITE_CHECK, FUCCI | CERT |
+| **MVCC version tracking** | TX_INFER | WRITE_CHECK |
+| **Optimizer coverage** | QPG | CERT, EET |
 | **Comprehensive testing** | QUERY_PARTITIONING + EDC + EET + DQE + WRITE_CHECK | All others |
 
 ---
 
 # Version History
+
+## v2.0.60 (2026-05-27)
+- **GaussDB-M EET Alignment**: ExpressionTree expanded from 16 to 32 node types, matching MySQL coverage
+  - Added 14 expression-level nodes (BinaryArithmetic, Cast, ComputableFunction, JsonFunction, TemporalFunction, WindowFunction, PostfixText, ScalarSubquery, IfFunction, OracleAlias, OracleExpressionBag, Join, DerivedTable)
+  - Added ManuelPredicate leaf node
+  - Implemented createCoalesce, isCoalesce, getCoalesceArguments in adapter
+- **Documentation**: Added EET variants (EET_UPDATE/EET_DELETE/EET_INSERT_SELECT), QPG, TX_INFER, FUCCI deep-dive sections
+
+## v2.0.59 (2026-05-27)
+- **EET Oracle Alignment**: IN→EXISTS UNION subquery handling added across all dialects
+- **isQueryLevelNode**: Query-level nodes now properly handled (UNION/SELECT/WITH not wrapped in CASE/tautology)
+- **GaussDB-A EET Expansion**: Rules 1-6 wrapping transforms, ExpressionTree 12→24+ types, MINUS→NOT EXISTS, IN→EXISTS UNION, createCoalesce implemented
+- **Documentation**: Updated help options, GaussDB-A/GaussDB-PG commands
 
 ## v0.1.85 (2026-05-08)
 - **New Oracle**: WRITE_CHECK transaction-level test oracle

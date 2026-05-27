@@ -32,6 +32,9 @@ import sqlancer.mysql.ast.MySQLTemporalFunction;
 import sqlancer.mysql.ast.MySQLText;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation;
 import sqlancer.mysql.ast.MySQLUnaryPrefixOperation;
+import sqlancer.mysql.ast.MySQLUnionSelect;
+import sqlancer.mysql.ast.MySQLWithSelect;
+import sqlancer.mysql.ast.MySQLCteDefinition;
 import sqlancer.mysql.ast.MySQLWindowFunction;
 
 /**
@@ -207,6 +210,52 @@ public final class MySQLEETExpressionTree {
             MySQLOrderByTerm o = (MySQLOrderByTerm) e;
             return new MySQLOrderByTerm(mapChild.apply(o.getExpr()), o.getOrder());
         }
+        // Query-level nodes: recurse into branches/fields, but node itself is not wrapped
+        if (e instanceof MySQLUnionSelect) {
+            MySQLUnionSelect u = (MySQLUnionSelect) e;
+            List<MySQLSelect> newBranches = new ArrayList<>();
+            for (MySQLSelect b : u.getBranches()) {
+                newBranches.add((MySQLSelect) mapChild.apply(b));
+            }
+            return new MySQLUnionSelect(newBranches, u.isUnionAll());
+        }
+        if (e instanceof MySQLSelect) {
+            MySQLSelect s = (MySQLSelect) e;
+            List<MySQLExpression> newFetch = new ArrayList<>();
+            for (MySQLExpression col : s.getFetchColumns()) {
+                newFetch.add(mapChild.apply(col));
+            }
+            MySQLExpression newWhere = s.getWhereClause() == null ? null : mapChild.apply(s.getWhereClause());
+            MySQLExpression newHaving = s.getHavingClause() == null ? null : mapChild.apply(s.getHavingClause());
+            List<MySQLExpression> newGroupBy = new ArrayList<>();
+            if (s.getGroupByExpressions() != null) {
+                for (MySQLExpression gb : s.getGroupByExpressions()) {
+                    newGroupBy.add(mapChild.apply(gb));
+                }
+            }
+            MySQLSelect copy = new MySQLSelect();
+            copy.setFromOptions(s.getFromOptions());
+            copy.setModifiers(s.getModifiers());
+            copy.setHint(s.getHint());
+            copy.setFetchColumns(newFetch);
+            copy.setFromList(new ArrayList<>(s.getFromList()));
+            copy.setJoinList(new ArrayList<>(s.getJoinList()));
+            copy.setWhereClause(newWhere);
+            copy.setGroupByExpressions(newGroupBy);
+            copy.setHavingClause(newHaving);
+            copy.setOrderByClauses(new ArrayList<>(s.getOrderByClauses()));
+            copy.setLimitClause(s.getLimitClause());
+            copy.setOffsetClause(s.getOffsetClause());
+            return copy;
+        }
+        if (e instanceof MySQLWithSelect) {
+            MySQLWithSelect w = (MySQLWithSelect) e;
+            List<MySQLCteDefinition> newCtes = new ArrayList<>();
+            for (MySQLCteDefinition c : w.getCtes()) {
+                newCtes.add(new MySQLCteDefinition(c.getName(), (MySQLSelect) mapChild.apply(c.getSubquery())));
+            }
+            return new MySQLWithSelect(newCtes, (MySQLSelect) mapChild.apply(w.getMainQuery()));
+        }
         return e;
     }
 
@@ -287,6 +336,32 @@ public final class MySQLEETExpressionTree {
             sink.accept(((MySQLPostfixText) e).getExpr());
         } else if (e instanceof MySQLOrderByTerm) {
             sink.accept(((MySQLOrderByTerm) e).getExpr());
+        } else if (e instanceof MySQLUnionSelect) {
+            for (MySQLSelect b : ((MySQLUnionSelect) e).getBranches()) {
+                sink.accept(b);
+            }
+        } else if (e instanceof MySQLSelect) {
+            MySQLSelect s = (MySQLSelect) e;
+            for (MySQLExpression col : s.getFetchColumns()) {
+                sink.accept(col);
+            }
+            if (s.getWhereClause() != null) {
+                sink.accept(s.getWhereClause());
+            }
+            if (s.getHavingClause() != null) {
+                sink.accept(s.getHavingClause());
+            }
+            if (s.getGroupByExpressions() != null) {
+                for (MySQLExpression gb : s.getGroupByExpressions()) {
+                    sink.accept(gb);
+                }
+            }
+        } else if (e instanceof MySQLWithSelect) {
+            MySQLWithSelect w = (MySQLWithSelect) e;
+            for (MySQLCteDefinition c : w.getCtes()) {
+                sink.accept(c.getSubquery());
+            }
+            sink.accept(w.getMainQuery());
         }
     }
 

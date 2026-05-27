@@ -1,5 +1,34 @@
 # SQLancer Release Notes
 
+## v2.0.60 | 2026-05-27
+- 修复 [GaussDB-M ExpressionTree 覆盖缩水]：从16种扩展到32种 node type，对齐 MySQL ExpressionTree 覆盖水平
+  - 新增表达式级节点：BinaryArithmeticOperation、CastOperation、ComputableFunction、JsonFunction、TemporalFunction、WindowFunction、PostfixText、ScalarSubquery、IfFunction、OracleAlias、OracleExpressionBag、Join（onCondition）、DerivedTable
+  - 新增叶节点：ManuelPredicate（isEetReductionLeaf + isRule7NoChange）
+  - forEachChild/mapChildren 全面覆盖所有有子表达式的节点类型
+- 修复 [GaussDB-M EET Adapter]：
+  - isBooleanLike 增加 BetweenOperation
+  - isRule7NoChange 增加 ManuelPredicate
+  - 实现 createCoalesce（COALESCE→CASE WHEN 递归构造），替换 null stub
+  - 实现 isCoalesce（检测 GaussDBComputableFunction.COALESCE），替换 false stub
+  - 实现 getCoalesceArguments（提取 COALESCE 函数参数）
+- 修复 [GaussDB-A Adapter]：移除未使用的 GaussDBACteDefinition import
+- 文档 [帮助选项更新]：sqlancer_help_0413.md 补全缺失的 DBMS 命令（GaussDB-A, GaussDB-PG）和 oracle 选项列表（EET_UPDATE/EET_DELETE/EET_INSERT_SELECT, WRITE_CHECK, FUCCI, TX_INFER, EDC, SONAR, DQE, DQP），新增全局事务选项和 FUCCI 选项
+- 文档 [英文用户指南更新]：USER_GUIDE.md 新增 EET 变体、QPG、TX_INFER、FUCCI 深度解析章节；更新 Oracle 快速参考表和选择决策表；修复 GaussDB-A/GaussDB-PG 示例重复行
+- 文档 [中文用户指南更新]：user_guide_cn.md 新增 EET 变体、TX_INFER、FUCCI 深度解析章节；更新 Oracle 快速参考表和选择决策表
+
+## v2.0.59 | 2026-05-27
+- 新增 [EET Oracle 对齐原生工具]：IN→EXISTS 变换支持 UNION 子查询（MySQL、PostgreSQL、GaussDB-M、GaussDB-A）
+- 新增 [EET Oracle isQueryLevelNode]：查询级节点（UNION/SELECT/WITH）递归变换内部表达式但不做 CASE WHEN wrapping，匹配原生 EET 行为
+- 新增 [EET ExpressionTree UNION/SELECT/WITH 遍历]：MySQL/PG/GaussDB-M/GaussDB-A ExpressionTree 增加集合操作和查询级节点的 mapChildren/forEachChild 支持
+- 修复 [GaussDB-A 功能裁剪]：
+  - 补齐 wrapping rules（BoolTransform Rule 1-2、ValueTransform Rule 3-6、ConstBoolTransform），从仅6条语义重写扩展到完整9+6条规则
+  - ExpressionTree 从12种扩展到24+种 node type：新增 Aggregate、BinaryArithmetic、Cast、Like、ScalarSubquery、PostfixText、DerivedTable、UnionSelect、MinusSelect、WithSelect、Select、Text、ColumnValue、CteTableReference、ManuelPredicate
+  - 实现 MINUS→NOT EXISTS 变换（GaussDBAMinusSelect 检测 + NULL-safe 列等值构建）
+  - 实现 IN→EXISTS UNION 变换
+  - 实现 createCoalesce（COALESCE→CASE WHEN 递归构造）
+  - QueryTransformer 增加 UNION/MINUS/WITH/DerivedTable 集合操作根节点处理
+  - isBooleanLike 增加 GaussDBALikeOperation；isRule7NoChange 增加 Text/CteTableReference/ManuelPredicate
+
 ## v2.0.58 | 2026-05-27
 - 修复 [GaussDB-M DELETE/UPDATE/INSERT ExpectedErrors]：添加datetime/date/time错误到GaussDBMDeleteGenerator、GaussDBMUpdateGenerator、GaussDBMInsertGenerator
 - 修复 [PostgreSQL EET Oracle]：IntConstant添加asBoolean()方法重写，解决整数0/1的布尔转换UnsupportedOperationException

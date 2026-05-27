@@ -161,9 +161,24 @@ Usage: SQLancer [options] [command] [command options]
       The user name used to log into the DBMS
       Default: sqlancer
     --validate-result-size-only
-      Should validate result size only and skip comparing content of the 
+      Should validate result size only and skip comparing content of the
       result set
       Default: false
+    --use-fixed-num-transaction
+      Use a fixed number of transactions for WRITE_CHECK/FUCCI oracles
+      Default: false
+    --num-transaction
+      Number of transactions per schedule for WRITE_CHECK/FUCCI oracles
+      Default: 2
+    --num-schedule
+      Number of schedules to generate for WRITE_CHECK/FUCCI oracles
+      Default: 10
+    --set-case
+      Use a specified test case file for WRITE_CHECK_REPRODUCE
+      Default: false
+    --case-file
+      Path to test case input file for WRITE_CHECK_REPRODUCE
+      Default: ""
   Commands:
     citus      PostgreSQL (default port: 5432, default host: localhost)
       Usage: citus [options]
@@ -186,7 +201,11 @@ Usage: SQLancer [options] [command] [command options]
             in each test database
             Default: <empty string>
           --oracle
-            Specifies which test oracle should be used for PostgreSQL
+            Specifies which test oracle should be used for PostgreSQL.
+            Options: [AGGREGATE, CERT, DISTINCT, DQE, DQP, EET, EET_UPDATE,
+            EET_DELETE, FUCCI, FUZZER, GROUP_BY, HAVING, NOREC, PQS,
+            QUERY_PARTITIONING, SONAR, TLP_WHERE, WRITE_CHECK,
+            WRITE_CHECK_REPRODUCE]
             Default: [QUERY_PARTITIONING]
           --repartition
             Specifies whether repartition joins should be allowed
@@ -375,8 +394,8 @@ Usage: SQLancer [options] [command] [command options]
             Allow generating DATE constants
             Default: true
           --test-datemodel
-            Allow generating Doris¡¯s data model in tables. 
-            (Aggregate¡¢Uniqe¡¢Duplicate) 
+            Allow generating Dorisï¿½ï¿½s data model in tables. 
+            (Aggregateï¿½ï¿½Uniqeï¿½ï¿½Duplicate) 
             Default: true
           --test-datetime-constants
             Allow generating DATETIME constants
@@ -493,14 +512,80 @@ Usage: SQLancer [options] [command] [command options]
             Allow generating VARCHAR constants
             Default: true
 
-    gaussdb-m      GaussDB-M (M-Compatibility)
+    gaussdb-m      GaussDB-M (M-Compatibility, default port: 3306, default host: localhost)
       Usage: gaussdb-m [options]
         Options:
           --help, -h
             Lists all supported options for the GaussDB-M command
           --oracle
-            Specifies which test oracle(s) should be used for GaussDB-M
+            Specifies which test oracle(s) should be used for GaussDB-M.
+            Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC,
+            EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, FUCCI, FUZZER,
+            GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR,
+            TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]
             Default: [QUERY_PARTITIONING]
+          --fucci-oracle-type
+            FUCCI oracle variant: DT, MT, CS, or ALL
+            Default: ALL
+            Possible Values: [DT, MT, CS, ALL]
+          --fucci-isolation-level
+            Isolation level for FUCCI scheduling
+            Default: RANDOM
+            Possible Values: [RANDOM, READ_COMMITTED, REPEATABLE_READ,
+            SERIALIZABLE]
+          --fucci-schedule-count
+            Number of schedules to generate per FUCCI test
+            Default: 10
+
+    gaussdb-a      GaussDB-A (A-Compatibility/Oracle mode, requires --target-database)
+      Usage: gaussdb-a [options]
+        Options:
+          --help, -h
+            Lists all supported options for the GaussDB-A command
+          --oracle
+            Specifies which test oracle(s) should be used for GaussDB-A.
+            Options: [AGGREGATE, CERT, DISTINCT, DQE, DQP, EET, EET_UPDATE,
+            EET_DELETE, EET_INSERT_SELECT, FUCCI, FUZZER, GROUP_BY, HAVING,
+            NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE, WRITE_CHECK,
+            WRITE_CHECK_REPRODUCE]
+            Default: [QUERY_PARTITIONING]
+          --target-database
+            REQUIRED: Name of the A-compatible database to connect to.
+            GaussDB-A requires an Oracle-compatible database created via
+            CREATE DATABASE ... WITH DBCOMPATIBILITY 'A';
+          --enable-clob-blob
+            Enable CLOB and BLOB data types in schema generation
+            Default: false
+          --fucci-oracle-type
+            FUCCI oracle variant: DT, MT, CS, or ALL
+            Default: ALL
+            Possible Values: [DT, MT, CS, ALL]
+          --fucci-isolation-level
+            Isolation level for FUCCI scheduling
+            Default: RANDOM
+            Possible Values: [RANDOM, READ_COMMITTED, REPEATABLE_READ,
+            SERIALIZABLE]
+          --fucci-schedule-count
+            Number of schedules to generate per FUCCI test
+            Default: 10
+
+    gaussdb-pg      GaussDB-PG (PG-Compatibility, requires --target-database)
+      Usage: gaussdb-pg [options]
+        Options:
+          --help, -h
+            Lists all supported options for the GaussDB-PG command
+          --oracle
+            Specifies which test oracle(s) should be used for GaussDB-PG.
+            Options: [AGGREGATE, CERT, DISTINCT, DQE, DQP, EET, FUZZER,
+            GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE]
+            Default: [QUERY_PARTITIONING]
+          --target-database
+            REQUIRED: Name of the PG-compatible database to connect to.
+            GaussDB-PG requires a PostgreSQL-compatible database created via
+            CREATE DATABASE ... WITH DBCOMPATIBILITY 'PG';
+          --enable-time-types
+            Enable DATE, TIME, TIMESTAMP data types in schema generation
+            Default: false
 
     h2      H2
       Usage: h2
@@ -555,7 +640,25 @@ Usage: SQLancer [options] [command] [command options]
             Comma-separated storage engine names used in CREATE TABLE 
             ENGINE=... (e.g. InnoDB,MyISAM,MyCustomEngine)
           --oracle
+            Specifies which test oracle(s) should be used for MySQL.
+            Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC,
+            EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, FUCCI, FUZZER,
+            GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR,
+            TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]
             Default: [QUERY_PARTITIONING]
+          --fucci-oracle-type
+            FUCCI oracle variant: DT (Differential Testing), MT
+            (Metamorphic Testing), CS (Constraint Solving), or ALL
+            Default: ALL
+            Possible Values: [DT, MT, CS, ALL]
+          --fucci-isolation-level
+            Isolation level for FUCCI scheduling
+            Default: RANDOM
+            Possible Values: [RANDOM, READ_UNCOMMITTED, READ_COMMITTED,
+            REPEATABLE_READ, SERIALIZABLE]
+          --fucci-schedule-count
+            Number of schedules to generate per FUCCI test
+            Default: 10
 
     oceanbase      OceanBase (default port: 2881, default host: localhost)
       Usage: oceanbase [options]
@@ -586,18 +689,51 @@ Usage: SQLancer [options] [command] [command options]
             in each test database
             Default: <empty string>
           --oracle
-            Specifies which test oracle should be used for PostgreSQL
+            Specifies which test oracle(s) should be used for PostgreSQL.
+            Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC,
+            EET, EET_UPDATE, EET_DELETE, FUCCI, FUZZER, GROUP_BY, HAVING,
+            NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, WRITE_CHECK,
+            WRITE_CHECK_REPRODUCE]
             Default: [QUERY_PARTITIONING]
-          --tablespace-path
-            Base path for tablespace directories (default is OS-dependent)
-            Default: C:\Users\JERRY~1.XIA\AppData\Local\Temp\postgresql\tablespace
+          --fucci-oracle-type
+            FUCCI oracle variant: DT, MT, CS, or ALL
+            Default: ALL
+            Possible Values: [DT, MT, CS, ALL]
+          --fucci-isolation-level
+            Isolation level for FUCCI scheduling
+            Default: RANDOM
+            Possible Values: [RANDOM, READ_COMMITTED, REPEATABLE_READ,
+            SERIALIZABLE]
+          --fucci-schedule-count
+            Number of schedules to generate per FUCCI test
+            Default: 10
+          --bombard
+            Enable stress mode with concurrent random SQL bombardment
+            Default: false
+          --bombard-workers
+            Number of worker threads for bombard mode
+            Default: 4
           --test-collations
             Specifies whether to test different collations
             Default: true
           --test-tablespaces
-            Specifies whether to test tablespace creation (default is 
-            OS-dependent) 
+            Specifies whether to test tablespace creation
             Default: false
+          --test-foreign-keys
+            Test foreign key constraints
+            Default: true
+          --pg-table-columns
+            Number of columns per table
+            Default: 10
+          --pg-tables
+            Number of tables to create per database
+            Default: 3
+          --pg-index-model
+            Index generation model (0=none, 1-6=various strategies)
+            Default: 0
+          --tablespace-path
+            Base path for tablespace directories (default is OS-dependent)
+            Default: OS-dependent
 
     presto      Presto
       Usage: presto [options]

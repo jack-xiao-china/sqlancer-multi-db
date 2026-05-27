@@ -31,6 +31,8 @@ import sqlancer.postgres.ast.PostgresPrintedExpression;
 import sqlancer.postgres.ast.PostgresSelect;
 import sqlancer.postgres.ast.PostgresTableReference;
 import sqlancer.postgres.ast.PostgresText;
+import sqlancer.postgres.ast.PostgresUnionSelect;
+import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 public class PostgresEETTransformAdapter implements EETTransformAdapter<PostgresExpression> {
@@ -165,6 +167,13 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
     }
 
     @Override
+    public boolean isQueryLevelNode(PostgresExpression expr) {
+        return expr instanceof PostgresUnionSelect || expr instanceof PostgresIntersectSelect
+                || expr instanceof PostgresExceptSelect || expr instanceof PostgresWithSelect
+                || expr instanceof PostgresSelect;
+    }
+
+    @Override
     public boolean isConstant(PostgresExpression expr) {
         return expr instanceof PostgresConstant;
     }
@@ -283,6 +292,41 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
             return null;
         }
         PostgresExpression subquery = in.getListElements().get(0);
+        PostgresExpression lhs = in.getExpr();
+
+        // Handle UNION subquery (matching native EET in_query.cc lines 108-139)
+        if (subquery instanceof PostgresUnionSelect) {
+            PostgresUnionSelect union = (PostgresUnionSelect) subquery;
+            java.util.List<PostgresSelect> modifiedSelects = new java.util.ArrayList<>();
+            for (PostgresSelect branch : union.getSelects()) {
+                if (branch.getFetchColumns() == null || branch.getFetchColumns().isEmpty()) {
+                    return null;
+                }
+                PostgresExpression branchSelected = branch.getFetchColumns().get(0);
+                PostgresExpression eqExpr = new PostgresBinaryComparisonOperation(branchSelected, lhs,
+                        PostgresBinaryComparisonOperator.EQUALS);
+                PostgresExpression branchPredicate = branch.getWhereClause();
+                PostgresExpression newPredicate;
+                if (branchPredicate != null) {
+                    newPredicate = new PostgresBinaryLogicalOperation(eqExpr, branchPredicate,
+                            PostgresBinaryLogicalOperation.BinaryLogicalOperator.AND);
+                } else {
+                    newPredicate = eqExpr;
+                }
+                PostgresSelect modifiedBranch = shallowCopyPostgresSelect(branch);
+                modifiedBranch.setWhereClause(newPredicate);
+                modifiedSelects.add(modifiedBranch);
+            }
+            PostgresExpression modifiedUnion = new PostgresUnionSelect(modifiedSelects, union.isUnionAll());
+            PostgresExpression existsExpr = new PostgresExists(modifiedUnion);
+            // CASE WHEN (lhs IN subquery) IS NOT NULL THEN EXISTS ELSE NULL END
+            PostgresExpression originalIn = new PostgresInOperation(lhs, java.util.List.of(subquery), in.isTrue());
+            PostgresExpression isNotNull = new PostgresPostfixOperation(originalIn, PostfixOperator.IS_NOT_NULL);
+            PostgresExpression nullVal = PostgresConstant.createNullConstant();
+            return new PostgresCaseWhen(isNotNull, existsExpr, nullVal);
+        }
+
+        // Handle simple SELECT subquery
         if (!(subquery instanceof PostgresSelect)) {
             return null;
         }
@@ -291,7 +335,6 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
             return null;
         }
         PostgresExpression selected = select.getFetchColumns().get(0);
-        PostgresExpression lhs = in.getExpr();
         PostgresExpression predicate = select.getWhereClause();
         PostgresExpression eqExpr = new PostgresBinaryComparisonOperation(selected, lhs,
                 PostgresBinaryComparisonOperator.EQUALS);

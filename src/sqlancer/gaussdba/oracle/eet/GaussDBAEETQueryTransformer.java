@@ -4,10 +4,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.gaussdba.ast.GaussDBACteDefinition;
+import sqlancer.gaussdba.ast.GaussDBADerivedTable;
 import sqlancer.gaussdba.ast.GaussDBAExpression;
 import sqlancer.gaussdba.ast.GaussDBAJoin;
+import sqlancer.gaussdba.ast.GaussDBAMinusSelect;
 import sqlancer.gaussdba.ast.GaussDBASelect;
 import sqlancer.gaussdba.ast.GaussDBATableReference;
+import sqlancer.gaussdba.ast.GaussDBAUnionSelect;
+import sqlancer.gaussdba.ast.GaussDBAWithSelect;
 
 /**
  * Traverses a {@link GaussDBASelect} and applies EET transforms (copy-based, original AST unchanged).
@@ -21,6 +26,30 @@ public class GaussDBAEETQueryTransformer {
     }
 
     public GaussDBAExpression eqTransformRoot(GaussDBAExpression root) {
+        if (root instanceof GaussDBAUnionSelect) {
+            GaussDBAUnionSelect u = (GaussDBAUnionSelect) root;
+            List<GaussDBASelect> newSelects = new ArrayList<>();
+            for (GaussDBASelect s : u.getSelects()) {
+                newSelects.add(eqTransformQuery(s));
+            }
+            return new GaussDBAUnionSelect(newSelects, u.isUnionAll());
+        }
+        if (root instanceof GaussDBAMinusSelect) {
+            GaussDBAMinusSelect m = (GaussDBAMinusSelect) root;
+            List<GaussDBASelect> newSelects = new ArrayList<>();
+            for (GaussDBASelect s : m.getSelects()) {
+                newSelects.add(eqTransformQuery(s));
+            }
+            return new GaussDBAMinusSelect(newSelects, m.isMinusAll());
+        }
+        if (root instanceof GaussDBAWithSelect) {
+            GaussDBAWithSelect w = (GaussDBAWithSelect) root;
+            List<GaussDBACteDefinition> newCtes = new ArrayList<>();
+            for (GaussDBACteDefinition c : w.getCtes()) {
+                newCtes.add(new GaussDBACteDefinition(c.getName(), eqTransformQuery(c.getSelect())));
+            }
+            return new GaussDBAWithSelect(newCtes, eqTransformQuery(w.getMainSelect()));
+        }
         if (root instanceof GaussDBASelect) {
             return eqTransformQuery((GaussDBASelect) root);
         }
@@ -77,6 +106,10 @@ public class GaussDBAEETQueryTransformer {
     private GaussDBAExpression transformTableRef(GaussDBAExpression ref) {
         if (ref instanceof GaussDBATableReference) {
             return ref;
+        }
+        if (ref instanceof GaussDBADerivedTable) {
+            GaussDBADerivedTable d = (GaussDBADerivedTable) ref;
+            return new GaussDBADerivedTable(eqTransformQuery(d.getSelect()), d.getAlias());
         }
         if (ref instanceof GaussDBASelect) {
             return eqTransformQuery((GaussDBASelect) ref);

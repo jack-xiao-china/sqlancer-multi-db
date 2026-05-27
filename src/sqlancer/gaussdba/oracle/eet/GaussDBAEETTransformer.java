@@ -3,6 +3,7 @@ package sqlancer.gaussdba.oracle.eet;
 import sqlancer.common.oracle.eet.EETBetweenToComparisonRule;
 import sqlancer.common.oracle.eet.EETCoalesceToCaseRule;
 import sqlancer.common.oracle.eet.EETDeMorganRule;
+import sqlancer.common.oracle.eet.EETExceptToNotExistsRule;
 import sqlancer.common.oracle.eet.EETExistsToInRule;
 import sqlancer.common.oracle.eet.EETInToExistsRule;
 import sqlancer.common.oracle.eet.EETNullifToCaseRule;
@@ -32,6 +33,10 @@ public class GaussDBAEETTransformer {
         base.registerRule(new EETInToExistsRule<>());
         base.registerRule(new EETCoalesceToCaseRule<>());
         base.registerRule(new EETNullifToCaseRule<>());
+        base.registerRule(new EETExceptToNotExistsRule<>()); // MINUS → NOT EXISTS
+        // Register wrapping rules (Rules 1-6, matching MySQL/PG coverage)
+        // BoolTransform (1-2), ValueTransform (3-6), ConstBoolTransform are default rules
+        // already in EETTransformerBase, so no explicit registration needed.
     }
 
     public GaussDBAExpression transformExpression(GaussDBAExpression expr) {

@@ -86,6 +86,12 @@ public class EETTransformerBase<E> {
         // §3.2: recurse into children first (EET-main order), then transform this node.
         E exprRec = adapter.mapChildren(this::transformExpression, expr);
 
+        // Query-level nodes (UNION, SELECT, WITH, etc.) should not be wrapped in CASE/tautology.
+        // They are returned after branch recursion — their internal expressions are already transformed.
+        if (adapter.isQueryLevelNode(exprRec)) {
+            return exprRec;
+        }
+
         int attempts = 0;
         while (attempts++ < MAX_TRANSFORM_RETRIES) {
             try {

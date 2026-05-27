@@ -26,6 +26,8 @@ import sqlancer.mysql.ast.MySQLPrintedExpression;
 import sqlancer.mysql.ast.MySQLTableReference;
 import sqlancer.mysql.ast.MySQLText;
 import sqlancer.mysql.ast.MySQLSelect;
+import sqlancer.mysql.ast.MySQLUnionSelect;
+import sqlancer.mysql.ast.MySQLWithSelect;
 import sqlancer.mysql.ast.MySQLComputableFunction;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation.UnaryPostfixOperator;
@@ -139,6 +141,12 @@ public class MySQLEETTransformAdapter implements EETTransformAdapter<MySQLExpres
     @Override
     public boolean isRule7NoChange(MySQLExpression expr) {
         return expr instanceof MySQLTableReference || expr instanceof MySQLText;
+    }
+
+    @Override
+    public boolean isQueryLevelNode(MySQLExpression expr) {
+        return expr instanceof MySQLUnionSelect || expr instanceof MySQLWithSelect
+                || expr instanceof MySQLSelect;
     }
 
     @Override
@@ -266,6 +274,42 @@ public class MySQLEETTransformAdapter implements EETTransformAdapter<MySQLExpres
             return null;
         }
         MySQLExpression subquery = in.getListElements().get(0);
+        MySQLExpression lhs = in.getExpr();
+
+        // Handle UNION subquery (matching native EET in_query.cc lines 108-139)
+        if (subquery instanceof MySQLUnionSelect) {
+            MySQLUnionSelect union = (MySQLUnionSelect) subquery;
+            java.util.List<MySQLSelect> modifiedBranches = new java.util.ArrayList<>();
+            for (MySQLSelect branch : union.getBranches()) {
+                if (branch.getFetchColumns() == null || branch.getFetchColumns().isEmpty()) {
+                    return null;
+                }
+                MySQLExpression branchSelected = branch.getFetchColumns().get(0);
+                MySQLExpression eqExpr = new MySQLBinaryComparisonOperation(branchSelected, lhs,
+                        BinaryComparisonOperator.EQUALS);
+                MySQLExpression branchPredicate = branch.getWhereClause();
+                MySQLExpression newPredicate;
+                if (branchPredicate != null) {
+                    newPredicate = new MySQLBinaryLogicalOperation(eqExpr, branchPredicate,
+                            MySQLBinaryLogicalOperator.AND);
+                } else {
+                    newPredicate = eqExpr;
+                }
+                MySQLSelect modifiedBranch = shallowCopyMySQLSelect(branch);
+                modifiedBranch.setWhereClause(newPredicate);
+                modifiedBranches.add(modifiedBranch);
+            }
+            MySQLExpression modifiedUnion = new MySQLUnionSelect(modifiedBranches, union.isUnionAll());
+            MySQLExpression existsExpr = new MySQLExists(modifiedUnion);
+            // CASE WHEN (lhs IN subquery) IS NOT NULL THEN EXISTS ELSE NULL END
+            MySQLExpression originalIn = new MySQLInOperation(lhs, java.util.List.of(subquery), in.isTrue());
+            MySQLExpression isNotNull = new MySQLUnaryPostfixOperation(originalIn, UnaryPostfixOperator.IS_NULL,
+                    true);
+            MySQLExpression nullVal = MySQLConstant.createNullConstant();
+            return new MySQLCaseOperator(null, java.util.List.of(isNotNull), java.util.List.of(existsExpr), nullVal);
+        }
+
+        // Handle simple SELECT subquery
         if (!(subquery instanceof MySQLSelect)) {
             return null;
         }
@@ -275,7 +319,6 @@ public class MySQLEETTransformAdapter implements EETTransformAdapter<MySQLExpres
             return null;
         }
         MySQLExpression selected = select.getFetchColumns().get(0);
-        MySQLExpression lhs = in.getExpr();
         MySQLExpression predicate = select.getWhereClause();
 
         // Construct: (selected = lhs) AND predicate

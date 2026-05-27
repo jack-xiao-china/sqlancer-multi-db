@@ -142,6 +142,13 @@ public interface EETTransformAdapter<E> {
     /** Get the expression type name for impedance tracking (e.g., "MySQLComputableFunction"). */
     String getExpressionTypeName(E expr);
 
+    /** Check if the expression is a query-level node (UNION, INTERSECT, EXCEPT, WITH, SELECT).
+     * Query-level nodes should be returned after branch recursion without trying wrapping rules,
+     * because wrapping them in CASE WHEN or boolean tautology produces invalid SQL.
+     * This matches the native EET behavior where equivalent_transform on a unioned_query
+     * only transforms each branch and returns the UNION unchanged. */
+    boolean isQueryLevelNode(E expr);
+
     /** Check if a dialect supports a specific semantic rewrite rule. */
     boolean supportsRule(String ruleName);
 

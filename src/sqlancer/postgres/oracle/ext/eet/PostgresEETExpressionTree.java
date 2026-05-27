@@ -43,6 +43,11 @@ import sqlancer.postgres.ast.PostgresTableReference;
 import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
 import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresText;
+import sqlancer.postgres.ast.PostgresExceptSelect;
+import sqlancer.postgres.ast.PostgresIntersectSelect;
+import sqlancer.postgres.ast.PostgresUnionSelect;
+import sqlancer.postgres.ast.PostgresWithSelect;
+import sqlancer.postgres.ast.PostgresCteDefinition;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowSpecification;
@@ -302,9 +307,66 @@ public final class PostgresEETExpressionTree {
             }
             return newJoin;
         }
-        // INTERSECT/EXCEPT are query-level nodes — children are PostgresSelect, not PostgresExpression
-        // They are handled in PostgresEETQueryTransformer, not here.
-        // Aggregates are complex nodes; keep them unchanged for reducer stability.
+        // Query-level nodes: recurse into branches, node itself not wrapped
+        if (e instanceof PostgresUnionSelect) {
+            PostgresUnionSelect u = (PostgresUnionSelect) e;
+            List<PostgresSelect> newSelects = new ArrayList<>();
+            for (PostgresSelect s : u.getSelects()) {
+                newSelects.add((PostgresSelect) mapChild.apply(s));
+            }
+            return new PostgresUnionSelect(newSelects, u.isUnionAll());
+        }
+        if (e instanceof PostgresIntersectSelect) {
+            PostgresIntersectSelect i = (PostgresIntersectSelect) e;
+            List<PostgresSelect> newSelects = new ArrayList<>();
+            for (PostgresSelect s : i.getSelects()) {
+                newSelects.add((PostgresSelect) mapChild.apply(s));
+            }
+            return new PostgresIntersectSelect(newSelects, i.isIntersectAll());
+        }
+        if (e instanceof PostgresExceptSelect) {
+            PostgresExceptSelect ex = (PostgresExceptSelect) e;
+            List<PostgresSelect> newSelects = new ArrayList<>();
+            for (PostgresSelect s : ex.getSelects()) {
+                newSelects.add((PostgresSelect) mapChild.apply(s));
+            }
+            return new PostgresExceptSelect(newSelects, ex.isExceptAll());
+        }
+        if (e instanceof PostgresSelect) {
+            PostgresSelect s = (PostgresSelect) e;
+            List<PostgresExpression> newFetch = new ArrayList<>();
+            for (PostgresExpression col : s.getFetchColumns()) {
+                newFetch.add(mapChild.apply(col));
+            }
+            PostgresExpression newWhere = s.getWhereClause() == null ? null : mapChild.apply(s.getWhereClause());
+            PostgresExpression newHaving = s.getHavingClause() == null ? null : mapChild.apply(s.getHavingClause());
+            List<PostgresExpression> newGroupBy = new ArrayList<>();
+            if (s.getGroupByExpressions() != null) {
+                for (PostgresExpression gb : s.getGroupByExpressions()) {
+                    newGroupBy.add(mapChild.apply(gb));
+                }
+            }
+            PostgresSelect copy = new PostgresSelect();
+            copy.setSelectOption(s.getSelectOption());
+            copy.setFetchColumns(newFetch);
+            copy.setFromList(new ArrayList<>(s.getFromList()));
+            copy.setJoinClauses(new ArrayList<>(s.getJoinClauses()));
+            copy.setWhereClause(newWhere);
+            copy.setGroupByExpressions(newGroupBy);
+            copy.setHavingClause(newHaving);
+            copy.setOrderByClauses(new ArrayList<>(s.getOrderByClauses()));
+            copy.setLimitClause(s.getLimitClause());
+            copy.setOffsetClause(s.getOffsetClause());
+            return copy;
+        }
+        if (e instanceof PostgresWithSelect) {
+            PostgresWithSelect w = (PostgresWithSelect) e;
+            List<PostgresCteDefinition> newCtes = new ArrayList<>();
+            for (PostgresCteDefinition c : w.getCtes()) {
+                newCtes.add(new PostgresCteDefinition(c.getName(), (PostgresSelect) mapChild.apply(c.getSelect())));
+            }
+            return new PostgresWithSelect(newCtes, (PostgresSelect) mapChild.apply(w.getMainSelect()));
+        }
         return e;
     }
 
@@ -449,6 +511,40 @@ public final class PostgresEETExpressionTree {
             if (j.getTableReference() != null) {
                 sink.accept(j.getTableReference());
             }
+        } else if (e instanceof PostgresUnionSelect) {
+            for (PostgresSelect s : ((PostgresUnionSelect) e).getSelects()) {
+                sink.accept(s);
+            }
+        } else if (e instanceof PostgresIntersectSelect) {
+            for (PostgresSelect s : ((PostgresIntersectSelect) e).getSelects()) {
+                sink.accept(s);
+            }
+        } else if (e instanceof PostgresExceptSelect) {
+            for (PostgresSelect s : ((PostgresExceptSelect) e).getSelects()) {
+                sink.accept(s);
+            }
+        } else if (e instanceof PostgresSelect) {
+            PostgresSelect s = (PostgresSelect) e;
+            for (PostgresExpression col : s.getFetchColumns()) {
+                sink.accept(col);
+            }
+            if (s.getWhereClause() != null) {
+                sink.accept(s.getWhereClause());
+            }
+            if (s.getHavingClause() != null) {
+                sink.accept(s.getHavingClause());
+            }
+            if (s.getGroupByExpressions() != null) {
+                for (PostgresExpression gb : s.getGroupByExpressions()) {
+                    sink.accept(gb);
+                }
+            }
+        } else if (e instanceof PostgresWithSelect) {
+            PostgresWithSelect w = (PostgresWithSelect) e;
+            for (PostgresCteDefinition c : w.getCtes()) {
+                sink.accept(c.getSelect());
+            }
+            sink.accept(w.getMainSelect());
         }
     }
 
