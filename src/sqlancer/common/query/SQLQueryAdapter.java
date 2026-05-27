@@ -75,8 +75,9 @@ public class SQLQueryAdapter extends Query<SQLConnection> implements Serializabl
             "42703",
             // Wrong object type (e.g., typed table operations on non-typed table)
             "42809",
-            // Syntax error
+            // Syntax error or access rule violation
             "42601",
+            "42000",
             // Undefined table
             "42P01",
             // Duplicate table/index (relation already exists)

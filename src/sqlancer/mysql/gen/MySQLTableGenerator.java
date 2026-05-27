@@ -112,6 +112,15 @@ public class MySQLTableGenerator {
         list.add("Got error -1 - 'Unknown error' from storage engine");
         list.add("Compression failed with the following error");
         list.add("Punch hole not supported by the filesystem");
+        list.add("used in key specification without a key length");
+        list.add("can't have a default value");
+        list.add("Invalid default value");
+        list.add("Incorrect prefix key");
+        list.add("Duplicate column name");
+        list.add("COLUMN_FORMAT");
+        list.add("CREATE TEMPORARY TABLE is not allowed with ROW_FORMAT");
+        list.add("Can't reopen table");
+        list.add("Binary operands of bitwise operators must be of equal length");
     }
 
     private enum PartitionOptions {
@@ -468,12 +477,8 @@ public class MySQLTableGenerator {
             sb.append(r.getLong(0, (1L << Math.min(r.getInteger(1, 64), 63))));
             break;
         case ENUM:
-            // For ENUM, use numeric index or string value
-            if (Randomly.getBoolean()) {
-                sb.append(1); // Default to first enum value by index
-            } else {
-                sb.append("'e0'"); // Default enum value
-            }
+            // For ENUM, only use string value (numeric index not reliable)
+            sb.append("'e0'");
             break;
         case SET:
             // For SET, use empty string or single value

@@ -158,8 +158,13 @@ public class MySQLInsertGenerator {
      */
     private void generateInsertSelect(List<MySQLColumn> columns) {
         sb.append("SELECT ");
-        // Generate expressions matching the number of columns
-        MySQLExpressionGenerator gen = new MySQLExpressionGenerator(globalState);
+        // Use source table columns for expression generation
+        MySQLTable sourceTable = schema.getRandomTableNonView();
+        if (sourceTable == null) {
+            throw new IgnoreMeException();
+        }
+        MySQLExpressionGenerator gen = new MySQLExpressionGenerator(globalState)
+                .setColumns(sourceTable.getColumns());
         for (int i = 0; i < columns.size(); i++) {
             if (i != 0) {
                 sb.append(", ");
@@ -167,10 +172,7 @@ public class MySQLInsertGenerator {
             sb.append(MySQLVisitor.asString(gen.generateExpression()));
         }
         sb.append(" FROM ");
-        // Use a different table for SELECT
-        MySQLTable sourceTable = schema.getRandomTableNonView();
-        if (sourceTable == null || sourceTable.getName().equals(table.getName())) {
-            // If same table or no other table, use the same table but that's okay
+        if (sourceTable.getName().equals(table.getName())) {
             sb.append(table.getName());
         } else {
             sb.append(sourceTable.getName());
@@ -188,6 +190,8 @@ public class MySQLInsertGenerator {
         // Add expected errors for INSERT SELECT
         errors.add("Column count doesn't match value count");
         errors.add("Unknown column");
+        MySQLErrors.addExpressionErrors(errors);
+        MySQLErrors.addInsertUpdateErrors(errors);
     }
 
     private static boolean isTemporalType(MySQLDataType type) {

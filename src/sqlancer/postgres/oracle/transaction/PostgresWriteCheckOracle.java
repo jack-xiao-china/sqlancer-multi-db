@@ -1,22 +1,30 @@
 package sqlancer.postgres.oracle.transaction;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.MainOptions;
 import sqlancer.Randomly;
+import sqlancer.SQLConnection;
 import sqlancer.common.oracle.TxBase;
+import sqlancer.common.query.Query;
 import sqlancer.common.transaction.Transaction;
 import sqlancer.common.transaction.TxSQLQueryAdapter;
 import sqlancer.common.transaction.TxStatement;
 import sqlancer.common.transaction.TxStatementExecutionResult;
 import sqlancer.common.transaction.TxTestExecutionResult;
 import sqlancer.postgres.PostgresGlobalState;
+import sqlancer.postgres.PostgresOptions;
 import sqlancer.postgres.transaction.PostgresIsolation.PostgresIsolationLevel;
 import sqlancer.postgres.transaction.PostgresTxStatement;
 import sqlancer.postgres.transaction.PostgresTxTestExecutor;
 import sqlancer.postgres.transaction.PostgresTxTestGenerator;
+import sqlancer.postgres.gen.transaction.PostgresTransactionProvider;
 
 public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
 
@@ -26,6 +34,8 @@ public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
 
     @Override
     public void check() throws SQLException {
+        List<Query<?>> dbQueries = reviseDBQueries();
+
         logger.writeCurrent("\n================= Generate new transaction list =================");
         PostgresTxTestGenerator txTestGenerator = new PostgresTxTestGenerator(state);
         List<Transaction> transactions = txTestGenerator.generateTransactions();
@@ -43,18 +53,21 @@ public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
                 PostgresTxTestExecutor testExecutor = new PostgresTxTestExecutor(state, transactions, schedule, isoLevel);
 
                 TxTestExecutionResult testResult = testExecutor.execute();
-                reproduceDatabase(state.getState().getStatements());
+                recreateDatabase(transactions);
+                reproduceDatabase(dbQueries);
 
                 List<TxStatement> oracleSchedule = genOracleSchedule(testResult);
                 PostgresTxTestExecutor oracleExecutor = new PostgresTxTestExecutor(state, transactions, oracleSchedule, isoLevel);
                 TxTestExecutionResult oracleResult = oracleExecutor.execute();
-                reproduceDatabase(state.getState().getStatements());
+                recreateDatabase(transactions);
+                reproduceDatabase(dbQueries);
 
                 List<TxStatement> oracleWithoutCommitAndRollbackSchedule = genOracleWithoutCommitAndRollbackSchedule(testResult);
                 PostgresTxTestExecutor oracleWithoutCommitAndRollbackExecutor = new PostgresTxTestExecutor(state, transactions,
                         oracleWithoutCommitAndRollbackSchedule, isoLevel);
                 TxTestExecutionResult oracleWithoutCommitAndRollbackResult = oracleWithoutCommitAndRollbackExecutor.execute();
-                reproduceDatabase(state.getState().getStatements());
+                recreateDatabase(transactions);
+                reproduceDatabase(dbQueries);
 
                 String compareResultInfo;
                 if (isoLevel == PostgresIsolationLevel.SERIALIZABLE) {
@@ -115,7 +128,7 @@ public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
         for (TxStatementExecutionResult stmtResult : testResult.getStatementExecutionResults()) {
             Transaction stmtTx = stmtResult.getStatement().getTransaction();
             if (!stmtResult.isBlocked()) {
-                if (stmtResult.reportDeadlock()) {
+                if (stmtResult.reportDeadlock() || stmtResult.reportRollback()) {
                     for (TxStatement stmt : stmtTx.getStatements()) {
                         if (!stmt.isEndTxType()) {
                             oracleSchedule.add(stmt);
@@ -148,5 +161,54 @@ public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
             }
         }
         return oracleSchedule;
+    }
+
+    protected void recreateDatabase(List<Transaction> transactions) throws SQLException {
+        for (Transaction tx : transactions) {
+            tx.closeConnection();
+        }
+        state.getConnection().close();
+        String databaseName = state.getDatabaseName();
+        String username = state.getOptions().getUserName();
+        String password = state.getOptions().getPassword();
+        String host = state.getOptions().getHost();
+        int port = state.getOptions().getPort();
+        if (host == null) {
+            host = PostgresOptions.DEFAULT_HOST;
+        }
+        if (port == MainOptions.NO_SET_PORT) {
+            port = PostgresOptions.DEFAULT_PORT;
+        }
+        String entryURL = String.format("postgresql://%s:%d/test", host, port);
+        Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
+        try (Statement s = con.createStatement()) {
+            s.execute("DROP DATABASE IF EXISTS " + databaseName);
+        }
+        try (Statement s = con.createStatement()) {
+            s.execute("CREATE DATABASE " + databaseName);
+        }
+        con.close();
+        entryURL = String.format("postgresql://%s:%d/%s", host, port, databaseName);
+        con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
+        SQLConnection newConnection = new SQLConnection(con);
+        state.setConnection(newConnection);
+        for (Transaction tx : transactions) {
+            SQLConnection txCon = PostgresTransactionProvider.createNewConnection(state);
+            tx.setConnection(txCon);
+        }
+    }
+
+    protected List<Query<?>> reviseDBQueries() {
+        List<Query<?>> dbInitQueries = state.getState().getStatements();
+        List<Query<?>> dbQueries = new ArrayList<>();
+        int i = 0;
+        for (Query<?> query : dbInitQueries) {
+            i++;
+            if (i < 5) {
+                continue;
+            }
+            dbQueries.add(query);
+        }
+        return dbQueries;
     }
 }

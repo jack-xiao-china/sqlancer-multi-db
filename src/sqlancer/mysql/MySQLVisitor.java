@@ -1,6 +1,7 @@
 package sqlancer.mysql;
 
 import sqlancer.mysql.ast.MySQLAggregate;
+import sqlancer.mysql.ast.MySQLAnyAllSubquery;
 import sqlancer.mysql.ast.MySQLBetweenOperation;
 import sqlancer.mysql.ast.MySQLBinaryArithmeticOperation;
 import sqlancer.mysql.ast.MySQLBinaryComparisonOperation;
@@ -17,6 +18,7 @@ import sqlancer.mysql.ast.MySQLExpression;
 import sqlancer.mysql.ast.MySQLInOperation;
 import sqlancer.mysql.ast.MySQLJoin;
 import sqlancer.mysql.ast.MySQLOrderByTerm;
+import sqlancer.mysql.ast.MySQLScalarSubquery;
 import sqlancer.mysql.ast.MySQLSelect;
 import sqlancer.mysql.ast.MySQLStringExpression;
 import sqlancer.mysql.ast.MySQLTableReference;
@@ -75,6 +77,10 @@ public interface MySQLVisitor {
 
     void visit(MySQLExists op);
 
+    void visit(MySQLAnyAllSubquery op);
+
+    void visit(MySQLScalarSubquery op);
+
     void visit(MySQLStringExpression op);
 
     void visit(MySQLBetweenOperation op);
@@ -130,6 +136,10 @@ public interface MySQLVisitor {
             visit((MySQLOrderByTerm) expr);
         } else if (expr instanceof MySQLExists) {
             visit((MySQLExists) expr);
+        } else if (expr instanceof MySQLAnyAllSubquery) {
+            visit((MySQLAnyAllSubquery) expr);
+        } else if (expr instanceof MySQLScalarSubquery) {
+            visit((MySQLScalarSubquery) expr);
         } else if (expr instanceof MySQLJoin) {
             visit((MySQLJoin) expr);
         } else if (expr instanceof MySQLStringExpression) {

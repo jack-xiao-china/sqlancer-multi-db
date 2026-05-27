@@ -623,4 +623,14 @@ public class GaussDBMExpressionGenerator extends UntypedExpressionGenerator<Gaus
         this.columns = tables.getColumns();
         return this;
     }
+
+    private GaussDBExpression lastGeneratedExpression;
+
+    public GaussDBExpression getLastGeneratedExpression() {
+        return lastGeneratedExpression;
+    }
+
+    public void setLastGeneratedExpression(GaussDBExpression expr) {
+        this.lastGeneratedExpression = expr;
+    }
 }

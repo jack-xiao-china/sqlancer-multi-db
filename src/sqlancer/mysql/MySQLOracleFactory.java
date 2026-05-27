@@ -27,7 +27,13 @@ import sqlancer.mysql.oracle.MySQLTLPDistinctOracle;
 import sqlancer.mysql.oracle.MySQLTLPGroupByOracle;
 import sqlancer.mysql.oracle.MySQLTLPHavingOracle;
 import sqlancer.mysql.oracle.transaction.MySQLWriteCheckOracle;
+import sqlancer.mysql.oracle.transaction.MySQLWriteCheckReproduceOracle;
+import sqlancer.mysql.oracle.transaction.MySQLFucciOracle;
+import sqlancer.mysql.oracle.transaction.MySQLTxInferOracle;
 import sqlancer.mysql.oracle.eet.MySQLEETOracle;
+import sqlancer.mysql.oracle.eet.MySQLEETUpdateOracle;
+import sqlancer.mysql.oracle.eet.MySQLEETDeleteOracle;
+import sqlancer.mysql.oracle.eet.MySQLEETInsertSelectOracle;
 
 public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
 
@@ -136,6 +142,39 @@ public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
             return new MySQLEETOracle(globalState);
         }
     },
+    EET_UPDATE {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLEETUpdateOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_DELETE {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLEETDeleteOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_INSERT_SELECT {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLEETInsertSelectOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
     CODDTEST {
         @Override
         public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
@@ -184,6 +223,43 @@ public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
         @Override
         public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
             return new MySQLWriteCheckOracle(globalState);
+        }
+    },
+    WRITE_CHECK_REPRODUCE {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLWriteCheckReproduceOracle(globalState);
+        }
+    },
+    /**
+     * Fucci Oracle - MVCC-based transaction testing.
+     * Combines DT (Differential Testing), MT (Metamorphic Testing), and CS (Constraint Solving) oracles.
+     * Supports MySQL, PostgreSQL, GaussDB-M, and GaussDB-A.
+     */
+    FUCCI {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws Exception {
+            return new MySQLFucciOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // Fucci needs tables with data for transaction testing
+        }
+    },
+    /**
+     * TX_INFER Oracle - MVCC version inference for transaction isolation level testing.
+     * Uses auxiliary version tables to track row versions and infer expected results.
+     */
+    TX_INFER {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLTxInferOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // TX_INFER needs tables with data
         }
     },
     QUERY_PARTITIONING {

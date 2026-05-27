@@ -115,7 +115,7 @@ public class GaussDBAWriteCheckOracle extends TxBase<GaussDBAGlobalState> {
         for (TxStatementExecutionResult stmtResult : testResult.getStatementExecutionResults()) {
             Transaction stmtTx = stmtResult.getStatement().getTransaction();
             if (!stmtResult.isBlocked()) {
-                if (stmtResult.reportDeadlock()) {
+                if (stmtResult.reportDeadlock() || stmtResult.reportRollback()) {
                     for (TxStatement stmt : stmtTx.getStatements()) {
                         if (!stmt.isEndTxType()) {
                             oracleSchedule.add(stmt);

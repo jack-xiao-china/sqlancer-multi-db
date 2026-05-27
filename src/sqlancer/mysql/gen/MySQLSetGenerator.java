@@ -191,7 +191,7 @@ public class MySQLSetGenerator {
         sb.append(a.name);
         sb.append(" = ");
         sb.append(a.prod.apply(r));
-        ExpectedErrors errors = ExpectedErrors.from("Unknown system variable");
+        ExpectedErrors errors = ExpectedErrors.from("Unknown system variable", "Access denied");
         return new SQLQueryAdapter(sb.toString(), errors);
     }
 

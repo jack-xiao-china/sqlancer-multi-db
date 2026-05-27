@@ -17,8 +17,11 @@ import sqlancer.postgres.ast.PostgresCollate;
 import sqlancer.postgres.ast.PostgresColumnReference;
 import sqlancer.postgres.ast.PostgresColumnValue;
 import sqlancer.postgres.ast.PostgresConstant;
+import sqlancer.postgres.ast.PostgresExceptSelect;
+import sqlancer.postgres.ast.PostgresExists;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresFunction;
+import sqlancer.postgres.ast.PostgresIntersectSelect;
 import sqlancer.postgres.ast.PostgresText;
 import sqlancer.postgres.ast.PostgresInOperation;
 import sqlancer.postgres.ast.PostgresJsonContainOperation;
@@ -35,6 +38,8 @@ import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
 import sqlancer.postgres.ast.PostgresPrintedExpression;
+import sqlancer.postgres.ast.PostgresScalarSubquery;
+import sqlancer.postgres.ast.PostgresLateralSubquery;
 import sqlancer.postgres.ast.PostgresSelect;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
@@ -147,6 +152,55 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             sb.append(")");
             first = false;
         }
+    }
+
+    @Override
+    public void visit(PostgresIntersectSelect intersectSelect) {
+        boolean first = true;
+        for (PostgresSelect s : intersectSelect.getSelects()) {
+            if (!first) {
+                sb.append(intersectSelect.isIntersectAll() ? " INTERSECT ALL " : " INTERSECT ");
+            }
+            sb.append("(");
+            visit(s);
+            sb.append(")");
+            first = false;
+        }
+    }
+
+    @Override
+    public void visit(PostgresExceptSelect exceptSelect) {
+        boolean first = true;
+        for (PostgresSelect s : exceptSelect.getSelects()) {
+            if (!first) {
+                sb.append(exceptSelect.isExceptAll() ? " EXCEPT ALL " : " EXCEPT ");
+            }
+            sb.append("(");
+            visit(s);
+            sb.append(")");
+            first = false;
+        }
+    }
+
+    @Override
+    public void visit(PostgresExists exists) {
+        sb.append(" EXISTS (");
+        visit(exists.getSubquery());
+        sb.append(")");
+    }
+
+    @Override
+    public void visit(PostgresScalarSubquery ss) {
+        sb.append("(");
+        visit(ss.getSubquery());
+        sb.append(")");
+    }
+
+    @Override
+    public void visit(PostgresLateralSubquery lateral) {
+        sb.append("LATERAL (");
+        visit(lateral.getSubquery());
+        sb.append(")");
     }
 
     @Override

@@ -94,6 +94,7 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
     private final Randomly r;
 
     private List<PostgresColumn> columns;
+    private PostgresExpression lastGeneratedExpression;
 
     private List<PostgresTable> targetTables;
 
@@ -1568,5 +1569,13 @@ public class PostgresExpressionGenerator implements ExpressionGenerator<Postgres
             select.setLimitClause(PostgresConstant.createIntConstant((int) Math.abs(r.getInteger())));
         }
         return increase;
+    }
+
+    public PostgresExpression getLastGeneratedExpression() {
+        return lastGeneratedExpression;
+    }
+
+    public void setLastGeneratedExpression(PostgresExpression expr) {
+        this.lastGeneratedExpression = expr;
     }
 }

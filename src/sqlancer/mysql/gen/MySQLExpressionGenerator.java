@@ -69,6 +69,7 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
     private final MySQLGlobalState state;
     private MySQLRowValue rowVal;
     private List<MySQLTable> tables;
+    private MySQLExpression lastGeneratedExpression;
 
     public MySQLExpressionGenerator(MySQLGlobalState state) {
         this.state = state;
@@ -471,6 +472,9 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
 
     @Override
     protected MySQLExpression generateColumn() {
+        if (columns == null || columns.isEmpty()) {
+            throw new IgnoreMeException();
+        }
         MySQLColumn c = Randomly.fromList(columns);
         MySQLConstant val;
         if (rowVal == null) {
@@ -815,5 +819,13 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
         }
         List<MySQLSchema.MySQLTable> tablesCopy = new ArrayList<>(tableList);
         return MySQLJoin.getRandomJoinClauses(tablesCopy, state);
+    }
+
+    public MySQLExpression getLastGeneratedExpression() {
+        return lastGeneratedExpression;
+    }
+
+    public void setLastGeneratedExpression(MySQLExpression expr) {
+        this.lastGeneratedExpression = expr;
     }
 }

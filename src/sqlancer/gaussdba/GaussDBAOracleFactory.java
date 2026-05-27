@@ -16,11 +16,16 @@ import sqlancer.gaussdba.oracle.GaussDBADQPOracle;
 import sqlancer.gaussdba.oracle.GaussDBAFuzzer;
 import sqlancer.gaussdba.oracle.GaussDBAPivotedQuerySynthesisOracle;
 import sqlancer.gaussdba.oracle.eet.GaussDBAEETOracle;
+import sqlancer.gaussdba.oracle.eet.GaussDBAEETInsertSelectOracle;
+import sqlancer.gaussdba.oracle.eet.GaussDBAEETUpdateOracle;
+import sqlancer.gaussdba.oracle.eet.GaussDBAEETDeleteOracle;
 import sqlancer.gaussdba.oracle.ext.GaussDBATLPDistinctOracle;
 import sqlancer.gaussdba.oracle.ext.GaussDBATLPGroupByOracle;
 import sqlancer.gaussdba.oracle.tlp.GaussDBATLPAggregateOracle;
 import sqlancer.gaussdba.oracle.tlp.GaussDBATLPHavingOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckOracle;
+import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckReproduceOracle;
+import sqlancer.gaussdba.oracle.transaction.GaussDBAFucciOracle;
 
 public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> {
 
@@ -122,6 +127,39 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
             return new GaussDBAEETOracle(globalState);
         }
     },
+    EET_INSERT_SELECT {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAEETInsertSelectOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_UPDATE {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAEETUpdateOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_DELETE {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAEETDeleteOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
 
     FUZZER {
         @Override
@@ -142,6 +180,37 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    /**
+     * WriteCheck Reproduce Oracle for reproducing bugs from file.
+     * Reads transaction test case from specified file and re-executes.
+     */
+    WRITE_CHECK_REPRODUCE {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAWriteCheckReproduceOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * Fucci Oracle - MVCC-based transaction testing.
+     * Combines DT (Differential Testing), MT (Metamorphic Testing), and CS (Constraint Solving) oracles.
+     * Supports MySQL, PostgreSQL, GaussDB-M, and GaussDB-A.
+     */
+    FUCCI {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAFucciOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // Fucci needs tables with data for transaction testing
         }
     };
 }

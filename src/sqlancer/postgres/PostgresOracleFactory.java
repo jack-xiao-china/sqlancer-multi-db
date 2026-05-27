@@ -26,8 +26,13 @@ import sqlancer.postgres.oracle.ext.PostgresTLPGroupByOracle;
 import sqlancer.postgres.oracle.tlp.PostgresTLPAggregateOracle;
 import sqlancer.postgres.oracle.tlp.PostgresTLPHavingOracle;
 import sqlancer.postgres.oracle.ext.eet.PostgresEETOracle;
+import sqlancer.postgres.oracle.ext.eet.PostgresEETUpdateOracle;
+import sqlancer.postgres.oracle.ext.eet.PostgresEETDeleteOracle;
+import sqlancer.postgres.oracle.ext.eet.PostgresEETInsertSelectOracle;
 import sqlancer.postgres.oracle.PostgresSonarOracle;
 import sqlancer.postgres.oracle.transaction.PostgresWriteCheckOracle;
+import sqlancer.postgres.oracle.transaction.PostgresWriteCheckReproduceOracle;
+import sqlancer.postgres.oracle.transaction.PostgresFucciOracle;
 
 public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> {
     NOREC {
@@ -158,6 +163,39 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
             return new PostgresEETOracle(globalState);
         }
     },
+    EET_UPDATE {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresEETUpdateOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_DELETE {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresEETDeleteOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_INSERT_SELECT {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresEETInsertSelectOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
     CODDTEST {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
@@ -208,6 +246,37 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    /**
+     * WriteCheck Reproduce Oracle for reproducing bugs from file.
+     * Reads transaction test case from specified file and re-executes.
+     */
+    WRITE_CHECK_REPRODUCE {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresWriteCheckReproduceOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * Fucci Oracle - MVCC-based transaction testing.
+     * Combines DT (Differential Testing), MT (Metamorphic Testing), and CS (Constraint Solving) oracles.
+     * Supports MySQL, PostgreSQL, GaussDB-M, and GaussDB-A.
+     */
+    FUCCI {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresFucciOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // Fucci needs tables with data for transaction testing
         }
     };
 

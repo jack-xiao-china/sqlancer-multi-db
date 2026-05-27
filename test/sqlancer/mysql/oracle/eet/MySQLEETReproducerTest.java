@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import sqlancer.common.oracle.eet.EETQueryExecutor;
 import sqlancer.mysql.MySQLGlobalState;
 
 class MySQLEETReproducerTest {

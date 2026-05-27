@@ -25,7 +25,13 @@ import sqlancer.gaussdbm.oracle.GaussDBMTLPDistinctOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPGroupByOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMTLPHavingOracle;
 import sqlancer.gaussdbm.oracle.eet.GaussDBMEETOracle;
+import sqlancer.gaussdbm.oracle.eet.GaussDBMEETInsertSelectOracle;
+import sqlancer.gaussdbm.oracle.eet.GaussDBMEETUpdateOracle;
+import sqlancer.gaussdbm.oracle.eet.GaussDBMEETDeleteOracle;
 import sqlancer.gaussdbm.oracle.transaction.GaussDBMWriteCheckOracle;
+import sqlancer.gaussdbm.oracle.transaction.GaussDBMWriteCheckReproduceOracle;
+import sqlancer.gaussdbm.oracle.transaction.GaussDBMFucciOracle;
+import sqlancer.gaussdbm.oracle.transaction.GaussDBMTxInferOracle;
 
 /**
  * GaussDB-M test oracles. Enum declaration order matches {@link sqlancer.mysql.MySQLOracleFactory} for CLI/help
@@ -120,6 +126,39 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
             return new GaussDBMEETOracle(globalState);
         }
     },
+    EET_INSERT_SELECT {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMEETInsertSelectOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_UPDATE {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMEETUpdateOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    EET_DELETE {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMEETDeleteOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
     CODDTEST {
         @Override
         public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
@@ -161,6 +200,53 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    /**
+     * WriteCheck Reproduce Oracle for reproducing bugs from file.
+     * Reads transaction test case from specified file and re-executes.
+     */
+    WRITE_CHECK_REPRODUCE {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMWriteCheckReproduceOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * Fucci Oracle - MVCC-based transaction testing.
+     * Combines DT (Differential Testing), MT (Metamorphic Testing), and CS (Constraint Solving) oracles.
+     * Supports MySQL, PostgreSQL, GaussDB-M, and GaussDB-A.
+     */
+    FUCCI {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMFucciOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // Fucci needs tables with data for transaction testing
+        }
+    },
+    /**
+     * TX_INFER Oracle - MVCC version inference for transaction isolation level testing.
+     * Uses auxiliary version tables to track row versions and infer expected results.
+     * Inherits MySQL implementation since GaussDB-M uses MySQL-compatible mode.
+     */
+    TX_INFER {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMTxInferOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true; // TX_INFER needs tables with data
         }
     },
     QUERY_PARTITIONING {

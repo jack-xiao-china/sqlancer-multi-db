@@ -11,7 +11,7 @@ public class GaussDBMTxStatement extends TxStatement {
     public enum GaussDBMStatementType implements TxStatementType {
         BEGIN, COMMIT, ROLLBACK,
         SELECT, SELECT_FOR_SHARE, SELECT_FOR_UPDATE,
-        UPDATE, DELETE, INSERT,
+        UPDATE, DELETE, INSERT, REPLACE,
         SET,
         UNKNOWN
     }

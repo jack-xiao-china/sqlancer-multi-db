@@ -8,6 +8,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 
 import sqlancer.DBMSSpecificOptions;
+import sqlancer.fucci.FucciOptions.FucciOracleType;
 
 @Parameters(separators = "=", commandDescription = "PostgreSQL (default port: " + PostgresOptions.DEFAULT_PORT
         + ", default host: " + PostgresOptions.DEFAULT_HOST + ")")
@@ -26,8 +27,18 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--bulk-insert", description = "Specifies whether INSERT statements should be issued in bulk", arity = 1)
     public boolean allowBulkInsert;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, WRITE_CHECK]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, EET_UPDATE, EET_DELETE, FUCCI, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
     public List<PostgresOracleFactory> oracle = Arrays.asList(PostgresOracleFactory.QUERY_PARTITIONING);
+
+    // Fucci Oracle parameters
+    @Parameter(names = "--fucci-oracle-type", description = "Fucci Oracle type: DT/MT/CS/ALL (default: ALL)")
+    public FucciOracleType fucciOracleType = FucciOracleType.ALL;
+
+    @Parameter(names = "--fucci-isolation-level", description = "Test isolation level: RANDOM/READ_COMMITTED/REPEATABLE_READ/SERIALIZABLE (default: RANDOM)")
+    public String fucciIsolationLevel = "RANDOM";
+
+    @Parameter(names = "--fucci-schedule-count", description = "Number of schedules to test (default: 10)")
+    public int fucciScheduleCount = 10;
 
     @Parameter(names = "--bombard", description = "Run a PostgreSQL stress mode that executes concurrent random SQL against a single database", arity = 1)
     private boolean bombard;

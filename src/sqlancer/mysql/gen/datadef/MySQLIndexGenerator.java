@@ -117,9 +117,12 @@ public class MySQLIndexGenerator {
         errors.add("Data truncation: Truncated incorrect");
         errors.add("a disallowed function.");
         errors.add("Data truncation");
+        errors.add("Cannot create a functional index on a function that returns a JSON or GEOMETRY value.");
         errors.add("Cannot create a functional index on an expression that returns a BLOB or TEXT.");
+        errors.add("Incorrect prefix key");
         errors.add("used in key specification without a key length");
         errors.add("can't be used in key specification with the used table type");
+        errors.add("does not support the create option");
         errors.add("Specified key was too long");
         errors.add("out of range");
         errors.add("Data truncated for functional index");

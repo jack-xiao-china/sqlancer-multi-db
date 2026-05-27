@@ -23,11 +23,16 @@ import sqlancer.postgres.ast.PostgresPostfixText;
 import sqlancer.postgres.ast.PostgresPrintedExpression;
 import sqlancer.postgres.ast.PostgresPrefixOperation;
 import sqlancer.postgres.ast.PostgresText;
+import sqlancer.postgres.ast.PostgresExceptSelect;
+import sqlancer.postgres.ast.PostgresExists;
+import sqlancer.postgres.ast.PostgresIntersectSelect;
 import sqlancer.postgres.ast.PostgresUnionSelect;
 import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
+import sqlancer.postgres.ast.PostgresScalarSubquery;
+import sqlancer.postgres.ast.PostgresLateralSubquery;
 import sqlancer.postgres.ast.PostgresSelect;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
@@ -108,6 +113,31 @@ public final class PostgresExpectedValueVisitor implements PostgresVisitor {
     @Override
     public void visit(PostgresUnionSelect unionSelect) {
         // query node: ignore for expected-value tracing
+    }
+
+    @Override
+    public void visit(PostgresIntersectSelect intersectSelect) {
+        // query node: ignore
+    }
+
+    @Override
+    public void visit(PostgresExceptSelect exceptSelect) {
+        // query node: ignore
+    }
+
+    @Override
+    public void visit(PostgresExists exists) {
+        // boolean subquery: ignore
+    }
+
+    @Override
+    public void visit(PostgresScalarSubquery ss) {
+        // scalar subquery: ignore for expected-value tracing
+    }
+
+    @Override
+    public void visit(PostgresLateralSubquery lateral) {
+        // lateral subquery: ignore for expected-value tracing
     }
 
     @Override

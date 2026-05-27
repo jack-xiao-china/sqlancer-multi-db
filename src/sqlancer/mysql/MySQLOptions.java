@@ -9,6 +9,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 
 import sqlancer.DBMSSpecificOptions;
+import sqlancer.fucci.FucciOptions.FucciOracleType;
 
 @Parameters(separators = "=", commandDescription = "MySQL (default port: " + MySQLOptions.DEFAULT_PORT
         + ", default host: " + MySQLOptions.DEFAULT_HOST + ")")
@@ -30,11 +31,21 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
     public static final String DEFAULT_HOST = "localhost";
     public static final int DEFAULT_PORT = 3306;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, WRITE_CHECK]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, EET_UPDATE, EET_DELETE, FUCCI, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
     public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.QUERY_PARTITIONING);
 
     @Parameter(names = "--engines", description = "Comma-separated storage engine names used in CREATE TABLE ENGINE=... (e.g. InnoDB,MyISAM,MyCustomEngine)")
     public String engines;
+
+    // Fucci Oracle parameters
+    @Parameter(names = "--fucci-oracle-type", description = "Fucci Oracle type: DT/MT/CS/ALL (default: ALL)")
+    public FucciOracleType fucciOracleType = FucciOracleType.ALL;
+
+    @Parameter(names = "--fucci-isolation-level", description = "Test isolation level: RANDOM/READ_UNCOMMITTED/READ_COMMITTED/REPEATABLE_READ/SERIALIZABLE (default: RANDOM)")
+    public String fucciIsolationLevel = "RANDOM";
+
+    @Parameter(names = "--fucci-schedule-count", description = "Number of schedules to test (default: 10)")
+    public int fucciScheduleCount = 10;
 
     // Test feature flags
     @Parameter(names = { "--test-foreign-keys" }, description = "Test foreign key constraints", arity = 1, hidden = true)

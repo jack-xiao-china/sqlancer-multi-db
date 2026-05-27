@@ -42,7 +42,8 @@ public class MySQLAlterTable {
                                                            * https://bugs.mysql.com/bug.php?id=95897
                                                            */,
                 "Field in list of fields for partition function not found in table", "in 'partition function'",
-                "has a functional index dependency and cannot be dropped or renamed."),
+                "has a functional index dependency and cannot be dropped or renamed.",
+                "check that column/key exists"),
         FORCE, //
         // ORDER_BY is supported, see below
         DELAY_KEY_WRITE, //
@@ -54,11 +55,20 @@ public class MySQLAlterTable {
         DROP_PRIMARY_KEY(
                 "ALGORITHM=INSTANT is not supported. Reason: Dropping a primary key is not allowed without also adding a new primary key. Try ALGORITHM=COPY/INPLACE."),
         MODIFY_COLUMN("Cannot convert", "Data truncated", "ALGORITHM=INSTANT is not supported",
-                "ALGORITHM=INPLACE is not supported", "Incorrect column specifier"),
+                "ALGORITHM=INPLACE is not supported", "Incorrect column specifier",
+                "used in key specification without a key length",
+                "supports indexing only via generated columns on a specified JSON path",
+                "can't have a default value", "Invalid default value",
+                "Unknown column"),
         CHANGE_COLUMN("Cannot convert", "Data truncated", "ALGORITHM=INSTANT is not supported",
                 "ALGORITHM=INPLACE is not supported", "Unknown column", "Incorrect column specifier",
-                "has a functional index dependency and cannot be dropped or renamed."),
-        ADD_COLUMN("Duplicate column name", "ALGORITHM=INSTANT is not supported", "ALGORITHM=INPLACE is not supported");
+                "has a functional index dependency and cannot be dropped or renamed.",
+                "used in key specification without a key length",
+                "supports indexing only via generated columns on a specified JSON path",
+                "can't have a default value", "Invalid default value",
+                "Duplicate column name", "check that column/key exists"),
+        ADD_COLUMN("Duplicate column name", "ALGORITHM=INSTANT is not supported", "ALGORITHM=INPLACE is not supported",
+                "can't have a default value", "Invalid default value");
 
         private String[] potentialErrors;
 
@@ -70,7 +80,10 @@ public class MySQLAlterTable {
 
     private SQLQueryAdapter create() {
         ExpectedErrors errors = ExpectedErrors.from("does not support the create option", "doesn't have this option",
-                "is not supported for this operation", "Data truncation", "Specified key was too long");
+                "is not supported for this operation", "Data truncation", "Specified key was too long",
+                "A primary key index cannot be invisible", "Can't reopen table",
+                "Incorrect prefix key", "has a partitioning function dependency",
+                "Incorrect DECIMAL value", "Deadlock found when trying to get lock");
         errors.add("Data truncated for functional index ");
         errors.add("Compression failed with the following error");
         errors.add("Punch hole not supported by the filesystem");

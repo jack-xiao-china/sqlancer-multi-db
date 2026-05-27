@@ -20,6 +20,9 @@ import sqlancer.postgres.ast.PostgresInOperation;
 import sqlancer.postgres.ast.PostgresJsonContainOperation;
 import sqlancer.postgres.ast.PostgresLikeOperation;
 import sqlancer.postgres.ast.PostgresOrderByTerm;
+import sqlancer.postgres.ast.PostgresExceptSelect;
+import sqlancer.postgres.ast.PostgresExists;
+import sqlancer.postgres.ast.PostgresIntersectSelect;
 import sqlancer.postgres.ast.PostgresPOSIXRegularExpression;
 import sqlancer.postgres.ast.PostgresPostfixOperation;
 import sqlancer.postgres.ast.PostgresPostfixText;
@@ -31,6 +34,8 @@ import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
+import sqlancer.postgres.ast.PostgresScalarSubquery;
+import sqlancer.postgres.ast.PostgresLateralSubquery;
 import sqlancer.postgres.ast.PostgresSelect;
 import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresSelect.PostgresSubquery;
@@ -103,6 +108,16 @@ public interface PostgresVisitor {
 
     void visit(PostgresUnionSelect unionSelect);
 
+    void visit(PostgresIntersectSelect intersectSelect);
+
+    void visit(PostgresExceptSelect exceptSelect);
+
+    void visit(PostgresExists exists);
+
+    void visit(PostgresScalarSubquery ss);
+
+    void visit(PostgresLateralSubquery lateral);
+
     void visit(PostgresWithSelect withSelect);
 
     void visit(PostgresDerivedTable derivedTable);
@@ -170,6 +185,16 @@ public interface PostgresVisitor {
             visit((PostgresText) expression);
         } else if (expression instanceof PostgresUnionSelect) {
             visit((PostgresUnionSelect) expression);
+        } else if (expression instanceof PostgresIntersectSelect) {
+            visit((PostgresIntersectSelect) expression);
+        } else if (expression instanceof PostgresExceptSelect) {
+            visit((PostgresExceptSelect) expression);
+        } else if (expression instanceof PostgresExists) {
+            visit((PostgresExists) expression);
+        } else if (expression instanceof PostgresScalarSubquery) {
+            visit((PostgresScalarSubquery) expression);
+        } else if (expression instanceof PostgresLateralSubquery) {
+            visit((PostgresLateralSubquery) expression);
         } else if (expression instanceof PostgresWithSelect) {
             visit((PostgresWithSelect) expression);
         } else if (expression instanceof PostgresDerivedTable) {

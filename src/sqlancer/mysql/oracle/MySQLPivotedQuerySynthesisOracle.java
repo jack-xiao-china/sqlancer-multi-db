@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.common.oracle.PivotedQuerySynthesisBase;
@@ -102,6 +103,9 @@ public class MySQLPivotedQuerySynthesisOracle
         MySQLExpression expression = new MySQLExpressionGenerator(globalState).setRowVal(rw).setColumns(columns)
                 .generateExpression();
         MySQLConstant expectedValue = expression.getExpectedValue();
+        if (expectedValue == null) {
+            throw new IgnoreMeException();
+        }
         MySQLExpression result;
         if (expectedValue.isNull()) {
             result = new MySQLUnaryPostfixOperation(expression, UnaryPostfixOperator.IS_NULL, false);

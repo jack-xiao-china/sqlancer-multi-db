@@ -56,6 +56,8 @@ public final class MySQLViewGenerator {
         errors.add("VIEW contains invalid column(s)");
         errors.add("Unknown table");
         errors.add("reference to VIEW");
+        errors.add("Can't reopen table");
+        errors.add("View's SELECT refers to a temporary table");
         MySQLErrors.addExpressionErrors(errors);
 
         return new SQLQueryAdapter(sb.toString(), errors, true);

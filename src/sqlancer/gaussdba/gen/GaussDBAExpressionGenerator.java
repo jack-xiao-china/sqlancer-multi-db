@@ -16,11 +16,15 @@ import sqlancer.gaussdba.GaussDBASchema.GaussDBARowValue;
 import sqlancer.gaussdba.GaussDBASchema.GaussDBATable;
 import sqlancer.gaussdba.GaussDBAToStringVisitor;
 import sqlancer.gaussdba.ast.GaussDBABetweenOperation;
+import sqlancer.gaussdba.ast.GaussDBABinaryArithmeticOperation;
+import sqlancer.gaussdba.ast.GaussDBABinaryArithmeticOperation.GaussDBAArithmeticOperator;
 import sqlancer.gaussdba.ast.GaussDBABinaryComparisonOperation;
+import sqlancer.gaussdba.ast.GaussDBACastOperation;
+import sqlancer.gaussdba.ast.GaussDBACaseWhen;
+import sqlancer.gaussdba.ast.GaussDBALikeOperation;
 import sqlancer.gaussdba.ast.GaussDBABinaryComparisonOperation.GaussDBABinaryComparisonOperator;
 import sqlancer.gaussdba.ast.GaussDBABinaryLogicalOperation;
 import sqlancer.gaussdba.ast.GaussDBABinaryLogicalOperation.GaussDBABinaryLogicalOperator;
-import sqlancer.gaussdba.ast.GaussDBACaseWhen;
 import sqlancer.gaussdba.ast.GaussDBAColumnReference;
 import sqlancer.gaussdba.ast.GaussDBAColumnValue;
 import sqlancer.gaussdba.ast.GaussDBAConstant;
@@ -76,7 +80,9 @@ public class GaussDBAExpressionGenerator
     }
 
     private enum Action {
-        COLUMN, LITERAL, BINARY_LOGICAL_OPERATOR, BINARY_COMPARISON_OPERATION, BETWEEN_OPERATOR, IN_OPERATOR, UNARY_OPERATOR
+        COLUMN, LITERAL, BINARY_LOGICAL_OPERATOR, BINARY_COMPARISON_OPERATION, BINARY_ARITHMETIC_OPERATION,
+        BETWEEN_OPERATOR, IN_OPERATOR, UNARY_OPERATOR, UNARY_POSTFIX_OPERATOR, CASE_OPERATOR,
+        AGGREGATE_FUNCTION, CAST_OPERATOR, LIKE_OPERATOR
     }
 
     public GaussDBAExpression generateExpression(int depth) {
@@ -94,6 +100,9 @@ public class GaussDBAExpressionGenerator
         case BINARY_COMPARISON_OPERATION:
             return new GaussDBABinaryComparisonOperation(generateExpression(depth + 1), generateExpression(depth + 1),
                     GaussDBABinaryComparisonOperator.getRandom());
+        case BINARY_ARITHMETIC_OPERATION:
+            return new GaussDBABinaryArithmeticOperation(generateExpression(depth + 1), generateExpression(depth + 1),
+                    GaussDBAArithmeticOperator.getRandom());
         case BETWEEN_OPERATOR:
             GaussDBAExpression a = generateExpression(depth + 1);
             GaussDBAExpression x = generateLeafNode();
@@ -104,9 +113,43 @@ public class GaussDBAExpressionGenerator
         case UNARY_OPERATOR:
             return new GaussDBAUnaryPrefixOperation(generateExpression(depth + 1),
                     Randomly.getBoolean() ? UnaryPrefixOperator.NOT : Randomly.fromOptions(UnaryPrefixOperator.UNARY_PLUS, UnaryPrefixOperator.UNARY_MINUS));
+        case UNARY_POSTFIX_OPERATOR:
+            return new GaussDBAUnaryPostfixOperation(generateExpression(depth + 1),
+                    Randomly.fromOptions(UnaryPostfixOperator.IS_NULL, UnaryPostfixOperator.IS_NOT_NULL));
+        case CASE_OPERATOR:
+            int nrCases = Randomly.smallNumber() + 1;
+            List<GaussDBAExpression> conditions = new ArrayList<>();
+            List<GaussDBAExpression> thenExprs = new ArrayList<>();
+            for (int i = 0; i < nrCases; i++) {
+                conditions.add(generateExpression(depth + 1));
+                thenExprs.add(generateLeafNode());
+            }
+            return new GaussDBACaseWhen(conditions, thenExprs, generateLeafNode());
+        case AGGREGATE_FUNCTION:
+            GaussDBAAggregateFunction func = Randomly.fromOptions(GaussDBAAggregateFunction.values());
+            return new GaussDBAAggregate(List.of(generateLeafNode()), func);
+        case CAST_OPERATOR:
+            return new GaussDBACastOperation(generateExpression(depth + 1),
+                    Randomly.fromOptions(GaussDBADataType.NUMBER, GaussDBADataType.VARCHAR2, GaussDBADataType.DATE));
+        case LIKE_OPERATOR:
+            return new GaussDBALikeOperation(generateExpression(depth + 1),
+                    GaussDBAConstant.createVarchar2Constant(generateLikePattern()), Randomly.getBoolean());
         default:
             throw new AssertionError();
         }
+    }
+
+    private String generateLikePattern() {
+        StringBuilder sb = new StringBuilder();
+        int len = Randomly.smallNumber() + 1;
+        for (int i = 0; i < len; i++) {
+            if (Randomly.getBooleanWithSmallProbability()) {
+                sb.append(Randomly.fromOptions('%', '_'));
+            } else {
+                sb.append((char) ('a' + state.getRandomly().getInteger(0, 26)));
+            }
+        }
+        return sb.toString();
     }
 
     private GaussDBAExpression generateLeafNode() {
@@ -361,5 +404,23 @@ public class GaussDBAExpressionGenerator
             return false;
         }
         return true;
+    }
+
+    private GaussDBAExpression lastGeneratedExpression;
+
+    public GaussDBAExpression getLastGeneratedExpression() {
+        return lastGeneratedExpression;
+    }
+
+    public void setLastGeneratedExpression(GaussDBAExpression expr) {
+        this.lastGeneratedExpression = expr;
+    }
+
+    public List<GaussDBAExpression> generateExpressions(int count) {
+        List<GaussDBAExpression> expressions = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            expressions.add(generateExpression(0));
+        }
+        return expressions;
     }
 }

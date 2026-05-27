@@ -79,4 +79,8 @@ public class SQLancerResultSet implements Closeable {
         this.runnableEpilogue = runnableEpilogue;
     }
 
+    public Object getObject(int i) throws SQLException {
+        return rs.getObject(i);
+    }
+
 }

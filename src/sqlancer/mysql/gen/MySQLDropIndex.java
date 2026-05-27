@@ -45,7 +45,9 @@ public final class MySQLDropIndex {
         return new SQLQueryAdapter(sb.toString(),
                 ExpectedErrors.from("LOCK=NONE is not supported", "ALGORITHM=INPLACE is not supported",
                         "Data truncation", "Data truncated for functional index",
-                        "A primary key index cannot be invisible"));
+                        "A primary key index cannot be invisible",
+                        "check that column/key exists",
+                        "Incorrect prefix key"));
     }
 
 }

@@ -3,6 +3,7 @@ package sqlancer.gaussdba;
 import sqlancer.common.visitor.ToStringVisitor;
 import sqlancer.gaussdba.ast.GaussDBAAggregate;
 import sqlancer.gaussdba.ast.GaussDBABetweenOperation;
+import sqlancer.gaussdba.ast.GaussDBABinaryArithmeticOperation;
 import sqlancer.gaussdba.ast.GaussDBABinaryComparisonOperation;
 import sqlancer.gaussdba.ast.GaussDBABinaryLogicalOperation;
 import sqlancer.gaussdba.ast.GaussDBACaseWhen;
@@ -11,14 +12,24 @@ import sqlancer.gaussdba.ast.GaussDBAColumnReference;
 import sqlancer.gaussdba.ast.GaussDBAColumnValue;
 import sqlancer.gaussdba.ast.GaussDBAConstant;
 import sqlancer.gaussdba.ast.GaussDBADataType;
+import sqlancer.gaussdba.ast.GaussDBAAlias;
+import sqlancer.gaussdba.ast.GaussDBAExists;
 import sqlancer.gaussdba.ast.GaussDBAExpression;
+import sqlancer.gaussdba.ast.GaussDBADerivedTable;
 import sqlancer.gaussdba.ast.GaussDBAInOperation;
 import sqlancer.gaussdba.ast.GaussDBAJoin;
 import sqlancer.gaussdba.ast.GaussDBALikeOperation;
+import sqlancer.gaussdba.ast.GaussDBAMinusSelect;
+import sqlancer.gaussdba.ast.GaussDBAPrintedExpression;
 import sqlancer.gaussdba.ast.GaussDBASelect;
+import sqlancer.gaussdba.ast.GaussDBAText;
 import sqlancer.gaussdba.ast.GaussDBATableReference;
 import sqlancer.gaussdba.ast.GaussDBAUnaryPostfixOperation;
 import sqlancer.gaussdba.ast.GaussDBAUnaryPrefixOperation;
+import sqlancer.gaussdba.ast.GaussDBAUnionSelect;
+import sqlancer.gaussdba.ast.GaussDBAWithSelect;
+import sqlancer.gaussdba.ast.GaussDBACteDefinition;
+import sqlancer.gaussdba.ast.GaussDBACteTableReference;
 
 public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression> {
 
@@ -36,6 +47,8 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
             visit((GaussDBABinaryLogicalOperation) expr);
         } else if (expr instanceof GaussDBABinaryComparisonOperation) {
             visit((GaussDBABinaryComparisonOperation) expr);
+        } else if (expr instanceof GaussDBABinaryArithmeticOperation) {
+            visit((GaussDBABinaryArithmeticOperation) expr);
         } else if (expr instanceof GaussDBABetweenOperation) {
             visit((GaussDBABetweenOperation) expr);
         } else if (expr instanceof GaussDBATableReference) {
@@ -56,6 +69,24 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
             visit((GaussDBAInOperation) expr);
         } else if (expr instanceof GaussDBALikeOperation) {
             visit((GaussDBALikeOperation) expr);
+        } else if (expr instanceof GaussDBAExists) {
+            visit((GaussDBAExists) expr);
+        } else if (expr instanceof GaussDBAPrintedExpression) {
+            visit((GaussDBAPrintedExpression) expr);
+        } else if (expr instanceof GaussDBAUnionSelect) {
+            visit((GaussDBAUnionSelect) expr);
+        } else if (expr instanceof GaussDBAMinusSelect) {
+            visit((GaussDBAMinusSelect) expr);
+        } else if (expr instanceof GaussDBAWithSelect) {
+            visit((GaussDBAWithSelect) expr);
+        } else if (expr instanceof GaussDBACteTableReference) {
+            visit((GaussDBACteTableReference) expr);
+        } else if (expr instanceof GaussDBADerivedTable) {
+            visit((GaussDBADerivedTable) expr);
+        } else if (expr instanceof GaussDBAAlias) {
+            visit((GaussDBAAlias) expr);
+        } else if (expr instanceof GaussDBAText) {
+            visit((GaussDBAText) expr);
         } else {
             throw new AssertionError(expr);
         }
@@ -141,6 +172,16 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
         visit(op.getLeft());
         sb.append(" ");
         sb.append(op.getOp().getTextRepr());
+        sb.append(" ");
+        visit(op.getRight());
+        sb.append(")");
+    }
+
+    public void visit(GaussDBABinaryArithmeticOperation op) {
+        sb.append("(");
+        visit(op.getLeft());
+        sb.append(" ");
+        sb.append(op.getOp().toString());
         sb.append(" ");
         visit(op.getRight());
         sb.append(")");
@@ -267,6 +308,74 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
         sb.append(likeOp.isNegated() ? " NOT LIKE " : " LIKE ");
         visit(likeOp.getRight());
         sb.append(")");
+    }
+
+    public void visit(GaussDBAExists exists) {
+        sb.append("EXISTS (");
+        visit(exists.getSubquery());
+        sb.append(")");
+    }
+
+    public void visit(GaussDBAPrintedExpression printed) {
+        sb.append(printed.getPrintedSql());
+    }
+
+    public void visit(GaussDBAUnionSelect union) {
+        sb.append("(");
+        for (int i = 0; i < union.getSelects().size(); i++) {
+            visit(union.getSelects().get(i));
+            if (i < union.getSelects().size() - 1) {
+                sb.append(union.isUnionAll() ? " UNION ALL " : " UNION ");
+            }
+        }
+        sb.append(")");
+    }
+
+    public void visit(GaussDBAMinusSelect minus) {
+        sb.append("(");
+        for (int i = 0; i < minus.getSelects().size(); i++) {
+            visit(minus.getSelects().get(i));
+            if (i < minus.getSelects().size() - 1) {
+                sb.append(minus.isMinusAll() ? " MINUS ALL " : " MINUS ");
+            }
+        }
+        sb.append(")");
+    }
+
+    public void visit(GaussDBAWithSelect withSelect) {
+        sb.append("WITH ");
+        for (int i = 0; i < withSelect.getCtes().size(); i++) {
+            GaussDBACteDefinition cte = withSelect.getCtes().get(i);
+            sb.append(cte.getName());
+            sb.append(" AS (");
+            visit(cte.getSelect());
+            sb.append(")");
+            if (i < withSelect.getCtes().size() - 1) {
+                sb.append(", ");
+            }
+        }
+        sb.append(" ");
+        visit(withSelect.getMainSelect());
+    }
+
+    public void visit(GaussDBACteTableReference cteRef) {
+        sb.append(cteRef.getName());
+    }
+
+    public void visit(GaussDBADerivedTable derived) {
+        sb.append("(");
+        visit(derived.getSelect());
+        sb.append(") AS ");
+        sb.append(derived.getAlias());
+    }
+
+    public void visit(GaussDBAAlias alias) {
+        visit(alias.getExpression());
+        sb.append(alias.getOperatorRepresentation());
+    }
+
+    public void visit(GaussDBAText text) {
+        sb.append(text.getText());
     }
 
     public static String asString(GaussDBAExpression expr) {

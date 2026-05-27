@@ -7,6 +7,7 @@ import sqlancer.Randomly;
 import sqlancer.common.visitor.ToStringVisitor;
 import sqlancer.mysql.ast.MySQLAggregate;
 import sqlancer.mysql.ast.MySQLAggregate.MySQLAggregateFunction;
+import sqlancer.mysql.ast.MySQLAnyAllSubquery;
 import sqlancer.mysql.ast.MySQLBetweenOperation;
 import sqlancer.mysql.ast.MySQLBinaryArithmeticOperation;
 import sqlancer.mysql.ast.MySQLBinaryComparisonOperation;
@@ -25,6 +26,7 @@ import sqlancer.mysql.ast.MySQLJoin;
 import sqlancer.mysql.ast.MySQLOrderByTerm;
 import sqlancer.mysql.ast.MySQLOrderByTerm.MySQLOrder;
 import sqlancer.mysql.ast.MySQLPrintedExpression;
+import sqlancer.mysql.ast.MySQLScalarSubquery;
 import sqlancer.mysql.ast.MySQLSelect;
 import sqlancer.mysql.ast.MySQLUnionSelect;
 import sqlancer.mysql.ast.MySQLWithSelect;
@@ -282,6 +284,26 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
     public void visit(MySQLExists op) {
         sb.append(" EXISTS (");
         visit(op.getExpr());
+        sb.append(")");
+    }
+
+    @Override
+    public void visit(MySQLAnyAllSubquery op) {
+        sb.append("(");
+        visit(op.getLhs());
+        sb.append(") ");
+        sb.append(op.getComparisonOp().getOperator());
+        sb.append(" ");
+        sb.append(op.getQuantifier().getQuantifier());
+        sb.append(" (");
+        visit(op.getSubquery());
+        sb.append(")");
+    }
+
+    @Override
+    public void visit(MySQLScalarSubquery op) {
+        sb.append("(");
+        visit(op.getSubquery());
         sb.append(")");
     }
 

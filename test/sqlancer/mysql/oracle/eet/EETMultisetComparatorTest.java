@@ -9,6 +9,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import sqlancer.common.oracle.eet.EETMultisetComparator;
+
 class EETMultisetComparatorTest {
 
     @Test
