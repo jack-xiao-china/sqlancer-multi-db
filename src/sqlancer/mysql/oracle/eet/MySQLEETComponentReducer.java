@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 import sqlancer.Randomly;
+import sqlancer.common.oracle.eet.EETMultisetComparator;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLVisitor;
 import sqlancer.mysql.ast.MySQLCaseOperator;

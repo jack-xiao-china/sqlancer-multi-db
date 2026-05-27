@@ -5,8 +5,10 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import sqlancer.Randomly;
+import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
+import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBColumn;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBDataType;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBTable;
@@ -26,7 +28,9 @@ public final class GaussDBMInsertGenerator {
         String cols = columns.stream().map(GaussDBColumn::getName).collect(Collectors.joining(", "));
         String vals = columns.stream().map(c -> getRandomValueForType(c.getType())).collect(Collectors.joining(", "));
         String sql = "INSERT INTO " + table.getName() + "(" + cols + ") VALUES (" + vals + ")";
-        return new SQLQueryAdapter(sql);
+        ExpectedErrors errors = new ExpectedErrors();
+        GaussDBMErrors.addInsertUpdateErrors(errors);
+        return new SQLQueryAdapter(sql, errors);
     }
 
     private static String getRandomValueForType(GaussDBDataType type) {

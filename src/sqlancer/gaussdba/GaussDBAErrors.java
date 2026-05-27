@@ -19,11 +19,19 @@ public final class GaussDBAErrors {
         errors.add("value too large");
         errors.add("ORA-01722");             // Oracle错误码风格: invalid number
         errors.add("ORA-01858");             // invalid date format
+        errors.add("ORA-01861");             // literal does not match format string (datetime)
         errors.add("invalid input syntax");
         errors.add("invalid date format");
         errors.add("invalid month format");
         errors.add("data exception");
         errors.add("numeric field overflow");
+        // GaussDB-A Oracle mode datetime errors
+        errors.add("ERROR: invalid datetime value");
+        errors.add("ERROR: invalid date value");
+        errors.add("ERROR: invalid time value");
+        errors.add("ERROR: Incorrect datetime value");
+        errors.add("ERROR: Incorrect date value");
+        errors.add("ERROR: Incorrect time value");
         return errors;
     }
 
@@ -73,9 +81,17 @@ public final class GaussDBAErrors {
         errors.add("value too large");
         errors.add("ORA-01722");
         errors.add("ORA-01858");
+        errors.add("ORA-01861");  // literal does not match format string
         errors.add("invalid input syntax");
         errors.add("invalid date format");
         errors.add("data exception");
+        // GaussDB-A Oracle mode datetime errors
+        errors.add("ERROR: invalid datetime value");
+        errors.add("ERROR: invalid date value");
+        errors.add("ERROR: invalid time value");
+        errors.add("ERROR: Incorrect datetime value");
+        errors.add("ERROR: Incorrect date value");
+        errors.add("ERROR: Incorrect time value");
         return errors;
     }
 

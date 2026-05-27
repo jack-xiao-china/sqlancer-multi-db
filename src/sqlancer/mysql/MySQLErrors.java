@@ -28,6 +28,9 @@ public final class MySQLErrors {
         errors.add("Incorrect parameter count in the call to native function");
         // Packet size errors
         errors.add("Result of repeat() was larger than max_allowed_packet");
+        errors.add("Result of rpad() was larger than max_allowed_packet");
+        errors.add("Result of lpad() was larger than max_allowed_packet");
+        errors.add("Result of space() was larger than max_allowed_packet");
         errors.add("Packet too large");
         // 视图和 JOIN 相关错误
         errors.add("Not unique table/alias");
@@ -39,6 +42,9 @@ public final class MySQLErrors {
         errors.add("Illegal mix of collations");
         // SQL 语法错误（CODDTEST 等复杂查询可能产生的语法问题）
         errors.add("You have an error in your SQL syntax");
+        errors.add("Binary operands of bitwise operators must be of equal length");
+        errors.add("Incorrect DECIMAL value");
+        errors.add("Deadlock found when trying to get lock");
 
         if (MySQLBugs.bug111471) {
             errors.add("Memory capacity exceeded");
@@ -57,6 +63,12 @@ public final class MySQLErrors {
 
         errors.add(Pattern.compile("Unknown column '.*' in 'order clause'"));
         errors.add(Pattern.compile("Unknown column '.*' in '.*'")); // General unknown column error
+
+        // Match temporal conversion errors with various invalid date/time strings
+        errors.add(Pattern.compile("Incorrect datetime value: '.*'"));
+        errors.add(Pattern.compile("Incorrect date value: '.*'"));
+        errors.add(Pattern.compile("Incorrect time value: '.*'"));
+        errors.add(Pattern.compile("Incorrect TIMESTAMP value: '.*'"));
 
         return errors;
     }
@@ -95,11 +107,17 @@ public final class MySQLErrors {
         errors.add("The value specified for generated column");
         // 二进制值插入字符串列的字符集错误
         errors.add("Incorrect string value");
+        errors.add("Cannot convert string");
         // Temporal value errors during INSERT/UPDATE
         errors.add("Incorrect DATE value");
         errors.add("Incorrect TIME value");
         errors.add("Incorrect DATETIME value");
         errors.add("Incorrect TIMESTAMP value");
+        errors.add("Incorrect integer value");
+        errors.add("Incorrect double value");
+        // Self-referencing table and deadlock errors
+        errors.add("Can't reopen table");
+        errors.add("Deadlock found when trying to get lock");
 
         return errors;
     }

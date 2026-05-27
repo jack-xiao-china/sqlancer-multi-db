@@ -1,175 +1,66 @@
 package sqlancer.postgres.oracle.ext.eet;
 
-import sqlancer.IgnoreMeException;
-import sqlancer.Randomly;
-import sqlancer.postgres.PostgresSchema.PostgresDataType;
-import sqlancer.postgres.ast.PostgresBinaryLogicalOperation;
-import sqlancer.postgres.ast.PostgresBinaryLogicalOperation.BinaryLogicalOperator;
-import sqlancer.postgres.ast.PostgresCaseWhen;
-import sqlancer.postgres.ast.PostgresConstant;
+import sqlancer.common.oracle.eet.EETBetweenToComparisonRule;
+import sqlancer.common.oracle.eet.EETCoalesceToCaseRule;
+import sqlancer.common.oracle.eet.EETDeMorganRule;
+import sqlancer.common.oracle.eet.EETExceptToNotExistsRule;
+import sqlancer.common.oracle.eet.EETExistsToInRule;
+import sqlancer.common.oracle.eet.EETInToExistsRule;
+import sqlancer.common.oracle.eet.EETIntersectToExistsRule;
+import sqlancer.common.oracle.eet.EETNullifToCaseRule;
+import sqlancer.common.oracle.eet.EETTransformerBase;
+import sqlancer.common.schema.AbstractTables;
+import sqlancer.postgres.PostgresSchema.PostgresColumn;
+import sqlancer.postgres.PostgresSchema.PostgresTable;
 import sqlancer.postgres.ast.PostgresExpression;
-import sqlancer.postgres.ast.PostgresPostfixOperation;
-import sqlancer.postgres.ast.PostgresPostfixOperation.PostfixOperator;
-import sqlancer.postgres.ast.PostgresPrefixOperation;
-import sqlancer.postgres.ast.PostgresPrefixOperation.PrefixOperator;
-import sqlancer.postgres.ast.PostgresPrintedExpression;
-import sqlancer.postgres.ast.PostgresTableReference;
-import sqlancer.postgres.ast.PostgresText;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 /**
- * EET equivalent transformations (Rule 1–7 style) for PostgreSQL AST.
+ * PostgreSQL EET equivalent transformations. Delegates to {@link EETTransformerBase}
+ * with a {@link PostgresEETTransformAdapter} for dialect-specific AST node creation.
  *
- * Compared to MySQL/GaussDBM, this implementation focuses on a safe subset:
- * - boolean transforms for predicates (3-valued logic aware)
- * - value transforms via CASE WHEN for typed expressions when type is known
- * - recursive traversal via {@link PostgresEETExpressionTree}
+ * Registers PostgreSQL-supported semantic rewrite rules:
+ * - De Morgan's Law
+ * - BETWEEN → Comparison
+ * - EXISTS → IN (pending PostgresExists AST node, Phase 4)
+ * - IN → EXISTS (pending PostgresExists AST node, Phase 4)
+ * - INTERSECT → EXISTS (pending INTERSECT AST node, Phase 4)
+ * - EXCEPT → NOT EXISTS (pending EXCEPT AST node, Phase 4)
  */
 public final class PostgresEETTransformer {
 
-    private static final int MAX_TRANSFORM_RETRIES = 200;
-
-    private final PostgresExpressionGenerator gen;
+    private final EETTransformerBase<PostgresExpression> base;
 
     public PostgresEETTransformer(PostgresExpressionGenerator gen) {
-        this.gen = gen;
+        this(gen, null);
+    }
+
+    public PostgresEETTransformer(PostgresExpressionGenerator gen,
+            AbstractTables<PostgresTable, PostgresColumn> targetTables) {
+        PostgresEETTransformAdapter adapter = new PostgresEETTransformAdapter(gen, targetTables);
+        this.base = new EETTransformerBase<>(adapter);
+        // Register semantic rewrite rules (PostgreSQL-supported)
+        base.registerRule(new EETDeMorganRule<>());
+        base.registerRule(new EETBetweenToComparisonRule<>());
+        base.registerRule(new EETExistsToInRule<>());
+        base.registerRule(new EETInToExistsRule<>());
+        base.registerRule(new EETIntersectToExistsRule<>());
+        base.registerRule(new EETExceptToNotExistsRule<>());
+        base.registerRule(new EETCoalesceToCaseRule<>());
+        base.registerRule(new EETNullifToCaseRule<>());
     }
 
     public PostgresExpression transformExpression(PostgresExpression expr) {
-        if (expr == null) {
-            return null;
-        }
-        if (isRule7NoChange(expr)) {
-            return expr;
-        }
-        PostgresExpression exprRec = PostgresEETExpressionTree.mapChildren(this::transformExpression, expr);
-        PostgresExpression constHandled = tryConstBoolTransform(exprRec);
-        if (constHandled != null) {
-            return constHandled;
-        }
-        int attempts = 0;
-        while (attempts++ < MAX_TRANSFORM_RETRIES) {
-            try {
-                if (isBooleanLike(exprRec)) {
-                    if (Randomly.getBoolean()) {
-                        return transformBoolExpr(exprRec);
-                    } else {
-                        return transformValueExpr(exprRec);
-                    }
-                } else {
-                    return transformValueExpr(exprRec);
-                }
-            } catch (IgnoreMeException e) {
-                // retry
-            }
-        }
-        throw new IgnoreMeException();
+        return base.transformExpression(expr);
     }
 
-    private static boolean isRule7NoChange(PostgresExpression expr) {
-        return expr instanceof PostgresTableReference || expr instanceof PostgresText;
+    /** Get the underlying base transformer (for rule registration and testing). */
+    public EETTransformerBase<PostgresExpression> getBase() {
+        return base;
     }
 
-    static boolean isBooleanLike(PostgresExpression expr) {
-        // conservative: only treat known boolean-typed nodes as boolean-like
-        if (expr == null) {
-            return false;
-        }
-        PostgresDataType t = expr.getExpressionType();
-        if (t == PostgresDataType.BOOLEAN) {
-            return true;
-        }
-        return expr instanceof PostgresBinaryLogicalOperation || expr instanceof PostgresPostfixOperation
-                || expr instanceof PostgresPrefixOperation;
-    }
-
-    PostgresExpression tryConstBoolTransform(PostgresExpression expr) {
-        if (!(expr instanceof PostgresConstant)) {
-            return null;
-        }
-        PostgresConstant c = (PostgresConstant) expr;
-        if (c.isNull() || !c.isInt()) {
-            return null;
-        }
-        long v = c.asInt();
-        if (v != 0 && v != 1) {
-            return null;
-        }
-        PostgresExpression extend;
-        try {
-            extend = gen.generateBooleanExpression();
-        } catch (IgnoreMeException e) {
-            return null;
-        }
-        if (v == 1) {
-            return new PostgresBinaryLogicalOperation(c, extend, BinaryLogicalOperator.OR);
-        } else {
-            return new PostgresBinaryLogicalOperation(c, extend, BinaryLogicalOperator.AND);
-        }
-    }
-
-    public PostgresExpression transformBoolExpr(PostgresExpression expr) {
-        PostgresExpression randomBool = gen.generateBooleanExpression();
-        int choice = (int) Randomly.getNotCachedInteger(0, 6);
-        boolean useTrueExpr = choice <= 2;
-
-        PostgresExpression notRand = new PostgresPrefixOperation(randomBool, PrefixOperator.NOT);
-        PostgresExpression randIsNull = new PostgresPostfixOperation(randomBool, PostfixOperator.IS_NULL);
-        PostgresExpression randIsNotNull = new PostgresPostfixOperation(randomBool, PostfixOperator.IS_NOT_NULL);
-
-        if (useTrueExpr) {
-            PostgresExpression part1 = new PostgresBinaryLogicalOperation(randomBool, notRand, BinaryLogicalOperator.OR);
-            PostgresExpression base = new PostgresBinaryLogicalOperation(part1, randIsNull, BinaryLogicalOperator.OR);
-            return new PostgresBinaryLogicalOperation(base, expr, BinaryLogicalOperator.AND);
-        } else {
-            PostgresExpression part1 = new PostgresBinaryLogicalOperation(randomBool, notRand, BinaryLogicalOperator.AND);
-            PostgresExpression base = new PostgresBinaryLogicalOperation(part1, randIsNotNull,
-                    BinaryLogicalOperator.AND);
-            return new PostgresBinaryLogicalOperation(base, expr, BinaryLogicalOperator.OR);
-        }
-    }
-
-    public PostgresExpression transformValueExpr(PostgresExpression expr) {
-        PostgresDataType type = expr.getExpressionType();
-        if (type == null) {
-            // Type unknown: still safe to wrap with an equivalent CASE WHEN using identical branches.
-            // This increases transform coverage without requiring additional Postgres type inference.
-            PostgresExpression randomBool = gen.generateBooleanExpression();
-            PostgresExpression copy = new PostgresPrintedExpression(expr);
-            return new PostgresCaseWhen(randomBool, copy, expr);
-        }
-        PostgresExpression randomBool = gen.generateBooleanExpression();
-        int choice = (int) Randomly.getNotCachedInteger(0, 9);
-        PostgresExpression randVal = gen.generateExpression(0, type);
-
-        if (choice <= 2) {
-            PostgresExpression trueExpr = buildTrueExpr(randomBool);
-            return new PostgresCaseWhen(trueExpr, new PostgresPrintedExpression(expr), randVal);
-        } else if (choice <= 5) {
-            PostgresExpression falseExpr = buildFalseExpr(randomBool);
-            return new PostgresCaseWhen(falseExpr, randVal, new PostgresPrintedExpression(expr));
-        } else {
-            PostgresExpression copy = new PostgresPrintedExpression(expr);
-            if (Randomly.getBoolean()) {
-                return new PostgresCaseWhen(randomBool, copy, expr);
-            } else {
-                return new PostgresCaseWhen(randomBool, expr, copy);
-            }
-        }
-    }
-
-    private static PostgresExpression buildTrueExpr(PostgresExpression randomBool) {
-        PostgresExpression notRand = new PostgresPrefixOperation(randomBool, PrefixOperator.NOT);
-        PostgresExpression randIsNull = new PostgresPostfixOperation(randomBool, PostfixOperator.IS_NULL);
-        PostgresExpression part1 = new PostgresBinaryLogicalOperation(randomBool, notRand, BinaryLogicalOperator.OR);
-        return new PostgresBinaryLogicalOperation(part1, randIsNull, BinaryLogicalOperator.OR);
-    }
-
-    private static PostgresExpression buildFalseExpr(PostgresExpression randomBool) {
-        PostgresExpression notRand = new PostgresPrefixOperation(randomBool, PrefixOperator.NOT);
-        PostgresExpression randIsNotNull = new PostgresPostfixOperation(randomBool, PostfixOperator.IS_NOT_NULL);
-        PostgresExpression part1 = new PostgresBinaryLogicalOperation(randomBool, notRand, BinaryLogicalOperator.AND);
-        return new PostgresBinaryLogicalOperation(part1, randIsNotNull, BinaryLogicalOperator.AND);
+    /** Get the adapter (for dialect-specific operations). */
+    public PostgresEETTransformAdapter getAdapter() {
+        return (PostgresEETTransformAdapter) base.getAdapter();
     }
 }
-

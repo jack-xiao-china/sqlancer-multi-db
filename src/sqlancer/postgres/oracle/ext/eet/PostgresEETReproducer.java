@@ -3,12 +3,14 @@ package sqlancer.postgres.oracle.ext.eet;
 import java.util.List;
 
 import sqlancer.Reproducer;
+import sqlancer.common.oracle.eet.EETMultisetComparator;
+import sqlancer.common.oracle.eet.EETQueryExecutor;
+import sqlancer.common.schema.AbstractTables;
 import sqlancer.postgres.PostgresGlobalState;
+import sqlancer.postgres.PostgresVisitor;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
 import sqlancer.postgres.PostgresSchema.PostgresTable;
-import sqlancer.postgres.PostgresVisitor;
-import sqlancer.common.schema.AbstractTables;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 public final class PostgresEETReproducer implements Reproducer<PostgresGlobalState> {

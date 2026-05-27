@@ -5,7 +5,9 @@ import java.util.List;
 import java.util.function.Function;
 
 import sqlancer.mysql.ast.MySQLAggregate;
+import sqlancer.mysql.ast.MySQLAnyAllSubquery;
 import sqlancer.mysql.ast.MySQLBetweenOperation;
+import sqlancer.mysql.ast.MySQLBinaryArithmeticOperation;
 import sqlancer.mysql.ast.MySQLBinaryComparisonOperation;
 import sqlancer.mysql.ast.MySQLBinaryLogicalOperation;
 import sqlancer.mysql.ast.MySQLBinaryOperation;
@@ -19,12 +21,18 @@ import sqlancer.mysql.ast.MySQLCteTableReference;
 import sqlancer.mysql.ast.MySQLExists;
 import sqlancer.mysql.ast.MySQLExpression;
 import sqlancer.mysql.ast.MySQLInOperation;
+import sqlancer.mysql.ast.MySQLScalarSubquery;
+import sqlancer.mysql.ast.MySQLSelect;
+import sqlancer.mysql.ast.MySQLOrderByTerm;
+import sqlancer.mysql.ast.MySQLPostfixText;
 import sqlancer.mysql.ast.MySQLPrintedExpression;
 import sqlancer.mysql.ast.MySQLStringExpression;
 import sqlancer.mysql.ast.MySQLTableReference;
+import sqlancer.mysql.ast.MySQLTemporalFunction;
 import sqlancer.mysql.ast.MySQLText;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation;
 import sqlancer.mysql.ast.MySQLUnaryPrefixOperation;
+import sqlancer.mysql.ast.MySQLWindowFunction;
 
 /**
  * Structural map/copy/replace on MySQL AST (EET §3.2 recursive traversal support).
@@ -127,6 +135,18 @@ public final class MySQLEETExpressionTree {
             // Keep original PQS expected; do not re-run inner.getExpectedValue() (can NPE on partial subtrees during EET).
             return new MySQLExists(inner, ex.getExpectedValue());
         }
+        if (e instanceof MySQLAnyAllSubquery) {
+            MySQLAnyAllSubquery aas = (MySQLAnyAllSubquery) e;
+            MySQLExpression mappedLhs = mapChild.apply(aas.getLhs());
+            MySQLExpression mappedSubquery = mapChild.apply(aas.getSubquery());
+            return new MySQLAnyAllSubquery(mappedLhs, mappedSubquery, aas.getComparisonOp(), aas.getQuantifier(),
+                    aas.getExpectedValue());
+        }
+        if (e instanceof MySQLScalarSubquery) {
+            MySQLScalarSubquery ss = (MySQLScalarSubquery) e;
+            MySQLExpression mappedSubquery = mapChild.apply(ss.getSubquery());
+            return new MySQLScalarSubquery((MySQLSelect) mappedSubquery);
+        }
         if (e instanceof MySQLCastOperation) {
             MySQLCastOperation c = (MySQLCastOperation) e;
             return new MySQLCastOperation(mapChild.apply(c.getExpr()), c.getType());
@@ -160,6 +180,32 @@ public final class MySQLEETExpressionTree {
                 list.add(mapChild.apply(x));
             }
             return new MySQLAggregate(list, a.getFunc());
+        }
+        if (e instanceof MySQLBinaryArithmeticOperation) {
+            MySQLBinaryArithmeticOperation b = (MySQLBinaryArithmeticOperation) e;
+            return new MySQLBinaryArithmeticOperation(mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()),
+                    b.getOp());
+        }
+        if (e instanceof MySQLTemporalFunction) {
+            MySQLTemporalFunction t = (MySQLTemporalFunction) e;
+            MySQLExpression mappedTemporal = mapChild.apply(t.getTemporalExpr());
+            MySQLExpression mappedInterval = mapChild.apply(t.getIntervalExpr());
+            return new MySQLTemporalFunction(t.getKind(), mappedTemporal, mappedInterval,
+                    t.getIntervalUnit(), t.getReturnType());
+        }
+        if (e instanceof MySQLWindowFunction) {
+            MySQLWindowFunction w = (MySQLWindowFunction) e;
+            MySQLExpression mappedExpr = mapChild.apply(w.getExpr());
+            MySQLExpression mappedPartition = mapChild.apply(w.getPartitionBy());
+            return new MySQLWindowFunction(w.getFunction(), mappedExpr, mappedPartition);
+        }
+        if (e instanceof MySQLPostfixText) {
+            MySQLPostfixText p = (MySQLPostfixText) e;
+            return new MySQLPostfixText(mapChild.apply(p.getExpr()), p.getText());
+        }
+        if (e instanceof MySQLOrderByTerm) {
+            MySQLOrderByTerm o = (MySQLOrderByTerm) e;
+            return new MySQLOrderByTerm(mapChild.apply(o.getExpr()), o.getOrder());
         }
         return e;
     }
@@ -204,6 +250,8 @@ public final class MySQLEETExpressionTree {
             }
         } else if (e instanceof MySQLExists) {
             sink.accept(((MySQLExists) e).getExpr());
+        } else if (e instanceof MySQLScalarSubquery) {
+            sink.accept(((MySQLScalarSubquery) e).getSubquery());
         } else if (e instanceof MySQLCastOperation) {
             sink.accept(((MySQLCastOperation) e).getExpr());
         } else if (e instanceof MySQLBetweenOperation) {
@@ -223,6 +271,22 @@ public final class MySQLEETExpressionTree {
             for (MySQLExpression x : ((MySQLAggregate) e).getExprs()) {
                 sink.accept(x);
             }
+        } else if (e instanceof MySQLBinaryArithmeticOperation) {
+            MySQLBinaryArithmeticOperation b = (MySQLBinaryArithmeticOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof MySQLTemporalFunction) {
+            MySQLTemporalFunction t = (MySQLTemporalFunction) e;
+            sink.accept(t.getTemporalExpr());
+            sink.accept(t.getIntervalExpr());
+        } else if (e instanceof MySQLWindowFunction) {
+            MySQLWindowFunction w = (MySQLWindowFunction) e;
+            sink.accept(w.getExpr());
+            sink.accept(w.getPartitionBy());
+        } else if (e instanceof MySQLPostfixText) {
+            sink.accept(((MySQLPostfixText) e).getExpr());
+        } else if (e instanceof MySQLOrderByTerm) {
+            sink.accept(((MySQLOrderByTerm) e).getExpr());
         }
     }
 

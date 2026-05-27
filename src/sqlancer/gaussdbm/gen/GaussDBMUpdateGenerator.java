@@ -7,6 +7,7 @@ import sqlancer.Randomly;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
+import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBColumn;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBDataType;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBTable;
@@ -25,6 +26,9 @@ public final class GaussDBMUpdateGenerator {
         errors.add("violates not-null constraint");
         errors.add("violates unique constraint");
         errors.add("duplicate key");
+        // Add datetime/date/time value errors for WHERE clause evaluation and SET value assignment
+        GaussDBMErrors.addExpressionErrors(errors);
+        GaussDBMErrors.addInsertUpdateErrors(errors);
 
         StringBuilder sb = new StringBuilder("UPDATE ");
         sb.append(table.getName());

@@ -15,6 +15,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 
 import sqlancer.IgnoreMeException;
+import sqlancer.common.oracle.eet.EETQueryExecutor;
+import sqlancer.common.oracle.eet.EETResultSetUtil;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.mysql.MySQLGlobalState;

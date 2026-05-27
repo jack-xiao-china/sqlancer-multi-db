@@ -32,6 +32,10 @@ public class PostgresFunction implements PostgresExpression {
         return args.clone();
     }
 
+    public PostgresFunctionWithResult getFunctionWithKnownResult() {
+        return functionWithKnownResult;
+    }
+
     public enum PostgresFunctionWithResult {
         ABS(1, "abs") {
 

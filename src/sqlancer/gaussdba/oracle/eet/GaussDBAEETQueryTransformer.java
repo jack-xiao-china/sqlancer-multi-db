@@ -8,7 +8,6 @@ import sqlancer.gaussdba.ast.GaussDBAExpression;
 import sqlancer.gaussdba.ast.GaussDBAJoin;
 import sqlancer.gaussdba.ast.GaussDBASelect;
 import sqlancer.gaussdba.ast.GaussDBATableReference;
-import sqlancer.gaussdba.gen.GaussDBAExpressionGenerator;
 
 /**
  * Traverses a {@link GaussDBASelect} and applies EET transforms (copy-based, original AST unchanged).
@@ -17,8 +16,8 @@ public class GaussDBAEETQueryTransformer {
 
     private final GaussDBAEETTransformer transformer;
 
-    public GaussDBAEETQueryTransformer(GaussDBAExpressionGenerator gen) {
-        this.transformer = new GaussDBAEETTransformer(gen);
+    public GaussDBAEETQueryTransformer(GaussDBAEETTransformer transformer) {
+        this.transformer = transformer;
     }
 
     public GaussDBAExpression eqTransformRoot(GaussDBAExpression root) {

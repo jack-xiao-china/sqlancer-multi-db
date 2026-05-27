@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 import sqlancer.Randomly;
+import sqlancer.common.oracle.eet.EETMultisetComparator;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
 import sqlancer.gaussdbm.GaussDBToStringVisitor;
 import sqlancer.gaussdbm.ast.GaussDBCaseWhen;
@@ -96,7 +97,8 @@ public final class GaussDBMEETComponentReducer {
         try {
             g.setRandomly(new Randomly(r.getReductionSeed()));
             GaussDBMExpressionGenerator gen = r.getExpressionGenerator().setTablesAndColumns(r.getTargetTables());
-            GaussDBMEETQueryTransformer qtf = new GaussDBMEETQueryTransformer(gen);
+            GaussDBMEETTransformer transformer = new GaussDBMEETTransformer(gen, r.getTargetTables());
+            GaussDBMEETQueryTransformer qtf = new GaussDBMEETQueryTransformer(transformer);
             return qtf.eqTransformRoot(orig);
         } catch (sqlancer.IgnoreMeException e) {
             return null;

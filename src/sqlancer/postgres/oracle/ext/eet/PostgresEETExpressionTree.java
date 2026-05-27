@@ -4,26 +4,48 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import sqlancer.postgres.ast.PostgresAggregate;
 import sqlancer.postgres.ast.PostgresBetweenOperation;
+import sqlancer.postgres.ast.PostgresBinaryArithmeticOperation;
+import sqlancer.postgres.ast.PostgresBinaryBitOperation;
 import sqlancer.postgres.ast.PostgresBinaryComparisonOperation;
+import sqlancer.postgres.ast.PostgresBinaryJsonOperation;
 import sqlancer.postgres.ast.PostgresBinaryLogicalOperation;
+import sqlancer.postgres.ast.PostgresBinaryRangeOperation;
 import sqlancer.postgres.ast.PostgresCaseWhen;
 import sqlancer.postgres.ast.PostgresCastOperation;
 import sqlancer.postgres.ast.PostgresCollate;
+import sqlancer.postgres.ast.PostgresConcatOperation;
 import sqlancer.postgres.ast.PostgresColumnReference;
 import sqlancer.postgres.ast.PostgresColumnValue;
 import sqlancer.postgres.ast.PostgresConstant;
 import sqlancer.postgres.ast.PostgresCteTableReference;
+import sqlancer.postgres.ast.PostgresExists;
 import sqlancer.postgres.ast.PostgresExpression;
+import sqlancer.postgres.ast.PostgresFunction;
+import sqlancer.postgres.ast.PostgresFunction.PostgresFunctionWithResult;
+import sqlancer.postgres.ast.PostgresFunctionWithUnknownResult;
 import sqlancer.postgres.ast.PostgresInOperation;
+import sqlancer.postgres.ast.PostgresJsonContainOperation;
+import sqlancer.postgres.ast.PostgresJoin;
 import sqlancer.postgres.ast.PostgresLikeOperation;
+import sqlancer.postgres.ast.PostgresLateralSubquery;
+import sqlancer.postgres.ast.PostgresScalarSubquery;
+import sqlancer.postgres.ast.PostgresSelect;
+import sqlancer.postgres.ast.PostgresOrderByTerm;
 import sqlancer.postgres.ast.PostgresPOSIXRegularExpression;
 import sqlancer.postgres.ast.PostgresPostfixOperation;
+import sqlancer.postgres.ast.PostgresPostfixText;
 import sqlancer.postgres.ast.PostgresPrefixOperation;
 import sqlancer.postgres.ast.PostgresPrintedExpression;
 import sqlancer.postgres.ast.PostgresSimilarTo;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresTemporalBinaryArithmeticOperation;
+import sqlancer.postgres.ast.PostgresTemporalFunction;
 import sqlancer.postgres.ast.PostgresText;
+import sqlancer.postgres.ast.PostgresWindowFunction;
+import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
+import sqlancer.postgres.ast.PostgresWindowFunction.WindowSpecification;
 
 /**
  * Structural map/copy/replace on Postgres AST (EET recursive traversal + reducer support).
@@ -131,6 +153,157 @@ public final class PostgresEETExpressionTree {
             PostgresCollate c = (PostgresCollate) e;
             return new PostgresCollate(mapChild.apply(c.getExpr()), c.getCollate());
         }
+        if (e instanceof PostgresExists) {
+            PostgresExists ex = (PostgresExists) e;
+            return new PostgresExists(mapChild.apply(ex.getSubquery()));
+        }
+        if (e instanceof PostgresScalarSubquery) {
+            PostgresScalarSubquery ss = (PostgresScalarSubquery) e;
+            return new PostgresScalarSubquery((PostgresSelect) mapChild.apply(ss.getSubquery()));
+        }
+        if (e instanceof PostgresLateralSubquery) {
+            PostgresLateralSubquery ls = (PostgresLateralSubquery) e;
+            return new PostgresLateralSubquery(mapChild.apply(ls.getSubquery()));
+        }
+        if (e instanceof PostgresBinaryArithmeticOperation) {
+            PostgresBinaryArithmeticOperation b = (PostgresBinaryArithmeticOperation) e;
+            return new PostgresBinaryArithmeticOperation(mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()),
+                    b.getOp());
+        }
+        if (e instanceof PostgresBinaryBitOperation) {
+            PostgresBinaryBitOperation b = (PostgresBinaryBitOperation) e;
+            return new PostgresBinaryBitOperation(b.getOp(), mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()));
+        }
+        if (e instanceof PostgresConcatOperation) {
+            PostgresConcatOperation c = (PostgresConcatOperation) e;
+            return new PostgresConcatOperation(mapChild.apply(c.getLeft()), mapChild.apply(c.getRight()));
+        }
+        if (e instanceof PostgresBinaryRangeOperation) {
+            PostgresBinaryRangeOperation b = (PostgresBinaryRangeOperation) e;
+            String opStr = b.getOperatorRepresentation();
+            PostgresBinaryRangeOperation.PostgresBinaryRangeComparisonOperator cmpOp = null;
+            for (PostgresBinaryRangeOperation.PostgresBinaryRangeComparisonOperator c : PostgresBinaryRangeOperation.PostgresBinaryRangeComparisonOperator
+                    .values()) {
+                if (c.getTextRepresentation().equals(opStr)) {
+                    cmpOp = c;
+                    break;
+                }
+            }
+            if (cmpOp != null) {
+                return new PostgresBinaryRangeOperation(cmpOp, mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()));
+            }
+            PostgresBinaryRangeOperation.PostgresBinaryRangeOperator rangeOp = null;
+            for (PostgresBinaryRangeOperation.PostgresBinaryRangeOperator r : PostgresBinaryRangeOperation.PostgresBinaryRangeOperator
+                    .values()) {
+                if (r.getTextRepresentation().equals(opStr)) {
+                    rangeOp = r;
+                    break;
+                }
+            }
+            if (rangeOp != null) {
+                return new PostgresBinaryRangeOperation(rangeOp, mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()));
+            }
+            return e;
+        }
+        if (e instanceof PostgresBinaryJsonOperation) {
+            PostgresBinaryJsonOperation b = (PostgresBinaryJsonOperation) e;
+            return new PostgresBinaryJsonOperation(b.getOp(), mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()));
+        }
+        if (e instanceof PostgresJsonContainOperation) {
+            PostgresJsonContainOperation b = (PostgresJsonContainOperation) e;
+            return new PostgresJsonContainOperation(b.getOp(), mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()));
+        }
+        if (e instanceof PostgresTemporalBinaryArithmeticOperation) {
+            PostgresTemporalBinaryArithmeticOperation b = (PostgresTemporalBinaryArithmeticOperation) e;
+            return new PostgresTemporalBinaryArithmeticOperation(mapChild.apply(b.getLeft()), mapChild.apply(b.getRight()),
+                    b.getOp(), b.getExpressionType());
+        }
+        if (e instanceof PostgresAggregate) {
+            PostgresAggregate a = (PostgresAggregate) e;
+            List<PostgresExpression> args = new ArrayList<>();
+            for (PostgresExpression x : a.getArgs()) {
+                args.add(mapChild.apply(x));
+            }
+            return new PostgresAggregate(args, a.getFunction());
+        }
+        if (e instanceof PostgresFunction) {
+            PostgresFunction f = (PostgresFunction) e;
+            PostgresExpression[] origArgs = f.getArguments();
+            PostgresExpression[] mappedArgs = new PostgresExpression[origArgs.length];
+            for (int i = 0; i < origArgs.length; i++) {
+                mappedArgs[i] = mapChild.apply(origArgs[i]);
+            }
+            PostgresFunctionWithResult knownResult = f.getFunctionWithKnownResult();
+            if (knownResult != null) {
+                return new PostgresFunction(knownResult, f.getExpressionType(), mappedArgs);
+            } else {
+                PostgresFunctionWithUnknownResult unknownFunc = findUnknownFuncByName(f.getFunctionName());
+                return new PostgresFunction(unknownFunc, f.getExpressionType(), mappedArgs);
+            }
+        }
+        if (e instanceof PostgresTemporalFunction) {
+            PostgresTemporalFunction t = (PostgresTemporalFunction) e;
+            PostgresExpression[] origArgs = t.getArguments();
+            PostgresExpression[] mappedArgs = new PostgresExpression[origArgs.length];
+            for (int i = 0; i < origArgs.length; i++) {
+                mappedArgs[i] = mapChild.apply(origArgs[i]);
+            }
+            return new PostgresTemporalFunction(t.getKind(), t.getExpressionType(), t.getModifier(),
+                    true, mappedArgs);
+        }
+        if (e instanceof PostgresPostfixText) {
+            PostgresPostfixText p = (PostgresPostfixText) e;
+            return new PostgresPostfixText(mapChild.apply(p.getExpr()), p.getText(), p.getExpectedValue(),
+                    p.getExpressionCompoundType());
+        }
+        if (e instanceof PostgresOrderByTerm) {
+            PostgresOrderByTerm o = (PostgresOrderByTerm) e;
+            return new PostgresOrderByTerm(mapChild.apply(o.getExpr()), o.isAscending());
+        }
+        if (e instanceof PostgresWindowFunction) {
+            PostgresWindowFunction w = (PostgresWindowFunction) e;
+            List<PostgresExpression> mappedArgs = new ArrayList<>();
+            for (PostgresExpression arg : w.getArguments()) {
+                mappedArgs.add(mapChild.apply(arg));
+            }
+            WindowSpecification origSpec = w.getWindowSpec();
+            List<PostgresExpression> mappedPartitionBy = new ArrayList<>();
+            if (origSpec.getPartitionBy() != null) {
+                for (PostgresExpression pb : origSpec.getPartitionBy()) {
+                    mappedPartitionBy.add(mapChild.apply(pb));
+                }
+            }
+            List<PostgresOrderByTerm> mappedOrderBy = new ArrayList<>();
+            if (origSpec.getOrderBy() != null) {
+                for (PostgresOrderByTerm ob : origSpec.getOrderBy()) {
+                    mappedOrderBy.add((PostgresOrderByTerm) mapChild.apply(ob));
+                }
+            }
+            WindowFrame mappedFrame = null;
+            if (origSpec.getFrame() != null) {
+                PostgresExpression mappedStart = origSpec.getFrame().getStartExpr() != null
+                        ? mapChild.apply(origSpec.getFrame().getStartExpr()) : null;
+                PostgresExpression mappedEnd = origSpec.getFrame().getEndExpr() != null
+                        ? mapChild.apply(origSpec.getFrame().getEndExpr()) : null;
+                mappedFrame = new WindowFrame(origSpec.getFrame().getType(), mappedStart, mappedEnd);
+            }
+            WindowSpecification mappedSpec = new WindowSpecification(mappedPartitionBy, mappedOrderBy, mappedFrame);
+            return new PostgresWindowFunction(w.getFunctionName(), mappedArgs, mappedSpec, w.getExpressionType());
+        }
+        if (e instanceof PostgresJoin) {
+            PostgresJoin j = (PostgresJoin) e;
+            PostgresExpression mappedLeft = j.getLeftTable() != null ? mapChild.apply(j.getLeftTable()) : null;
+            PostgresExpression mappedRight = j.getRightTable() != null ? mapChild.apply(j.getRightTable()) : null;
+            PostgresExpression mappedOn = j.getOnClause() != null ? mapChild.apply(j.getOnClause()) : null;
+            PostgresExpression mappedTableRef = j.getTableReference() != null ? mapChild.apply(j.getTableReference()) : null;
+            PostgresJoin newJoin = new PostgresJoin(mappedTableRef, mappedOn, j.getType());
+            if (mappedLeft != null && mappedRight != null) {
+                newJoin = PostgresJoin.createJoin(mappedLeft, mappedRight, j.getType(), mappedOn);
+            }
+            return newJoin;
+        }
+        // INTERSECT/EXCEPT are query-level nodes — children are PostgresSelect, not PostgresExpression
+        // They are handled in PostgresEETQueryTransformer, not here.
         // Aggregates are complex nodes; keep them unchanged for reducer stability.
         return e;
     }
@@ -186,12 +359,111 @@ public final class PostgresEETExpressionTree {
             sink.accept(r.getRegex());
         } else if (e instanceof PostgresCollate) {
             sink.accept(((PostgresCollate) e).getExpr());
+        } else if (e instanceof PostgresExists) {
+            sink.accept(((PostgresExists) e).getSubquery());
+        } else if (e instanceof PostgresScalarSubquery) {
+            sink.accept(((PostgresScalarSubquery) e).getSubquery());
+        } else if (e instanceof PostgresLateralSubquery) {
+            sink.accept(((PostgresLateralSubquery) e).getSubquery());
+        } else if (e instanceof PostgresBinaryArithmeticOperation) {
+            PostgresBinaryArithmeticOperation b = (PostgresBinaryArithmeticOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof PostgresBinaryBitOperation) {
+            PostgresBinaryBitOperation b = (PostgresBinaryBitOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof PostgresConcatOperation) {
+            PostgresConcatOperation c = (PostgresConcatOperation) e;
+            sink.accept(c.getLeft());
+            sink.accept(c.getRight());
+        } else if (e instanceof PostgresBinaryRangeOperation) {
+            PostgresBinaryRangeOperation b = (PostgresBinaryRangeOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof PostgresBinaryJsonOperation) {
+            PostgresBinaryJsonOperation b = (PostgresBinaryJsonOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof PostgresJsonContainOperation) {
+            PostgresJsonContainOperation b = (PostgresJsonContainOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof PostgresTemporalBinaryArithmeticOperation) {
+            PostgresTemporalBinaryArithmeticOperation b = (PostgresTemporalBinaryArithmeticOperation) e;
+            sink.accept(b.getLeft());
+            sink.accept(b.getRight());
+        } else if (e instanceof PostgresAggregate) {
+            for (PostgresExpression x : ((PostgresAggregate) e).getArgs()) {
+                sink.accept(x);
+            }
+        } else if (e instanceof PostgresFunction) {
+            for (PostgresExpression x : ((PostgresFunction) e).getArguments()) {
+                sink.accept(x);
+            }
+        } else if (e instanceof PostgresTemporalFunction) {
+            for (PostgresExpression x : ((PostgresTemporalFunction) e).getArguments()) {
+                sink.accept(x);
+            }
+        } else if (e instanceof PostgresPostfixText) {
+            sink.accept(((PostgresPostfixText) e).getExpr());
+        } else if (e instanceof PostgresOrderByTerm) {
+            sink.accept(((PostgresOrderByTerm) e).getExpr());
+        } else if (e instanceof PostgresWindowFunction) {
+            PostgresWindowFunction w = (PostgresWindowFunction) e;
+            for (PostgresExpression arg : w.getArguments()) {
+                sink.accept(arg);
+            }
+            WindowSpecification spec = w.getWindowSpec();
+            if (spec != null) {
+                if (spec.getPartitionBy() != null) {
+                    for (PostgresExpression pb : spec.getPartitionBy()) {
+                        sink.accept(pb);
+                    }
+                }
+                if (spec.getOrderBy() != null) {
+                    for (PostgresOrderByTerm ob : spec.getOrderBy()) {
+                        sink.accept(ob.getExpr());
+                    }
+                }
+                if (spec.getFrame() != null) {
+                    if (spec.getFrame().getStartExpr() != null) {
+                        sink.accept(spec.getFrame().getStartExpr());
+                    }
+                    if (spec.getFrame().getEndExpr() != null) {
+                        sink.accept(spec.getFrame().getEndExpr());
+                    }
+                }
+            }
+        } else if (e instanceof PostgresJoin) {
+            PostgresJoin j = (PostgresJoin) e;
+            if (j.getLeftTable() != null) {
+                sink.accept(j.getLeftTable());
+            }
+            if (j.getRightTable() != null) {
+                sink.accept(j.getRightTable());
+            }
+            if (j.getOnClause() != null) {
+                sink.accept(j.getOnClause());
+            }
+            if (j.getTableReference() != null) {
+                sink.accept(j.getTableReference());
+            }
         }
     }
 
     public static boolean isEetReductionLeaf(PostgresExpression e) {
         return e instanceof PostgresText || e instanceof PostgresTableReference || e instanceof PostgresCteTableReference
                 || e instanceof PostgresColumnReference || e instanceof PostgresColumnValue || e instanceof PostgresConstant;
+    }
+
+    private static PostgresFunctionWithUnknownResult findUnknownFuncByName(String name) {
+        for (PostgresFunctionWithUnknownResult f : PostgresFunctionWithUnknownResult.values()) {
+            if (f.getName().equals(name)) {
+                return f;
+            }
+        }
+        return null;
     }
 }
 

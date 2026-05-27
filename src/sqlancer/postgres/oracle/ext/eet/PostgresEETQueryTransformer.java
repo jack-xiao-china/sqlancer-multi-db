@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import sqlancer.postgres.ast.PostgresCteDefinition;
+import sqlancer.postgres.ast.PostgresExceptSelect;
+import sqlancer.postgres.ast.PostgresIntersectSelect;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresSelect;
@@ -18,6 +20,10 @@ public final class PostgresEETQueryTransformer {
 
     private final PostgresEETTransformer transformer;
 
+    public PostgresEETQueryTransformer(PostgresEETTransformer transformer) {
+        this.transformer = transformer;
+    }
+
     public PostgresEETQueryTransformer(PostgresExpressionGenerator gen) {
         this.transformer = new PostgresEETTransformer(gen);
     }
@@ -30,6 +36,22 @@ public final class PostgresEETQueryTransformer {
                 newBranches.add(eqTransformQuery(b));
             }
             return new PostgresUnionSelect(newBranches, u.isUnionAll());
+        }
+        if (root instanceof PostgresIntersectSelect) {
+            PostgresIntersectSelect i = (PostgresIntersectSelect) root;
+            List<PostgresSelect> newBranches = new ArrayList<>();
+            for (PostgresSelect b : i.getSelects()) {
+                newBranches.add(eqTransformQuery(b));
+            }
+            return new PostgresIntersectSelect(newBranches, i.isIntersectAll());
+        }
+        if (root instanceof PostgresExceptSelect) {
+            PostgresExceptSelect e = (PostgresExceptSelect) root;
+            List<PostgresSelect> newBranches = new ArrayList<>();
+            for (PostgresSelect b : e.getSelects()) {
+                newBranches.add(eqTransformQuery(b));
+            }
+            return new PostgresExceptSelect(newBranches, e.isExceptAll());
         }
         if (root instanceof PostgresWithSelect) {
             PostgresWithSelect w = (PostgresWithSelect) root;

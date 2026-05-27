@@ -1,12 +1,9 @@
 package sqlancer.mysql.oracle.eet;
 
-import java.sql.SQLException;
-import java.util.List;
-
-import sqlancer.IgnoreMeException;
 import sqlancer.Reproducer;
-import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.oracle.TestOracleUtils;
+import sqlancer.common.oracle.eet.EETOracleBase;
+import sqlancer.common.oracle.eet.EETQueryExecutor;
 import sqlancer.common.schema.AbstractTables;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
@@ -15,83 +12,64 @@ import sqlancer.mysql.MySQLVisitor;
 import sqlancer.mysql.ast.MySQLExpression;
 import sqlancer.mysql.gen.MySQLExpressionGenerator;
 
-public class MySQLEETOracle implements TestOracle<MySQLGlobalState> {
-
-    public static final int MAX_PROCESS_ROW_NUM = 10_000;
-
-    private final MySQLGlobalState state;
-    private final EETQueryExecutor executor;
-    private String lastQueryString;
-    private Reproducer<MySQLGlobalState> lastReproducer;
+public class MySQLEETOracle
+        extends EETOracleBase<MySQLGlobalState, MySQLExpression, AbstractTables<MySQLTable, MySQLColumn>, MySQLColumn> {
 
     public MySQLEETOracle(MySQLGlobalState state) {
-        this(state, null);
+        super(state, null);
     }
 
     public MySQLEETOracle(MySQLGlobalState state, EETQueryExecutor executor) {
-        this.state = state;
-        this.executor = executor != null ? executor : new EETDefaultQueryExecutor(state);
+        super(state, executor);
     }
 
     @Override
-    public void check() throws SQLException {
-        lastReproducer = null;
-        AbstractTables<MySQLTable, MySQLColumn> targetTables = TestOracleUtils.getRandomTableNonEmptyTables(state.getSchema());
-        MySQLExpressionGenerator gen = new MySQLExpressionGenerator(state).setTablesAndColumns(targetTables);
-        MySQLExpression root = MySQLEETQueryGenerator.generateEETQueryRandomShape(state, gen, targetTables);
-
-        MySQLEETQueryTransformer qtf = new MySQLEETQueryTransformer(gen);
-        long reductionSeed = state.getRandomly().getSeed();
-        MySQLExpression transformed = qtf.eqTransformRoot(root);
-
-        String originalQuery = MySQLVisitor.asString(root);
-        String transformedQuery = MySQLVisitor.asString(transformed);
-        lastQueryString = originalQuery + "\n-- EET transformed:\n" + transformedQuery;
-
-        if (state.getOptions().logEachSelect()) {
-            state.getLogger().writeCurrent(lastQueryString);
-        }
-
-        List<List<String>> originalResult;
-        List<List<String>> transformedResult;
-        try {
-            originalResult = executor.executeQuery(originalQuery);
-            transformedResult = executor.executeQuery(transformedQuery);
-        } catch (IgnoreMeException e) {
-            throw e;
-        } catch (SQLException e) {
-            throw new IgnoreMeException();
-        }
-
-        if (originalResult.size() > MAX_PROCESS_ROW_NUM || transformedResult.size() > MAX_PROCESS_ROW_NUM) {
-            throw new IgnoreMeException();
-        }
-
-        if (EETMultisetComparator.compareResultMultisets(originalResult, transformedResult)) {
-            return;
-        }
-
-        List<List<String>> orig2;
-        List<List<String>> trans2;
-        try {
-            orig2 = executor.executeQuery(originalQuery);
-            trans2 = executor.executeQuery(transformedQuery);
-        } catch (SQLException e) {
-            throw new IgnoreMeException();
-        }
-        if (!EETMultisetComparator.compareResultMultisets(orig2, trans2)) {
-            lastReproducer = new MySQLEETReproducer(root, transformed, gen, targetTables, reductionSeed, executor);
-            throw new AssertionError(String.format("EET logic bug: multiset mismatch\n%s\n", lastQueryString));
-        }
+    protected AbstractTables<MySQLTable, MySQLColumn> getRandomTables() {
+        return TestOracleUtils.getRandomTableNonEmptyTables(state.getSchema());
     }
 
     @Override
-    public String getLastQueryString() {
-        return lastQueryString;
+    protected Object createGenerator(AbstractTables<MySQLTable, MySQLColumn> tables) {
+        return new MySQLExpressionGenerator(state).setTablesAndColumns(tables);
     }
 
     @Override
-    public Reproducer<MySQLGlobalState> getLastReproducer() {
-        return lastReproducer;
+    protected MySQLExpression generateRootQuery(MySQLGlobalState state, Object gen,
+            AbstractTables<MySQLTable, MySQLColumn> tables) {
+        MySQLExpressionGenerator expressionGen = (MySQLExpressionGenerator) gen;
+        return MySQLEETQueryGenerator.generateEETQueryRandomShape(state, expressionGen, tables);
+    }
+
+    @Override
+    protected Object createTransformer(Object gen, AbstractTables<MySQLTable, MySQLColumn> tables) {
+        MySQLExpressionGenerator expressionGen = (MySQLExpressionGenerator) gen;
+        return new MySQLEETTransformer(expressionGen, tables);
+    }
+
+    @Override
+    protected Object createQueryTransformer(Object transformer) {
+        return new MySQLEETQueryTransformer((MySQLEETTransformer) transformer);
+    }
+
+    @Override
+    protected MySQLExpression transformRoot(Object queryTransformer, MySQLExpression root) {
+        return ((MySQLEETQueryTransformer) queryTransformer).eqTransformRoot(root);
+    }
+
+    @Override
+    protected String asString(MySQLExpression expr) {
+        return MySQLVisitor.asString(expr);
+    }
+
+    @Override
+    protected Reproducer<MySQLGlobalState> createReproducer(MySQLExpression original, MySQLExpression transformed,
+            Object gen, AbstractTables<MySQLTable, MySQLColumn> tables, long reductionSeed) {
+        MySQLExpressionGenerator expressionGen = (MySQLExpressionGenerator) gen;
+        return new MySQLEETReproducer(original, transformed, expressionGen, tables, reductionSeed, executor);
+    }
+
+    @Override
+    protected EETQueryExecutor createDefaultExecutor() {
+        return new EETDefaultQueryExecutor(state);
     }
 }

@@ -4,6 +4,8 @@ import java.sql.SQLException;
 import java.util.List;
 
 import sqlancer.IgnoreMeException;
+import sqlancer.common.oracle.eet.EETQueryExecutor;
+import sqlancer.common.oracle.eet.EETResultSetUtil;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.gaussdba.GaussDBAGlobalState;
@@ -24,8 +26,6 @@ public class GaussDBAEETDefaultQueryExecutor implements EETQueryExecutor {
                 throw new IgnoreMeException();
             }
             return EETResultSetUtil.readAllRows(rs);
-        } catch (SQLException e) {
-            throw e;
         }
     }
 }

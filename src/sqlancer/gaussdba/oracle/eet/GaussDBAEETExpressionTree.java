@@ -10,8 +10,10 @@ import sqlancer.gaussdba.ast.GaussDBABinaryLogicalOperation;
 import sqlancer.gaussdba.ast.GaussDBACaseWhen;
 import sqlancer.gaussdba.ast.GaussDBAColumnReference;
 import sqlancer.gaussdba.ast.GaussDBAConstant;
+import sqlancer.gaussdba.ast.GaussDBAExists;
 import sqlancer.gaussdba.ast.GaussDBAExpression;
 import sqlancer.gaussdba.ast.GaussDBAInOperation;
+import sqlancer.gaussdba.ast.GaussDBAPrintedExpression;
 import sqlancer.gaussdba.ast.GaussDBATableReference;
 import sqlancer.gaussdba.ast.GaussDBAUnaryPostfixOperation;
 import sqlancer.gaussdba.ast.GaussDBAUnaryPrefixOperation;
@@ -103,6 +105,14 @@ public final class GaussDBAEETExpressionTree {
             }
             return new GaussDBAInOperation(mapChild.apply(i.getExpr()), newList, i.isNegated());
         }
+        if (e instanceof GaussDBAExists) {
+            GaussDBAExists ex = (GaussDBAExists) e;
+            return new GaussDBAExists(mapChild.apply(ex.getSubquery()));
+        }
+        if (e instanceof GaussDBAPrintedExpression) {
+            GaussDBAPrintedExpression p = (GaussDBAPrintedExpression) e;
+            return new GaussDBAPrintedExpression(mapChild.apply(p.getOriginal()));
+        }
         return e;
     }
 
@@ -142,6 +152,10 @@ public final class GaussDBAEETExpressionTree {
             for (GaussDBAExpression x : i.getListElements()) {
                 sink.accept(x);
             }
+        } else if (e instanceof GaussDBAExists) {
+            sink.accept(((GaussDBAExists) e).getSubquery());
+        } else if (e instanceof GaussDBAPrintedExpression) {
+            sink.accept(((GaussDBAPrintedExpression) e).getOriginal());
         }
     }
 

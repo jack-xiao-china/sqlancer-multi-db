@@ -13,7 +13,6 @@ import sqlancer.gaussdbm.ast.GaussDBSelect;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
 import sqlancer.gaussdbm.ast.GaussDBUnionSelect;
 import sqlancer.gaussdbm.ast.GaussDBWithSelect;
-import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
 
 /**
  * Traverses a {@link GaussDBSelect} and applies EET transforms (copy-based, original AST unchanged).
@@ -22,8 +21,8 @@ public class GaussDBMEETQueryTransformer {
 
     private final GaussDBMEETTransformer transformer;
 
-    public GaussDBMEETQueryTransformer(GaussDBMExpressionGenerator gen) {
-        this.transformer = new GaussDBMEETTransformer(gen);
+    public GaussDBMEETQueryTransformer(GaussDBMEETTransformer transformer) {
+        this.transformer = transformer;
     }
 
     public GaussDBExpression eqTransformRoot(GaussDBExpression root) {

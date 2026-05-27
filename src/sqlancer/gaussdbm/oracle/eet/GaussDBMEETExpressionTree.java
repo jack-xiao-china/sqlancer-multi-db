@@ -12,7 +12,9 @@ import sqlancer.gaussdbm.ast.GaussDBCaseWhen;
 import sqlancer.gaussdbm.ast.GaussDBColumnReference;
 import sqlancer.gaussdbm.ast.GaussDBConstant;
 import sqlancer.gaussdbm.ast.GaussDBCteTableReference;
+import sqlancer.gaussdbm.ast.GaussDBExists;
 import sqlancer.gaussdbm.ast.GaussDBExpression;
+import sqlancer.gaussdbm.ast.GaussDBInOperation;
 import sqlancer.gaussdbm.ast.GaussDBPrintedExpression;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
 import sqlancer.gaussdbm.ast.GaussDBText;
@@ -104,6 +106,18 @@ public final class GaussDBMEETExpressionTree {
             }
             return new GaussDBAggregate(list, a.getFunc());
         }
+        if (e instanceof GaussDBExists) {
+            GaussDBExists ex = (GaussDBExists) e;
+            return new GaussDBExists(mapChild.apply(ex.getExpr()));
+        }
+        if (e instanceof GaussDBInOperation) {
+            GaussDBInOperation in = (GaussDBInOperation) e;
+            List<GaussDBExpression> newList = new ArrayList<>();
+            for (GaussDBExpression x : in.getListElements()) {
+                newList.add(mapChild.apply(x));
+            }
+            return new GaussDBInOperation(mapChild.apply(in.getExpr()), newList, in.isTrue());
+        }
         return e;
     }
 
@@ -137,6 +151,14 @@ public final class GaussDBMEETExpressionTree {
             sink.accept(((GaussDBPrintedExpression) e).getOriginal());
         } else if (e instanceof GaussDBAggregate) {
             for (GaussDBExpression x : ((GaussDBAggregate) e).getExprs()) {
+                sink.accept(x);
+            }
+        } else if (e instanceof GaussDBExists) {
+            sink.accept(((GaussDBExists) e).getExpr());
+        } else if (e instanceof GaussDBInOperation) {
+            GaussDBInOperation in = (GaussDBInOperation) e;
+            sink.accept(in.getExpr());
+            for (GaussDBExpression x : in.getListElements()) {
                 sink.accept(x);
             }
         }

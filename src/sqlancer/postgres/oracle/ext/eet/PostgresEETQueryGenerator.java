@@ -17,12 +17,14 @@ import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresSelect;
 import sqlancer.postgres.ast.PostgresSelect.LockingClauseContext;
 import sqlancer.postgres.ast.PostgresText;
+import sqlancer.postgres.ast.PostgresExceptSelect;
+import sqlancer.postgres.ast.PostgresIntersectSelect;
 import sqlancer.postgres.ast.PostgresUnionSelect;
 import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 /**
- * Builds random SELECT shapes for EET: plain SELECT, UNION, WITH (CTE), and derived table (subquery in FROM).
+ * Builds random SELECT shapes for EET: plain SELECT, UNION, INTERSECT, EXCEPT, WITH (CTE), and derived table.
  */
 public final class PostgresEETQueryGenerator {
 
@@ -62,11 +64,11 @@ public final class PostgresEETQueryGenerator {
             break;
         case AGGRESSIVE:
             // Prefer structured shapes to increase transformation surface.
-            mode = (int) Randomly.getNotCachedInteger(0, 8) == 0 ? 0 : (int) Randomly.getNotCachedInteger(1, 4);
+            mode = (int) Randomly.getNotCachedInteger(0, 8) == 0 ? 0 : (int) Randomly.getNotCachedInteger(1, 6);
             break;
         case BALANCED:
         default:
-            mode = (int) Randomly.getNotCachedInteger(0, 4);
+            mode = (int) Randomly.getNotCachedInteger(0, 6);
             break;
         }
         switch (mode) {
@@ -76,6 +78,10 @@ public final class PostgresEETQueryGenerator {
             return buildWithSelect(gen);
         case 3:
             return buildDerivedSelect(gen);
+        case 4:
+            return buildIntersectSelect(gen);
+        case 5:
+            return buildExceptSelect(gen);
         case 0:
         default:
             return buildBaseSelect(gen);
@@ -114,6 +120,32 @@ public final class PostgresEETQueryGenerator {
         right.setGroupByExpressions(List.of());
         right.setOrderByClauses(List.of());
         return new PostgresUnionSelect(List.of(left, right), Randomly.getBoolean());
+    }
+
+    private static PostgresIntersectSelect buildIntersectSelect(PostgresExpressionGenerator gen) {
+        PostgresSelect left = buildBaseSelect(gen, LockingClauseContext.STRUCTURAL);
+        List<PostgresExpression> sharedCols = new ArrayList<>(left.getFetchColumns());
+        PostgresSelect right = gen.generateSelect(LockingClauseContext.STRUCTURAL);
+        right.setFetchColumns(new ArrayList<>(sharedCols));
+        right.setJoinClauses(gen.getRandomJoinClauses());
+        right.setFromList(gen.getTableRefs());
+        right.setWhereClause(gen.generateBooleanExpression());
+        right.setGroupByExpressions(List.of());
+        right.setOrderByClauses(List.of());
+        return new PostgresIntersectSelect(List.of(left, right), Randomly.getBoolean());
+    }
+
+    private static PostgresExceptSelect buildExceptSelect(PostgresExpressionGenerator gen) {
+        PostgresSelect left = buildBaseSelect(gen, LockingClauseContext.STRUCTURAL);
+        List<PostgresExpression> sharedCols = new ArrayList<>(left.getFetchColumns());
+        PostgresSelect right = gen.generateSelect(LockingClauseContext.STRUCTURAL);
+        right.setFetchColumns(new ArrayList<>(sharedCols));
+        right.setJoinClauses(gen.getRandomJoinClauses());
+        right.setFromList(gen.getTableRefs());
+        right.setWhereClause(gen.generateBooleanExpression());
+        right.setGroupByExpressions(List.of());
+        right.setOrderByClauses(List.of());
+        return new PostgresExceptSelect(List.of(left, right), Randomly.getBoolean());
     }
 
     private static PostgresWithSelect buildWithSelect(PostgresExpressionGenerator gen) {

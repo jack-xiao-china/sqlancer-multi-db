@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 import sqlancer.Randomly;
+import sqlancer.common.oracle.eet.EETMultisetComparator;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.PostgresVisitor;
 import sqlancer.postgres.ast.PostgresCaseWhen;

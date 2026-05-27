@@ -23,6 +23,10 @@ public class MySQLEETQueryTransformer {
 
     private final MySQLEETTransformer transformer;
 
+    public MySQLEETQueryTransformer(MySQLEETTransformer transformer) {
+        this.transformer = transformer;
+    }
+
     public MySQLEETQueryTransformer(MySQLExpressionGenerator gen) {
         this.transformer = new MySQLEETTransformer(gen);
     }

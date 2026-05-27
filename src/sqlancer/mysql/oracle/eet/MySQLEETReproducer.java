@@ -4,6 +4,8 @@ import java.sql.SQLException;
 import java.util.List;
 
 import sqlancer.Reproducer;
+import sqlancer.common.oracle.eet.EETMultisetComparator;
+import sqlancer.common.oracle.eet.EETQueryExecutor;
 import sqlancer.common.schema.AbstractTables;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;

@@ -30,7 +30,11 @@ public class MySQLCastOperation implements MySQLExpression {
 
     @Override
     public MySQLConstant getExpectedValue() {
-        return expr.getExpectedValue().castAs(type);
+        MySQLConstant expected = expr.getExpectedValue();
+        if (expected == null) {
+            return null;
+        }
+        return expected.castAs(type);
     }
 
 }

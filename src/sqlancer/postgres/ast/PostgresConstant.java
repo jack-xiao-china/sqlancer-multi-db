@@ -332,6 +332,11 @@ public abstract class PostgresConstant implements PostgresExpression {
         }
 
         @Override
+        public boolean asBoolean() {
+            return val != 0;
+        }
+
+        @Override
         public boolean isInt() {
             return true;
         }

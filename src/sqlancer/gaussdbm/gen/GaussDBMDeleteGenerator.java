@@ -4,6 +4,7 @@ import sqlancer.Randomly;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
+import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBTable;
 import sqlancer.gaussdbm.GaussDBToStringVisitor;
 import sqlancer.gaussdbm.ast.GaussDBExpression;
@@ -18,6 +19,8 @@ public final class GaussDBMDeleteGenerator {
         ExpectedErrors errors = new ExpectedErrors();
         errors.add("violates foreign key constraint");
         errors.add("delete");
+        // Add datetime/date/time value errors for WHERE clause evaluation
+        GaussDBMErrors.addExpressionErrors(errors);
         StringBuilder sb = new StringBuilder("DELETE FROM ");
         sb.append(table.getName());
         if (Randomly.getBoolean()) {
