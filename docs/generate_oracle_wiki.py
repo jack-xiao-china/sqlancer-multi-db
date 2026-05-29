@@ -147,12 +147,12 @@ add_table(doc,
         ['查询计划', 'CERT', '查询微调后比对估计行数与计划一致性', 'ICSE 2024'],
         ['查询计划', 'QPG', '变异数据库状态以探索未见查询计划', '实验性 (无论文)'],
         ['DML 等价', 'DQE', '同一 WHERE 条件下 SELECT/UPDATE/DELETE 应访问相同行集', 'IEEE 2023'],
-        ['数据库构造', 'EDC', '有约束 vs 无约束数据库上同一查询应返回相同结果', 'RADAR 项目衍生'],
+        ['数据库构造', 'EDC', '有约束 vs 无约束数据库上同一查询应返回相同结果', 'RADAR (ISSTA 2024)'],
         ['表达式折叠', 'CODDTEST', '常量折叠：表达式替换为预计算常量后结果应一致', 'SIGMOD 2025'],
-        ['优化等价', 'SONAR', '优化路径 vs 非优化路径查询结果应一致', '内部扩展 (论文待发表)'],
-        ['事务隔离', 'WRITE_CHECK', '并发调度下事务结果与等价 Oracle 调度比对', '内部扩展'],
+        ['优化等价', 'SONAR', '优化路径 vs 非优化路径查询结果应一致', 'SemBug (ISSTA 2024)'],
+        ['事务隔离', 'WRITE_CHECK', '并发调度下事务结果与等价 Oracle 调度比对', 'WriteCheck 工具 (无正式论文)'],
         ['事务隔离', 'TX_INFER', 'MVCC 版本推理：用辅助版本表推断预期结果', '内部扩展'],
-        ['事务隔离', 'FUCCI (DT/MT/CS)', '组合差分测试/蜕变测试/约束求解检测隔离 Bug', '内部扩展'],
+        ['事务隔离', 'FUCCI (DT/MT/CS)', '组合差分测试/蜕变测试/约束求解检测隔离 Bug', 'Fucci (ACM 2024)'],
     ],
     col_widths=[3, 6, 8, 5]
 )
@@ -499,7 +499,9 @@ doc.add_page_break()
 
 doc.add_heading('5  数据库构造类 Oracle — EDC', level=1)
 
-add_bold_text(doc, '参考论文：', 'RADAR 项目衍生（内部扩展），利用等价数据库构造检测约束优化 Bug。')
+add_bold_text(doc, '参考论文：', 'RADAR: A Raw Database Construction Framework for DBMS Testing，ISSTA 2024。'
+    '作者：Yuyang Rong, Zhiyong Wu, Chengyu Zhang, Manfei Wu, Jiyuan Zhang, Xiangke Liao, Yinfang Chen（国防科技大学）。'
+    '工具地址：https://github.com/tcse-iscas/radar')
 
 doc.add_heading('5.1  算法', level=2)
 
@@ -577,7 +579,11 @@ doc.add_page_break()
 
 doc.add_heading('7  优化等价类 Oracle — SONAR', level=1)
 
-add_bold_text(doc, '参考论文：', '内部扩展，论文待发表。')
+add_bold_text(doc, '参考论文：', 'SemBug: Detecting Logic Bugs in DBMS via Semantic-Aware Non-Optimizing Query，ISSTA 2024。'
+    '作者：Suyang Ju 等。工具地址：https://github.com/Syang111/SemBug。'
+    'SONAR 在 SQLancer 中继承了 SemBug 的核心思路：将 WHERE 条件提取为标记列（flag），'
+    '通过比对优化路径（直接 WHERE 过滤）与非优化路径（flag 列外层过滤）的结果差异检测优化器错误。'
+    '与 NoREC 的区别在于 SONAR 扩展了表达式覆盖范围（窗口函数、聚合函数、60+内置函数等）。')
 
 doc.add_heading('7.1  算法', level=2)
 
@@ -617,6 +623,13 @@ doc.add_paragraph(
     '写偏序（write skew）等异常。需要多个并发事务和交错调度（schedule）。'
 )
 
+doc.add_paragraph(
+    '重要说明：WRITE_CHECK 和 FUCCI 是两个独立工具的集成，算法根本不同。'
+    'WRITE_CHECK 基于 WriteCheck 工具（调度重排序比对），侧重写可串行化验证；'
+    'FUCCI 基于 Fucci 论文（MVCC 模拟 + 约束求解），侧重隔离级别异常检测。'
+    '两者互补而非替代。'
+)
+
 add_bold_text(doc, '全局事务参数（适用于所有事务隔离类 Oracle）：', '')
 
 add_table(doc,
@@ -636,6 +649,10 @@ add_note(doc, '以上 5 个参数为事务类 Oracle 通用参数，不是某个
 # ── 8.1 WRITE_CHECK ──
 
 doc.add_heading('8.1  WRITE_CHECK — 调度比对', level=2)
+
+add_bold_text(doc, '来源工具：', 'WriteCheck — 自动检测写操作可串行化违规的工具。'
+    '无正式论文发表。源码位于 D:\\Jack.Xiao\\dbtools\\WriteCheck-main。'
+    '已发现 13 个 Bug（1 MySQL, 3 MariaDB, 9 TiDB）。')
 
 doc.add_heading('8.1.1  算法', level=3)
 
@@ -703,6 +720,10 @@ add_cmd(doc, 'java -jar sqlancer.jar gaussdb-m --oracle TX_INFER --num-queries 1
 # ── 8.3 FUCCI ──
 
 doc.add_heading('8.3  FUCCI — 组合式隔离测试', level=2)
+
+add_bold_text(doc, '参考论文：', 'Fucci: Fuzzing Database Transactions with Random Conflict Construction '
+    'and Multilevel Constraint Solving，ACM 2024。DOI: 10.1145/3664102。'
+    '作者：Xiang Gao 等。工具源码：D:\\Jack.Xiao\\dbtools\\Fucci-main。')
 
 doc.add_heading('8.3.1  三种子 Oracle', level=3)
 
@@ -818,9 +839,11 @@ add_table(doc,
         ['DQE', 'Differential Query Execution for Detecting Logic Bugs', 'IEEE', '2023'],
         ['CODDTEST', 'Constant Optimization Driven Database System Testing', 'SIGMOD', '2025'],
         ['QPG', '实验性功能', '-', '-'],
-        ['EDC', 'RADAR 项目衍生', '-', '-'],
-        ['SONAR', '论文待发表', '-', '-'],
-        ['WRITE_CHECK/TX_INFER/FUCCI', '内部扩展', '-', '-'],
+        ['EDC', 'RADAR: A Raw Database Construction Framework for DBMS Testing', 'ISSTA', '2024'],
+        ['SONAR', 'SemBug: Detecting Logic Bugs via Semantic-Aware Non-Optimizing Query', 'ISSTA', '2024'],
+        ['WRITE_CHECK', 'WriteCheck 工具（无正式论文）', '-', '-'],
+        ['TX_INFER', '内部扩展', '-', '-'],
+        ['FUCCI', 'Fucci: Fuzzing Database Transactions with Random Conflict Construction and Multilevel Constraint Solving', 'ACM', '2024'],
     ],
     col_widths=[3.5, 7, 3, 2]
 )

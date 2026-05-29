@@ -2,6 +2,7 @@
 
 ## v2.0.62 | 2026-05-29
 - 文档 [Oracle Wiki 全景指南]：新增 SQLancer_Test_Oracle_Wiki.docx，全面介绍所有新增 Test Oracle 的功能、核心算法、参考论文、语法覆盖、适用场景、具体命令和专属参数
+- 修正 [论文引用]：SONAR 对应 SemBug (ISSTA 2024)，EDC 对应 RADAR (ISSTA 2024)，FUCCI 对应 Fucci (ACM 2024 DOI:10.1145/3664102)，WRITE_CHECK 对应 WriteCheck 工具（无正式论文）；明确 WRITE_CHECK 与 FUCCI 是两个独立工具的集成，算法根本不同
 
 ## v2.0.61 | 2026-05-28
 - 修复 [EET ExpressionTree 覆盖审计补齐]：系统审计发现 PostgreSQL/MySQL/GaussDB-A 各有未覆盖的 AST 类型，子表达式递归变换缺失
