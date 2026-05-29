@@ -145,7 +145,7 @@ public class GaussDBAEETTransformAdapter implements EETTransformAdapter<GaussDBA
         return expr instanceof GaussDBABinaryLogicalOperation || expr instanceof GaussDBABinaryComparisonOperation
                 || expr instanceof GaussDBAUnaryPrefixOperation || expr instanceof GaussDBAUnaryPostfixOperation
                 || expr instanceof GaussDBAInOperation || expr instanceof GaussDBAExists
-                || expr instanceof GaussDBALikeOperation;
+                || expr instanceof GaussDBALikeOperation || expr instanceof GaussDBABetweenOperation;
     }
 
     @Override

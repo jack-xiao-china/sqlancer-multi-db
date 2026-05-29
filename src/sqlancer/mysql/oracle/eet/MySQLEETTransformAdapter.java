@@ -29,6 +29,9 @@ import sqlancer.mysql.ast.MySQLSelect;
 import sqlancer.mysql.ast.MySQLUnionSelect;
 import sqlancer.mysql.ast.MySQLWithSelect;
 import sqlancer.mysql.ast.MySQLComputableFunction;
+import sqlancer.mysql.ast.MySQLCteTableReference;
+import sqlancer.mysql.ast.MySQLStringExpression;
+import sqlancer.mysql.ast.MySQLManuelPredicate;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation.UnaryPostfixOperator;
 import sqlancer.mysql.ast.MySQLUnaryPrefixOperation;
@@ -135,12 +138,14 @@ public class MySQLEETTransformAdapter implements EETTransformAdapter<MySQLExpres
         return expr instanceof MySQLBinaryLogicalOperation || expr instanceof MySQLBinaryComparisonOperation
                 || expr instanceof MySQLUnaryPrefixOperation || expr instanceof MySQLUnaryPostfixOperation
                 || expr instanceof MySQLInOperation || expr instanceof MySQLExists
-                || expr instanceof MySQLAnyAllSubquery;
+                || expr instanceof MySQLAnyAllSubquery || expr instanceof MySQLBetweenOperation;
     }
 
     @Override
     public boolean isRule7NoChange(MySQLExpression expr) {
-        return expr instanceof MySQLTableReference || expr instanceof MySQLText;
+        return expr instanceof MySQLTableReference || expr instanceof MySQLText
+                || expr instanceof MySQLCteTableReference || expr instanceof MySQLStringExpression
+                || expr instanceof MySQLManuelPredicate;
     }
 
     @Override

@@ -33,6 +33,8 @@ import sqlancer.gaussdba.ast.GaussDBAUnaryPostfixOperation;
 import sqlancer.gaussdba.ast.GaussDBAUnaryPrefixOperation;
 import sqlancer.gaussdba.ast.GaussDBAUnionSelect;
 import sqlancer.gaussdba.ast.GaussDBAWithSelect;
+import sqlancer.gaussdba.ast.GaussDBAJoin;
+import sqlancer.gaussdba.ast.GaussDBAAlias;
 
 /**
  * Structural map/copy/replace on GaussDB-A AST (EET recursive traversal support).
@@ -168,6 +170,17 @@ public final class GaussDBAEETExpressionTree {
             GaussDBADerivedTable d = (GaussDBADerivedTable) e;
             return new GaussDBADerivedTable((GaussDBASelect) mapChild.apply(d.getSelect()), d.getAlias());
         }
+        if (e instanceof GaussDBAJoin) {
+            GaussDBAJoin j = (GaussDBAJoin) e;
+            GaussDBAExpression mappedTableRef = j.getTableReference() == null ? null
+                    : mapChild.apply(j.getTableReference());
+            GaussDBAExpression mappedOn = j.getOnCondition() == null ? null : mapChild.apply(j.getOnCondition());
+            return new GaussDBAJoin(mappedTableRef, mappedOn, j.getJoinType());
+        }
+        if (e instanceof GaussDBAAlias) {
+            GaussDBAAlias a = (GaussDBAAlias) e;
+            return new GaussDBAAlias(mapChild.apply(a.getExpression()), a.getOperatorRepresentation().substring(4));
+        }
         // Query-level nodes: recurse into branches/fields, node itself not wrapped
         if (e instanceof GaussDBAUnionSelect) {
             GaussDBAUnionSelect u = (GaussDBAUnionSelect) e;
@@ -283,6 +296,16 @@ public final class GaussDBAEETExpressionTree {
             sink.accept(((GaussDBAPostfixText) e).getExpr());
         } else if (e instanceof GaussDBADerivedTable) {
             sink.accept(((GaussDBADerivedTable) e).getSelect());
+        } else if (e instanceof GaussDBAJoin) {
+            GaussDBAJoin j = (GaussDBAJoin) e;
+            if (j.getTableReference() != null) {
+                sink.accept(j.getTableReference());
+            }
+            if (j.getOnCondition() != null) {
+                sink.accept(j.getOnCondition());
+            }
+        } else if (e instanceof GaussDBAAlias) {
+            sink.accept(((GaussDBAAlias) e).getExpression());
         } else if (e instanceof GaussDBAUnionSelect) {
             for (GaussDBASelect s : ((GaussDBAUnionSelect) e).getSelects()) {
                 sink.accept(s);

@@ -1,5 +1,14 @@
 # SQLancer Release Notes
 
+## v2.0.61 | 2026-05-28
+- 修复 [EET ExpressionTree 覆盖审计补齐]：系统审计发现 PostgreSQL/MySQL/GaussDB-A 各有未覆盖的 AST 类型，子表达式递归变换缺失
+  - PostgreSQL ExpressionTree：新增 PostgresAlias、PostgresDerivedTable、PostgresOracleExpressionBag mapChildren/forEachChild 处理
+  - PostgreSQL Adapter：isBooleanLike 增加 LikeOperation、SimilarTo、POSIXRegularExpression、BetweenOperation；isRule7NoChange 增加 CteTableReference
+  - MySQL ExpressionTree：新增 MySQLDerivedTable、MySQLJoin、MySQLOracleAlias、MySQLOracleExpressionBag、MySQLAggregateFunction、MySQLTypeof mapChildren/forEachChild；叶节点增加 ManuelPredicate、TableAndColumnRef
+  - MySQL Adapter：isBooleanLike 增加 BetweenOperation；isRule7NoChange 增加 CteTableReference、StringExpression、ManuelPredicate
+  - GaussDB-A ExpressionTree：新增 GaussDBAJoin、GaussDBAAlias mapChildren/forEachChild 处理
+  - GaussDB-A Adapter：isBooleanLike 增加 BetweenOperation
+
 ## v2.0.60 | 2026-05-27
 - 修复 [GaussDB-M ExpressionTree 覆盖缩水]：从16种扩展到32种 node type，对齐 MySQL ExpressionTree 覆盖水平
   - 新增表达式级节点：BinaryArithmeticOperation、CastOperation、ComputableFunction、JsonFunction、TemporalFunction、WindowFunction、PostfixText、ScalarSubquery、IfFunction、OracleAlias、OracleExpressionBag、Join（onCondition）、DerivedTable

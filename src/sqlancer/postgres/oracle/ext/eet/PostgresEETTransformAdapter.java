@@ -33,6 +33,10 @@ import sqlancer.postgres.ast.PostgresTableReference;
 import sqlancer.postgres.ast.PostgresText;
 import sqlancer.postgres.ast.PostgresUnionSelect;
 import sqlancer.postgres.ast.PostgresWithSelect;
+import sqlancer.postgres.ast.PostgresCteTableReference;
+import sqlancer.postgres.ast.PostgresLikeOperation;
+import sqlancer.postgres.ast.PostgresSimilarTo;
+import sqlancer.postgres.ast.PostgresPOSIXRegularExpression;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 public class PostgresEETTransformAdapter implements EETTransformAdapter<PostgresExpression> {
@@ -158,12 +162,15 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
                 || expr instanceof PostgresBinaryComparisonOperation
                 || expr instanceof PostgresInOperation || expr instanceof PostgresExists
                 || expr instanceof PostgresBinaryRangeOperation
-                || expr instanceof PostgresJsonContainOperation;
+                || expr instanceof PostgresJsonContainOperation
+                || expr instanceof PostgresLikeOperation || expr instanceof PostgresSimilarTo
+                || expr instanceof PostgresPOSIXRegularExpression || expr instanceof PostgresBetweenOperation;
     }
 
     @Override
     public boolean isRule7NoChange(PostgresExpression expr) {
-        return expr instanceof PostgresTableReference || expr instanceof PostgresText;
+        return expr instanceof PostgresTableReference || expr instanceof PostgresText
+                || expr instanceof PostgresCteTableReference;
     }
 
     @Override

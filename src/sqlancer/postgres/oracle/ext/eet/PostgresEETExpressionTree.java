@@ -51,6 +51,9 @@ import sqlancer.postgres.ast.PostgresCteDefinition;
 import sqlancer.postgres.ast.PostgresWindowFunction;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowFrame;
 import sqlancer.postgres.ast.PostgresWindowFunction.WindowSpecification;
+import sqlancer.postgres.ast.PostgresAlias;
+import sqlancer.postgres.ast.PostgresDerivedTable;
+import sqlancer.postgres.ast.PostgresOracleExpressionBag;
 
 /**
  * Structural map/copy/replace on Postgres AST (EET recursive traversal + reducer support).
@@ -307,6 +310,18 @@ public final class PostgresEETExpressionTree {
             }
             return newJoin;
         }
+        if (e instanceof PostgresAlias) {
+            PostgresAlias a = (PostgresAlias) e;
+            return new PostgresAlias(mapChild.apply(a.getExpression()), a.getOperatorRepresentation().substring(4));
+        }
+        if (e instanceof PostgresDerivedTable) {
+            PostgresDerivedTable d = (PostgresDerivedTable) e;
+            return new PostgresDerivedTable((PostgresSelect) mapChild.apply(d.getSelect()), d.getAlias());
+        }
+        if (e instanceof PostgresOracleExpressionBag) {
+            PostgresOracleExpressionBag b = (PostgresOracleExpressionBag) e;
+            return new PostgresOracleExpressionBag(mapChild.apply(b.getExpr()));
+        }
         // Query-level nodes: recurse into branches, node itself not wrapped
         if (e instanceof PostgresUnionSelect) {
             PostgresUnionSelect u = (PostgresUnionSelect) e;
@@ -511,6 +526,12 @@ public final class PostgresEETExpressionTree {
             if (j.getTableReference() != null) {
                 sink.accept(j.getTableReference());
             }
+        } else if (e instanceof PostgresAlias) {
+            sink.accept(((PostgresAlias) e).getExpression());
+        } else if (e instanceof PostgresDerivedTable) {
+            sink.accept(((PostgresDerivedTable) e).getSelect());
+        } else if (e instanceof PostgresOracleExpressionBag) {
+            sink.accept(((PostgresOracleExpressionBag) e).getExpr());
         } else if (e instanceof PostgresUnionSelect) {
             for (PostgresSelect s : ((PostgresUnionSelect) e).getSelects()) {
                 sink.accept(s);

@@ -36,6 +36,14 @@ import sqlancer.mysql.ast.MySQLUnionSelect;
 import sqlancer.mysql.ast.MySQLWithSelect;
 import sqlancer.mysql.ast.MySQLCteDefinition;
 import sqlancer.mysql.ast.MySQLWindowFunction;
+import sqlancer.mysql.ast.MySQLDerivedTable;
+import sqlancer.mysql.ast.MySQLJoin;
+import sqlancer.mysql.ast.MySQLOracleAlias;
+import sqlancer.mysql.ast.MySQLOracleExpressionBag;
+import sqlancer.mysql.ast.MySQLAggregateFunction;
+import sqlancer.mysql.ast.MySQLTypeof;
+import sqlancer.mysql.ast.MySQLManuelPredicate;
+import sqlancer.mysql.ast.MySQLTableAndColumnRef;
 
 /**
  * Structural map/copy/replace on MySQL AST (EET §3.2 recursive traversal support).
@@ -86,7 +94,8 @@ public final class MySQLEETExpressionTree {
         if (e == null) {
             return null;
         }
-        if (e instanceof MySQLText || e instanceof MySQLTableReference || e instanceof MySQLCteTableReference) {
+        if (e instanceof MySQLText || e instanceof MySQLTableReference || e instanceof MySQLCteTableReference
+                || e instanceof MySQLManuelPredicate || e instanceof MySQLTableAndColumnRef) {
             return e;
         }
         if (e instanceof MySQLColumnReference || e instanceof MySQLConstant || e instanceof MySQLStringExpression) {
@@ -209,6 +218,32 @@ public final class MySQLEETExpressionTree {
         if (e instanceof MySQLOrderByTerm) {
             MySQLOrderByTerm o = (MySQLOrderByTerm) e;
             return new MySQLOrderByTerm(mapChild.apply(o.getExpr()), o.getOrder());
+        }
+        if (e instanceof MySQLDerivedTable) {
+            MySQLDerivedTable d = (MySQLDerivedTable) e;
+            return new MySQLDerivedTable((MySQLSelect) mapChild.apply(d.getSubquery()), d.getAlias());
+        }
+        if (e instanceof MySQLJoin) {
+            MySQLJoin j = (MySQLJoin) e;
+            MySQLExpression mappedOn = j.getOnClause() == null ? null : mapChild.apply(j.getOnClause());
+            return new MySQLJoin(j.getTable(), mappedOn, j.getType());
+        }
+        if (e instanceof MySQLOracleAlias) {
+            MySQLOracleAlias a = (MySQLOracleAlias) e;
+            return new MySQLOracleAlias(mapChild.apply(a.getOriginalExpression()),
+                    mapChild.apply(a.getAliasExpression()));
+        }
+        if (e instanceof MySQLOracleExpressionBag) {
+            MySQLOracleExpressionBag b = (MySQLOracleExpressionBag) e;
+            return new MySQLOracleExpressionBag(mapChild.apply(b.getInnerExpr()));
+        }
+        if (e instanceof MySQLAggregateFunction) {
+            MySQLAggregateFunction a = (MySQLAggregateFunction) e;
+            return new MySQLAggregateFunction(a.getFunction(), mapChild.apply(a.getExpr()));
+        }
+        if (e instanceof MySQLTypeof) {
+            MySQLTypeof t = (MySQLTypeof) e;
+            return new MySQLTypeof(mapChild.apply(t.getInnerExpression()));
         }
         // Query-level nodes: recurse into branches/fields, but node itself is not wrapped
         if (e instanceof MySQLUnionSelect) {
@@ -336,6 +371,23 @@ public final class MySQLEETExpressionTree {
             sink.accept(((MySQLPostfixText) e).getExpr());
         } else if (e instanceof MySQLOrderByTerm) {
             sink.accept(((MySQLOrderByTerm) e).getExpr());
+        } else if (e instanceof MySQLDerivedTable) {
+            sink.accept(((MySQLDerivedTable) e).getSubquery());
+        } else if (e instanceof MySQLJoin) {
+            MySQLJoin j = (MySQLJoin) e;
+            if (j.getOnClause() != null) {
+                sink.accept(j.getOnClause());
+            }
+        } else if (e instanceof MySQLOracleAlias) {
+            MySQLOracleAlias a = (MySQLOracleAlias) e;
+            sink.accept(a.getOriginalExpression());
+            sink.accept(a.getAliasExpression());
+        } else if (e instanceof MySQLOracleExpressionBag) {
+            sink.accept(((MySQLOracleExpressionBag) e).getInnerExpr());
+        } else if (e instanceof MySQLAggregateFunction) {
+            sink.accept(((MySQLAggregateFunction) e).getExpr());
+        } else if (e instanceof MySQLTypeof) {
+            sink.accept(((MySQLTypeof) e).getInnerExpression());
         } else if (e instanceof MySQLUnionSelect) {
             for (MySQLSelect b : ((MySQLUnionSelect) e).getBranches()) {
                 sink.accept(b);
@@ -367,6 +419,7 @@ public final class MySQLEETExpressionTree {
 
     public static boolean isEetReductionLeaf(MySQLExpression e) {
         return e instanceof MySQLText || e instanceof MySQLTableReference || e instanceof MySQLCteTableReference
-                || e instanceof MySQLColumnReference || e instanceof MySQLConstant || e instanceof MySQLStringExpression;
+                || e instanceof MySQLColumnReference || e instanceof MySQLConstant || e instanceof MySQLStringExpression
+                || e instanceof MySQLManuelPredicate || e instanceof MySQLTableAndColumnRef;
     }
 }
