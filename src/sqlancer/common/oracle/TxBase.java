@@ -20,6 +20,11 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
     protected final MainOptions options;
     protected final Main.StateLogger logger;
 
+    /** Count of discrepancies classified as Undecided and skipped. */
+    protected int undecidedCount = 0;
+    /** Count of confirmed bugs detected. */
+    protected int bugCount = 0;
+
     public TxBase(S state) {
         this.state = state;
         this.options = state.getOptions();
@@ -45,14 +50,7 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
             if (stmtExecResult.isBlocked()) {
                 continue;
             }
-            TxStatementExecutionResult stmtOracleResult = null;
-            for (TxStatementExecutionResult oResult : stmtOracleResults) {
-                if (oResult.getStatement().equals(stmtExecResult.getStatement())
-                        && oResult.getStatement().getTransaction().getId() == stmtExecResult.getStatement().getTransaction().getId()) {
-                    stmtOracleResult = oResult;
-                    break;
-                }
-            }
+            TxStatementExecutionResult stmtOracleResult = findMatchingResult(stmtExecResult, stmtOracleResults);
             if (stmtOracleResult == null) {
                 continue;
             }
@@ -62,8 +60,49 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
                 continue;
             }
 
+            // --- Undecided classification (from Troc compareOracles) ---
+
+            // 1. Deadlock discrepancy: exec deadlocked but oracle didn't expect it
+            TxBugType deadlockType = TxDiscrepancyClassifier.classifyDeadlock(
+                    stmtExecResult.reportDeadlock(), stmtOracleResult.reportDeadlock());
+            if (deadlockType != null) {
+                if (deadlockType.isUndecided()) {
+                    logUndecided(deadlockType, stmt);
+                    continue;
+                }
+                bugCount++;
+                return deadlockType.getMessage() + "\n" + stmt;
+            }
+
+            // 2. Abort discrepancy
+            TxBugType abortType = TxDiscrepancyClassifier.classifyAbort(stmtExecResult, stmtOracleResult);
+            if (abortType != null) {
+                if (abortType.isUndecided()) {
+                    logUndecided(abortType, stmt);
+                    continue;
+                }
+                bugCount++;
+                return abortType.getMessage() + "\n" + stmt + "\n"
+                        + "Exec: " + stmtExecResult.getErrorInfo() + "\n"
+                        + "Oracle: " + stmtOracleResult.getErrorInfo();
+            }
+
+            // 3. Block discrepancy
+            TxBugType blockType = TxDiscrepancyClassifier.classifyBlock(stmtExecResult, stmtOracleResult);
+            if (blockType != null) {
+                if (blockType.isUndecided()) {
+                    logUndecided(blockType, stmt);
+                    continue;
+                }
+                bugCount++;
+                return blockType.getMessage() + "\n" + stmt;
+            }
+
+            // --- Original comparison logic ---
+
             String compareErrorResult = compareErrors(stmtExecResult, stmtOracleResult);
             if (!compareErrorResult.equals("")) {
+                bugCount++;
                 return compareErrorResult;
             }
 
@@ -73,9 +112,10 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
                     String selectCompareResult = compareQueryResult(stmtExecResult.getResult(),
                             stmtOracleResult.getResult());
                     if (!selectCompareResult.isEmpty()) {
-                        compareResult.append("Error: Inconsistent query result\n");
+                        compareResult.append(TxBugType.INCONSISTENT_QUERY_RESULT.getMessage()).append("\n");
                         compareResult.append(stmt).append("\n");
                         compareResult.append(selectCompareResult);
+                        bugCount++;
                         return compareResult.toString();
                     }
                 }
@@ -92,14 +132,7 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
             if (stmtExecResult.isBlocked()) {
                 continue;
             }
-            TxStatementExecutionResult stmtOracleResult = null;
-            for (TxStatementExecutionResult oResult : stmtOracleResults) {
-                if (oResult.getStatement().equals(stmtExecResult.getStatement())
-                        && oResult.getStatement().getTransaction().getId() == stmtExecResult.getStatement().getTransaction().getId()) {
-                    stmtOracleResult = oResult;
-                    break;
-                }
-            }
+            TxStatementExecutionResult stmtOracleResult = findMatchingResult(stmtExecResult, stmtOracleResults);
             if (stmtOracleResult == null) {
                 continue;
             }
@@ -112,8 +145,37 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
                 continue;
             }
 
+            // --- Undecided classification ---
+            TxBugType deadlockType = TxDiscrepancyClassifier.classifyDeadlock(
+                    stmtExecResult.reportDeadlock(), stmtOracleResult.reportDeadlock());
+            if (deadlockType != null && deadlockType.isUndecided()) {
+                logUndecided(deadlockType, stmt);
+                continue;
+            }
+
+            TxBugType abortType = TxDiscrepancyClassifier.classifyAbort(stmtExecResult, stmtOracleResult);
+            if (abortType != null) {
+                if (abortType.isUndecided()) {
+                    logUndecided(abortType, stmt);
+                    continue;
+                }
+                bugCount++;
+                return abortType.getMessage() + "\n" + stmt;
+            }
+
+            TxBugType blockType = TxDiscrepancyClassifier.classifyBlock(stmtExecResult, stmtOracleResult);
+            if (blockType != null) {
+                if (blockType.isUndecided()) {
+                    logUndecided(blockType, stmt);
+                    continue;
+                }
+                bugCount++;
+                return blockType.getMessage() + "\n" + stmt;
+            }
+
             String compareResult = compareErrors(stmtExecResult, stmtOracleResult);
             if (!compareResult.equals("")) {
+                bugCount++;
                 return compareResult;
             }
         }
@@ -127,7 +189,8 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
             List<Object> oracleFinalState = oracleResult.getDbFinalStates().get(finalState.getKey());
             String compareResultInfo = compareQueryResult(execFinalState, oracleFinalState);
             if (!compareResultInfo.isEmpty()) {
-                return "Error: Inconsistent final database state\n" + compareResultInfo;
+                bugCount++;
+                return TxBugType.INCONSISTENT_FINAL_STATE.getMessage() + "\n" + compareResultInfo;
             }
         }
         return "";
@@ -198,5 +261,40 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
                 return o.toString();
             }
         }).sorted().collect(Collectors.toList());
+    }
+
+    /**
+     * Find the oracle result matching a given execution result (same statement + same transaction).
+     */
+    private TxStatementExecutionResult findMatchingResult(
+            TxStatementExecutionResult target,
+            List<TxStatementExecutionResult> candidates) {
+        for (TxStatementExecutionResult candidate : candidates) {
+            if (candidate.getStatement().equals(target.getStatement())
+                    && candidate.getStatement().getTransaction().getId()
+                    == target.getStatement().getTransaction().getId()) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Log an Undecided discrepancy for later review.
+     * Undecided cases are skipped (not reported as bugs) but tracked for statistics.
+     */
+    protected void logUndecided(TxBugType type, TxStatement stmt) {
+        undecidedCount++;
+        logger.writeCurrent("[Undecided] " + type.getMessage() + " | " + stmt);
+    }
+
+    /** Returns the total number of Undecided discrepancies encountered. */
+    public int getUndecidedCount() {
+        return undecidedCount;
+    }
+
+    /** Returns the total number of confirmed bugs detected. */
+    public int getBugCount() {
+        return bugCount;
     }
 }

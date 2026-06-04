@@ -65,7 +65,7 @@ public class MySQLTxInferOracle extends TxBase<MySQLGlobalState> {
                     state.getState().getLocalState().log(testResult.toString());
                     state.getState().getLocalState().log("Oracle Result:");
                     state.getState().getLocalState().log(oracleResult.toString());
-                    throw new AssertionError("Transaction execution mismatches its oracle");
+                    throw new AssertionError(compareResultInfo);
                 }
 
                 reproduceDatabase(state.getState().getStatements());

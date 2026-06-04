@@ -492,3 +492,5 @@ SELECT * FROM t5 WHERE (t5.pkey >= t5.vkey) <> (t5.c30 = (
 ---
 
 **报告结束**
+
+ARG: Testing Query Rewriters via Abstract Rule Guided Fuzzing

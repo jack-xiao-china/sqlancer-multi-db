@@ -28,6 +28,17 @@ public class ExpectedErrors implements Serializable {
         this.regexes = new HashSet<>(regexErrors);
     }
 
+    /**
+     * Copy constructor: creates a new ExpectedErrors with the same error patterns as the given instance.
+     *
+     * @param other
+     *            the ExpectedErrors to copy
+     */
+    public ExpectedErrors(ExpectedErrors other) {
+        this.errors = new HashSet<>(other.errors);
+        this.regexes = new HashSet<>(other.regexes);
+    }
+
     public ExpectedErrors add(String error) {
         if (error == null) {
             throw new IllegalArgumentException();

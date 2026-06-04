@@ -18,7 +18,9 @@ import sqlancer.common.transaction.TxTestExecutionResult;
 import sqlancer.fucci.FucciGlobalState;
 import sqlancer.fucci.FucciIsolation.FucciIsolationLevel;
 import sqlancer.fucci.FucciTable;
+import sqlancer.fucci.mvcc.MVCCSimulator;
 import sqlancer.fucci.mvcc.Version;
+import sqlancer.fucci.mvcc.VisibilityRule;
 import sqlancer.fucci.transaction.FucciTransaction;
 import sqlancer.fucci.transaction.FucciTxStatement;
 import sqlancer.fucci.transaction.FucciTxTestExecutor;
@@ -31,6 +33,7 @@ public class FucciMTOracle extends TxBase<FucciGlobalState> {
 
     private Map<String, Map<Integer, List<Version>>> versionChains;
     private List<FucciTransaction> activeTransactions;
+    private MVCCSimulator mvccSimulator;
 
     public FucciMTOracle(FucciGlobalState state) {
         super(state);
@@ -117,6 +120,7 @@ public class FucciMTOracle extends TxBase<FucciGlobalState> {
             }
             versionChains.put(tableName, tableVersions);
         }
+        mvccSimulator = new MVCCSimulator(versionChains);
     }
 
     private void resetVersionChains() throws SQLException {
@@ -143,53 +147,21 @@ public class FucciMTOracle extends TxBase<FucciGlobalState> {
             }
         }
 
-        Map<String, List<Object>> finalStates = computeFinalStates();
+        // Use MVCCSimulator to compute final states with isolation-level-aware visibility
+        Map<String, List<Object>> finalStates = mvccSimulator.computeFinalStates();
         simulatedResult.setDbFinalStates(finalStates);
 
         return simulatedResult;
     }
 
-    private Map<String, List<Object>> computeFinalStates() {
-        Map<String, List<Object>> finalStates = new HashMap<>();
-
-        for (Map.Entry<String, Map<Integer, List<Version>>> tableEntry : versionChains.entrySet()) {
-            String tableName = tableEntry.getKey();
-            List<Object> tableData = new ArrayList<>();
-
-            for (Map.Entry<Integer, List<Version>> rowEntry : tableEntry.getValue().entrySet()) {
-                List<Version> versions = rowEntry.getValue();
-                for (int i = versions.size() - 1; i >= 0; i--) {
-                    Version v = versions.get(i);
-                    if (isVersionCommitted(v) && !v.isDeleted()) {
-                        Object[] data = v.getData();
-                        if (data != null) {
-                            for (Object o : data) {
-                                tableData.add(o);
-                            }
-                        }
-                        break;
-                    }
-                }
-            }
-            finalStates.put(tableName, tableData);
-        }
-        return finalStates;
-    }
-
-    private boolean isVersionCommitted(Version version) {
-        Object txRef = version.getTransaction();
-        if ("initial".equals(txRef)) {
-            return true;
-        }
-        if (txRef instanceof FucciTransaction) {
-            return ((FucciTransaction) txRef).isCommitted();
-        }
-        return true;
-    }
-
     private String compareWithSimulation(TxTestExecutionResult testResult,
             TxTestExecutionResult simulatedResult, FucciIsolationLevel isoLevel) {
-        if (isoLevel == FucciIsolationLevel.SERIALIZABLE) {
+        // Use VisibilityRule to determine comparison strategy:
+        // - SERIALIZABLE: compare all results (including SELECT)
+        // - Others: compare only write results (SELECT results vary by isolation level)
+        VisibilityRule rule = VisibilityRule.fromIsolationLevel(
+                isoLevel != null ? isoLevel.getName() : null);
+        if (rule == VisibilityRule.COMMITTED_WITH_LOCK) {
             return compareAllResults(testResult, simulatedResult);
         } else {
             return compareWriteTxResults(testResult, simulatedResult);

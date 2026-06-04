@@ -1,4 +1,4 @@
-package sqlancer.mysql.oracle.transaction;
+package sqlancer.gaussdba.oracle.transaction;
 
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -11,26 +11,29 @@ import java.util.stream.Collectors;
 
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLancerResultSet;
-import sqlancer.common.transaction.InnoDBRangeConflictDetector;
-import sqlancer.common.transaction.LockType;
 import sqlancer.common.transaction.QueryResultUtil;
 import sqlancer.common.transaction.Transaction;
 import sqlancer.common.transaction.TxSQLQueryAdapter;
 import sqlancer.common.transaction.TxStatement;
 import sqlancer.common.transaction.TxStatementExecutionResult;
 import sqlancer.common.transaction.TxTestExecutionResult;
-import sqlancer.mysql.MySQLGlobalState;
-import sqlancer.mysql.MySQLSchema.MySQLColumn;
-import sqlancer.mysql.MySQLSchema.MySQLTable;
-import sqlancer.mysql.transaction.MySQLIsolation.MySQLIsolationLevel;
-import sqlancer.mysql.transaction.MySQLTxStatement.MySQLStatementType;
+import sqlancer.gaussdba.GaussDBAGlobalState;
+import sqlancer.gaussdba.GaussDBASchema.GaussDBAColumn;
+import sqlancer.gaussdba.GaussDBASchema.GaussDBATable;
+import sqlancer.gaussdba.transaction.GaussDBAIsolation.GaussDBAIsolationLevel;
+import sqlancer.gaussdba.transaction.GaussDBATxStatement.GaussDBAStatementType;
 
 /**
- * MySQL MVCC version inference engine.
+ * GaussDB-A MVCC version inference engine.
  * Creates auxiliary version tables to track row versions and infer transaction execution results
  * based on MVCC visibility rules.
+ *
+ * GaussDB-A uses Oracle-compatible mode with PostgreSQL-like MVCC behavior:
+ * - Snapshot timing: BEGIN (same as PostgreSQL)
+ * - No READ_UNCOMMITTED isolation level
+ * - Oracle-compatible error codes (ORA-00060, ORA-04020)
  */
-public class MySQLTxInfer {
+public class GaussDBATxInfer {
 
     private static final String ROWID = "rid";
     private static final String VERSION_TABLE = "_vt";
@@ -39,22 +42,17 @@ public class MySQLTxInfer {
     private static final String VERSION_TX_ID = "txid";
     private static final String TABLE_PREFIX = "_infer_";
 
-    private final MySQLGlobalState globalState;
-    private final List<MySQLTable> tables;
+    private final GaussDBAGlobalState globalState;
+    private final List<GaussDBATable> tables;
     private final TxTestExecutionResult txTestResult;
-    private final MySQLIsolationLevel isolationLevel;
+    private final GaussDBAIsolationLevel isolationLevel;
     private List<Transaction> committedTxs;
     private Map<Transaction, List<Integer>> snapshotTxs;
 
     private int uniqueRowId = 1;
 
-    /** Tracks each transaction's last locking SELECT table name (for range conflict detection). */
-    private final Map<Transaction, String> rangeLockTable = new HashMap<>();
-    /** Tracks each transaction's last locking SELECT lock type. */
-    private final Map<Transaction, LockType> rangeLockType = new HashMap<>();
-
-    public MySQLTxInfer(MySQLGlobalState globalState, List<Transaction> transactions,
-                        TxTestExecutionResult txTestResult, MySQLIsolationLevel isolationLevel) {
+    public GaussDBATxInfer(GaussDBAGlobalState globalState, List<Transaction> transactions,
+                           TxTestExecutionResult txTestResult, GaussDBAIsolationLevel isolationLevel) {
         this.globalState = globalState;
         this.txTestResult = txTestResult;
         this.isolationLevel = isolationLevel;
@@ -69,7 +67,7 @@ public class MySQLTxInfer {
     public TxTestExecutionResult inferOracle() throws SQLException {
         List<TxStatementExecutionResult> stmtExecutionResults = txTestResult.getStatementExecutionResults();
         List<TxStatementExecutionResult> stmtOracleResults = scheduleClone(stmtExecutionResults);
-        for (MySQLTable table : tables) {
+        for (GaussDBATable table : tables) {
             String tableName = table.getName();
             addRowIdColumn(tableName);
             fillEmptyRowIds(tableName);
@@ -85,7 +83,7 @@ public class MySQLTxInfer {
         txOracleResult.setIsolationLevel(isolationLevel);
         txOracleResult.setStatementExecutionResults(stmtOracleResults);
         Map<String, List<Object>> finalStates = new HashMap<>();
-        for (MySQLTable targetTable : tables) {
+        for (GaussDBATable targetTable : tables) {
             String tableName = targetTable.getName();
             checkDeadlock(tableName);
             String finalTable = TABLE_PREFIX + tableName;
@@ -100,9 +98,8 @@ public class MySQLTxInfer {
     }
 
     private void addRowIdColumn(String tableName) throws SQLException {
-        // Check if column already exists using information_schema
         SQLQueryAdapter checkColumn = new SQLQueryAdapter(
-                String.format("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '%s' AND COLUMN_NAME = '%s'",
+                String.format("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '%s' AND column_name = '%s'",
                         tableName, ROWID));
         SQLancerResultSet result = checkColumn.executeAndGet(globalState);
         boolean columnExists = false;
@@ -111,7 +108,6 @@ public class MySQLTxInfer {
         }
 
         if (columnExists) {
-            // Column exists, drop it first
             SQLQueryAdapter dropColumn = new SQLQueryAdapter(
                     String.format("ALTER TABLE %s DROP COLUMN %s", tableName, ROWID));
             dropColumn.execute(globalState);
@@ -125,8 +121,9 @@ public class MySQLTxInfer {
     private List<Integer> fillEmptyRowIds(String tableName) throws SQLException {
         List<Integer> rowIds = new ArrayList<>();
         while (true) {
-            String updateRowId = String.format("UPDATE %s SET %s = %d WHERE %s IS NULL LIMIT 1",
-                    tableName, ROWID, uniqueRowId, ROWID);
+            String updateRowId = String.format(
+                    "UPDATE %s SET %s = %d WHERE %s IS NULL AND ctid = (SELECT ctid FROM %s WHERE %s IS NULL LIMIT 1)",
+                    tableName, ROWID, uniqueRowId, ROWID, tableName, ROWID);
             Statement statement = globalState.getConnection().createStatement();
             int ret = statement.executeUpdate(updateRowId);
             statement.close();
@@ -159,12 +156,8 @@ public class MySQLTxInfer {
         updateVTAdapter.execute(globalState);
     }
 
-    /**
-     * MySQL supports CREATE TABLE ... AS SELECT syntax (simpler than TiDB).
-     */
     private void createVersionTable(String tableName) throws SQLException {
         String auxiliaryVersionTable = TABLE_PREFIX + tableName + VERSION_TABLE;
-        // MySQL supports "CREATE TABLE ... AS SELECT"
         SQLQueryAdapter createVTAdapter = new SQLQueryAdapter(
                 String.format("CREATE TABLE %s AS SELECT * FROM %s", auxiliaryVersionTable, tableName), true);
         createVTAdapter.execute(globalState);
@@ -175,87 +168,49 @@ public class MySQLTxInfer {
         Object stmtType = stmt.getType();
         String auxiliaryPrefix = TABLE_PREFIX + stmt.getTransaction().getId() + "_" + stmtId;
 
-        if (stmtType == MySQLStatementType.BEGIN) {
-            // InnoDB RR/SER snapshot is established at the first consistent read (SELECT),
-            // not at BEGIN. Snapshot creation is deferred to readSnapshotVersion()
-            // where it is triggered on-demand when snapshotTxs is empty.
-        } else if (stmtType == MySQLStatementType.COMMIT) {
+        if (stmtType == GaussDBAStatementType.BEGIN) {
+            // GaussDB-A (Oracle-compatible) snapshot is established at BEGIN for RR/SER.
+            if (isolationLevel == GaussDBAIsolationLevel.REPEATABLE_READ
+                    || isolationLevel == GaussDBAIsolationLevel.SERIALIZABLE) {
+                createSnapshot(curTx);
+            }
+        } else if (stmtType == GaussDBAStatementType.COMMIT) {
             committedTxs.add(curTx);
-            // Release range locks on commit
-            rangeLockTable.remove(curTx);
-            rangeLockType.remove(curTx);
-        } else if (stmtType == MySQLStatementType.ROLLBACK) {
-            for (MySQLTable table : tables) {
+        } else if (stmtType == GaussDBAStatementType.ROLLBACK) {
+            for (GaussDBATable table : tables) {
                 String tableName = table.getName();
                 String auxiliaryVersionTable = TABLE_PREFIX + tableName + VERSION_TABLE;
                 SQLQueryAdapter sql = new SQLQueryAdapter(String.format("DELETE FROM %s WHERE %s = %d",
                         auxiliaryVersionTable, VERSION_TX_ID, curTx.getId()));
                 sql.execute(globalState);
             }
-            // Release range locks on rollback
-            rangeLockTable.remove(curTx);
-            rangeLockType.remove(curTx);
-        } else if (stmtType == MySQLStatementType.SELECT
-                || stmtType == MySQLStatementType.SELECT_FOR_SHARE
-                || stmtType == MySQLStatementType.SELECT_FOR_UPDATE) {
-            List<MySQLTable> targetTables = getTargetTables(stmt.getTxQueryAdapter().getQueryString());
+        } else if (stmtType == GaussDBAStatementType.SELECT
+                || stmtType == GaussDBAStatementType.SELECT_FOR_SHARE
+                || stmtType == GaussDBAStatementType.SELECT_FOR_UPDATE) {
+            List<GaussDBATable> targetTables = getTargetTables(stmt.getTxQueryAdapter().getQueryString());
             List<String> targetTableNames = new ArrayList<>();
-            for (MySQLTable targetTable : targetTables) {
+            for (GaussDBATable targetTable : targetTables) {
                 targetTableNames.add(targetTable.getName());
                 String auxiliaryTableName = auxiliaryPrefix + "_" + targetTable.getName();
-                if (isolationLevel == MySQLIsolationLevel.READ_UNCOMMITTED
-                        || isolationLevel == MySQLIsolationLevel.READ_COMMITTED
-                        || stmtType == MySQLStatementType.SELECT_FOR_UPDATE
-                        || stmtType == MySQLStatementType.SELECT_FOR_SHARE) {
+                if (isolationLevel == GaussDBAIsolationLevel.READ_COMMITTED
+                        || stmtType == GaussDBAStatementType.SELECT_FOR_UPDATE
+                        || stmtType == GaussDBAStatementType.SELECT_FOR_SHARE) {
                     readCommittedVersion(auxiliaryTableName, curTx, targetTable);
                 } else {
                     readSnapshotVersion(auxiliaryTableName, curTx, targetTable);
-                    if (snapshotTxs.get(curTx).isEmpty()) {
-                        createSnapshot(curTx);
-                    }
                 }
             }
             stmtResult.setResult(selectExecuteOnView(stmtResult, auxiliaryPrefix, targetTableNames));
-            queryWarningInfo(stmtResult, auxiliaryPrefix, targetTableNames);
             for (String targetTableName : targetTableNames) {
                 String auxiliaryTableName = auxiliaryPrefix + "_" + targetTableName;
                 dropTable(auxiliaryTableName);
             }
-            // Track range locks for SELECT FOR UPDATE/SHARE under RR/SER isolation
-            if ((isolationLevel == MySQLIsolationLevel.REPEATABLE_READ
-                    || isolationLevel == MySQLIsolationLevel.SERIALIZABLE)
-                    && (stmtType == MySQLStatementType.SELECT_FOR_UPDATE
-                    || stmtType == MySQLStatementType.SELECT_FOR_SHARE)) {
-                if (!targetTableNames.isEmpty()) {
-                    rangeLockTable.put(curTx, targetTableNames.get(0));
-                    rangeLockType.put(curTx, InnoDBRangeConflictDetector.getRangeLockType(
-                            (sqlancer.common.transaction.TxStatementType) stmtType));
-                }
-            }
         } else {
-            MySQLTable targetTable = getTargetTable(stmt.getTxQueryAdapter().getQueryString());
-            // Range conflict detection: check if another transaction holds a range lock
-            // on the same table (InnoDB RR/SER gap lock may block this write)
-            for (Transaction otherTx : snapshotTxs.keySet()) {
-                if (otherTx != curTx && rangeLockType.containsKey(otherTx)) {
-                    String lockedTable = rangeLockTable.get(otherTx);
-                    LockType lockType = rangeLockType.get(otherTx);
-                    if (InnoDBRangeConflictDetector.hasRangeConflict(
-                            (sqlancer.common.transaction.TxStatementType) stmtType,
-                            targetTable.getName(), lockedTable, lockType)) {
-                        stmtResult.setBlocked(true);
-                        return;
-                    }
-                }
-            }
+            GaussDBATable targetTable = getTargetTable(stmt.getTxQueryAdapter().getQueryString());
             String auxiliaryTableName = auxiliaryPrefix + "_" + targetTable.getName();
             readCommittedVersion(auxiliaryTableName, curTx, targetTable);
-            if (stmtType == MySQLStatementType.REPLACE) {
-                inferReplaceStmt(stmtResult, auxiliaryPrefix, stmtId);
-            } else {
-                List<Integer> affectedRowIds = affectRowOnView(stmtResult, auxiliaryPrefix);
-                updateVersionTable(stmtResult, auxiliaryPrefix, stmtId, affectedRowIds);
-            }
+            List<Integer> affectedRowIds = affectRowOnView(stmtResult, auxiliaryPrefix);
+            updateVersionTable(stmtResult, auxiliaryPrefix, stmtId, affectedRowIds);
             dropTable(auxiliaryTableName);
         }
     }
@@ -272,7 +227,7 @@ public class MySQLTxInfer {
         }
     }
 
-    private List<Object> getDBFinalState(String auxiliaryTable, MySQLTable targetTable) throws SQLException {
+    private List<Object> getDBFinalState(String auxiliaryTable, GaussDBATable targetTable) throws SQLException {
         dropTable(auxiliaryTable);
         readLatestVersion(auxiliaryTable, targetTable);
         dropRowIdColumn(auxiliaryTable);
@@ -281,7 +236,7 @@ public class MySQLTxInfer {
         return tableState;
     }
 
-    private void readLatestVersion(String auxiliaryTable, MySQLTable targetTable) throws SQLException {
+    private void readLatestVersion(String auxiliaryTable, GaussDBATable targetTable) throws SQLException {
         createTableLike(auxiliaryTable, targetTable.getName());
         String auxiliaryVersionTable = TABLE_PREFIX + targetTable.getName() + VERSION_TABLE;
 
@@ -291,7 +246,7 @@ public class MySQLTxInfer {
         List<Integer> visibleRowIds = getRowIds(queryRids);
 
         List<String> viewColumns = new ArrayList<>();
-        for (MySQLColumn tableColumn : targetTable.getColumns()) {
+        for (GaussDBAColumn tableColumn : targetTable.getColumns()) {
             viewColumns.add(tableColumn.getName());
         }
         viewColumns.add(ROWID);
@@ -304,7 +259,7 @@ public class MySQLTxInfer {
         }
     }
 
-    private void readSpecificVersion(String auxiliaryTable, List<String> selectTxId, MySQLTable targetTable)
+    private void readSpecificVersion(String auxiliaryTable, List<String> selectTxId, GaussDBATable targetTable)
             throws SQLException {
         createTableLike(auxiliaryTable, targetTable.getName());
         String auxiliaryVersionTable = TABLE_PREFIX + targetTable.getName() + VERSION_TABLE;
@@ -317,15 +272,15 @@ public class MySQLTxInfer {
         List<Integer> visibleRowIds = getRowIds(queryRids);
 
         List<String> viewColumns = new ArrayList<>();
-        for (MySQLColumn tableColumn : targetTable.getColumns()) {
+        for (GaussDBAColumn tableColumn : targetTable.getColumns()) {
             viewColumns.add(tableColumn.getName());
         }
         viewColumns.add(ROWID);
         String columnNames = String.join(", ", viewColumns);
 
-        String insertVersionSql;
         for (int rowId : visibleRowIds) {
-            insertVersionSql = String.format("INSERT INTO %s SELECT %s FROM %s WHERE %s = %d AND %s IN (%s) ORDER BY %s DESC LIMIT 1",
+            String insertVersionSql = String.format(
+                    "INSERT INTO %s SELECT %s FROM %s WHERE %s = %d AND %s IN (%s) ORDER BY %s DESC LIMIT 1",
                     auxiliaryTable, columnNames, auxiliaryVersionTable, ROWID, rowId,
                     VERSION_TX_ID, selectTxIdName, VERSION_ID);
             SQLQueryAdapter insertVersionAdapter = new SQLQueryAdapter(insertVersionSql);
@@ -333,18 +288,19 @@ public class MySQLTxInfer {
         }
     }
 
-    private void readCommittedVersion(String auxiliaryTable, Transaction curTx, MySQLTable targetTable) throws SQLException {
+    private void readCommittedVersion(String auxiliaryTable, Transaction curTx, GaussDBATable targetTable)
+            throws SQLException {
         List<String> selectTxId = new ArrayList<>();
         selectTxId.add("0");
         selectTxId.add(String.valueOf(curTx.getId()));
         for (Transaction committedTx : committedTxs) {
             selectTxId.add(String.valueOf(committedTx.getId()));
         }
-
         readSpecificVersion(auxiliaryTable, selectTxId, targetTable);
     }
 
-    private void readSnapshotVersion(String auxiliaryTable, Transaction curTx, MySQLTable targetTable) throws SQLException {
+    private void readSnapshotVersion(String auxiliaryTable, Transaction curTx, GaussDBATable targetTable)
+            throws SQLException {
         List<String> selectTxId = new ArrayList<>();
         selectTxId.add("0");
         selectTxId.add(String.valueOf(curTx.getId()));
@@ -354,7 +310,6 @@ public class MySQLTxInfer {
                 selectTxId.add(String.valueOf(committedTxId));
             }
         }
-
         readSpecificVersion(auxiliaryTable, selectTxId, targetTable);
     }
 
@@ -383,90 +338,18 @@ public class MySQLTxInfer {
         return QueryResultUtil.getQueryResult(queryResult);
     }
 
-    private void inferReplaceStmt(TxStatementExecutionResult stmtResult, String auxiliaryPrefix, int stmtId)
+    private List<Integer> affectRowOnView(TxStatementExecutionResult stmtResult, String auxiliaryPrefix)
             throws SQLException {
-        TxStatement stmt = stmtResult.getStatement();
-        String sql = stmt.getTxQueryAdapter().getQueryString();
-        MySQLTable targetTable = getTargetTable(sql);
-        String targetTableName = targetTable.getName();
-        String auxiliaryTable = auxiliaryPrefix + "_" + targetTableName;
-        sql = sql.replace(targetTableName, auxiliaryTable);
-
-        int columnIndex = sql.indexOf(auxiliaryTable) + auxiliaryTable.length();
-        if (!sql.substring(columnIndex, columnIndex + 1).equals("(")) {
-            String beforeStr = sql.substring(0, columnIndex);
-            String afterStr = sql.substring(columnIndex);
-            List<String> columns = new ArrayList<>();
-            for (MySQLColumn tableColumn : targetTable.getColumns()) {
-                columns.add(tableColumn.getName());
-            }
-            String columnNames = String.join(", ", columns);
-            sql = beforeStr + "(" + columnNames + ")" + afterStr;
-        }
-
-        SQLQueryAdapter queryRids = new SQLQueryAdapter(String.format("SELECT %s FROM %s", ROWID, auxiliaryTable));
-        List<Integer> replaceBeforeRowIds = getRowIds(queryRids);
-        TxSQLQueryAdapter replaceStmt = new TxSQLQueryAdapter(sql, stmt.getTxQueryAdapter().getExpectedErrors());
-        executeTxStatement(stmtResult, replaceStmt, auxiliaryPrefix, targetTableName);
-        List<Integer> replaceAfterRowIds = getRowIds(queryRids);
-
-        List<Integer> deleteRowIds = new ArrayList<>();
-        for (int rid : replaceBeforeRowIds) {
-            if (!replaceAfterRowIds.contains(rid)) {
-                deleteRowIds.add(rid);
-            }
-        }
-        List<Integer> newRowIds = fillEmptyRowIds(auxiliaryTable);
-
-        if (!deleteRowIds.isEmpty() || !newRowIds.isEmpty()) {
-            String auxiliaryReplaceTable = TABLE_PREFIX + targetTableName + "_replace";
-            readCommittedVersion(auxiliaryReplaceTable, stmt.getTransaction(), targetTable);
-
-            String auxiliaryVersionTable = TABLE_PREFIX + targetTableName + VERSION_TABLE;
-            List<String> viewColumns = new ArrayList<>();
-            for (MySQLColumn col : targetTable.getColumns()) {
-                viewColumns.add(col.getName());
-            }
-            viewColumns.add(ROWID);
-            String columnNames = String.join(", ", viewColumns);
-            for (int rowId : deleteRowIds) {
-                SQLQueryAdapter insertVersionTable = new SQLQueryAdapter(
-                        String.format("INSERT INTO %s (%s) SELECT * FROM %s WHERE %s = %d", auxiliaryVersionTable,
-                                columnNames, auxiliaryReplaceTable, ROWID, rowId));
-                insertVersionTable.execute(globalState);
-            }
-            SQLQueryAdapter updateVersion = new SQLQueryAdapter(
-                    String.format("UPDATE %s SET %s = %d, %s = %d, %s = %d WHERE %s IS NULL", auxiliaryVersionTable,
-                            VERSION_ID, stmtId, VERSION_IS_DELETED, 1, VERSION_TX_ID,
-                            stmt.getTransaction().getId(), VERSION_ID));
-            updateVersion.execute(globalState);
-            dropTable(auxiliaryReplaceTable);
-
-            for (int rowId : newRowIds) {
-                SQLQueryAdapter insertVersionTable = new SQLQueryAdapter(
-                        String.format("INSERT INTO %s (%s) SELECT * FROM %s WHERE %s = %d", auxiliaryVersionTable,
-                                columnNames, auxiliaryTable, ROWID, rowId));
-                insertVersionTable.execute(globalState);
-            }
-            updateVersion = new SQLQueryAdapter(
-                    String.format("UPDATE %s SET %s = %d, %s = %d, %s = %d WHERE %s IS NULL", auxiliaryVersionTable,
-                            VERSION_ID, stmtId, VERSION_IS_DELETED, 0, VERSION_TX_ID,
-                            stmtResult.getStatement().getTransaction().getId(), VERSION_ID));
-            updateVersion.execute(globalState);
-        }
-    }
-
-    private List<Integer> affectRowOnView(TxStatementExecutionResult stmtResult, String auxiliaryPrefix) throws SQLException {
         List<Integer> affectedRowIds;
         TxStatement stmt = stmtResult.getStatement();
         String sql = stmt.getTxQueryAdapter().getQueryString();
-        MySQLTable targetTable = getTargetTable(sql);
+        GaussDBATable targetTable = getTargetTable(sql);
         String targetTableName = targetTable.getName();
         String auxiliaryTable = auxiliaryPrefix + "_" + targetTableName;
         sql = sql.replace(targetTableName, auxiliaryTable);
 
         Object stmtType = stmt.getType();
-        if (stmtType == MySQLStatementType.UPDATE) {
+        if (stmtType == GaussDBAStatementType.UPDATE) {
             String updatedColumn = "updated";
             SQLQueryAdapter addColumnUpdated = new SQLQueryAdapter(
                     String.format("ALTER TABLE %s ADD COLUMN %s INT DEFAULT 0", auxiliaryTable, updatedColumn));
@@ -481,19 +364,19 @@ public class MySQLTxInfer {
             }
             TxSQLQueryAdapter updateStmt = new TxSQLQueryAdapter(sql,
                     stmtResult.getStatement().getTxQueryAdapter().getExpectedErrors());
-            executeTxStatement(stmtResult, updateStmt, auxiliaryPrefix, targetTableName);
+            executeTxStatement(stmtResult, updateStmt);
             SQLQueryAdapter selectUpdatedRids = new SQLQueryAdapter(
                     String.format("SELECT %s FROM %s WHERE %s = 1", ROWID, auxiliaryTable, updatedColumn));
             affectedRowIds = getRowIds(selectUpdatedRids);
             SQLQueryAdapter dropColumnUpdated = new SQLQueryAdapter(
                     String.format("ALTER TABLE %s DROP COLUMN %s", auxiliaryTable, updatedColumn));
             dropColumnUpdated.execute(globalState);
-        } else if (stmtType == MySQLStatementType.DELETE) {
+        } else if (stmtType == GaussDBAStatementType.DELETE) {
             SQLQueryAdapter queryRids = new SQLQueryAdapter(String.format("SELECT %s FROM %s", ROWID, auxiliaryTable));
             affectedRowIds = getRowIds(queryRids);
 
             TxSQLQueryAdapter deleteStmt = new TxSQLQueryAdapter(sql, stmt.getTxQueryAdapter().getExpectedErrors());
-            executeTxStatement(stmtResult, deleteStmt, auxiliaryPrefix, targetTableName);
+            executeTxStatement(stmtResult, deleteStmt);
 
             if (!stmtResult.reportError()) {
                 List<Integer> resRowIds = getRowIds(queryRids);
@@ -503,26 +386,12 @@ public class MySQLTxInfer {
             }
             readCommittedVersion(auxiliaryTable, stmt.getTransaction(), targetTable);
         } else {
-            int columnIndex = sql.indexOf(auxiliaryTable) + auxiliaryTable.length();
-
-            // Handle INSERT without specified columns
-            if (!sql.substring(columnIndex, columnIndex + 1).equals("(")) {
-                String beforeStr = sql.substring(0, columnIndex);
-                String afterStr = sql.substring(columnIndex);
-                List<String> columns = new ArrayList<>();
-                for (MySQLColumn tableColumn : targetTable.getColumns()) {
-                    columns.add(tableColumn.getName());
-                }
-                String columnNames = String.join(", ", columns);
-                sql = beforeStr + "(" + columnNames + ")" + afterStr;
-            }
-
-            // Handle INSERT ... ON DUPLICATE KEY UPDATE
+            // INSERT
             SQLQueryAdapter queryTableStmt = new SQLQueryAdapter(String.format("SELECT * FROM %s", auxiliaryTable));
             List<Object> tableBeforeResult = QueryResultUtil.getQueryResult(queryTableStmt.executeAndGet(globalState));
 
             TxSQLQueryAdapter insertStmt = new TxSQLQueryAdapter(sql, stmt.getTxQueryAdapter().getExpectedErrors());
-            executeTxStatement(stmtResult, insertStmt, auxiliaryPrefix, targetTableName);
+            executeTxStatement(stmtResult, insertStmt);
 
             List<Object> tableAfterResult = QueryResultUtil.getQueryResult(queryTableStmt.executeAndGet(globalState));
             affectedRowIds = new ArrayList<>(computeAffectedRowIds(tableBeforeResult, tableAfterResult, targetTable));
@@ -536,7 +405,7 @@ public class MySQLTxInfer {
     }
 
     private List<Integer> computeAffectedRowIds(List<Object> tableBeforeResult, List<Object> tableAfterResult,
-                                                MySQLTable targetTable) {
+                                                GaussDBATable targetTable) {
         List<Integer> affectedRowIds = new ArrayList<>();
         List<String> beforeResults = preprocessResultSet(tableBeforeResult);
         List<String> afterResults = preprocessResultSet(tableAfterResult);
@@ -559,29 +428,23 @@ public class MySQLTxInfer {
         return affectedRowIds;
     }
 
-    private void executeTxStatement(TxStatementExecutionResult stmtResult, TxSQLQueryAdapter txStmt,
-                                    String auxiliaryPrefix, String targetTableName)
+    private void executeTxStatement(TxStatementExecutionResult stmtResult, TxSQLQueryAdapter txStmt)
             throws SQLException {
-        String auxiliaryTable = auxiliaryPrefix + "_" + targetTableName;
         try {
             txStmt.execute(globalState, true);
         } catch (SQLException e) {
-            String errorInfo = e.getMessage().replace(auxiliaryTable, targetTableName);
-            stmtResult.setErrorInfo(errorInfo);
+            stmtResult.setErrorInfo(e.getMessage());
         }
-        List<String> targetTableNames = new ArrayList<>();
-        targetTableNames.add(targetTableName);
-        queryWarningInfo(stmtResult, auxiliaryPrefix, targetTableNames);
     }
 
     private void updateVersionTable(TxStatementExecutionResult stmtResult, String auxiliaryPrefix, int stmtId,
                                     List<Integer> affectedRowIds) throws SQLException {
-        MySQLTable targetTable = getTargetTable(stmtResult.getStatement().getTxQueryAdapter().getQueryString());
+        GaussDBATable targetTable = getTargetTable(stmtResult.getStatement().getTxQueryAdapter().getQueryString());
         String targetTableName = targetTable.getName();
         String auxiliaryVersionTable = TABLE_PREFIX + targetTableName + VERSION_TABLE;
         String auxiliaryTable = auxiliaryPrefix + "_" + targetTableName;
         List<String> viewColumns = new ArrayList<>();
-        for (MySQLColumn col : targetTable.getColumns()) {
+        for (GaussDBAColumn col : targetTable.getColumns()) {
             viewColumns.add(col.getName());
         }
         viewColumns.add(ROWID);
@@ -593,7 +456,7 @@ public class MySQLTxInfer {
             insertVersionTable.execute(globalState);
         }
         int isDeleted = 0;
-        if (stmtResult.getStatement().getType() == MySQLStatementType.DELETE) {
+        if (stmtResult.getStatement().getType() == GaussDBAStatementType.DELETE) {
             isDeleted = 1;
         }
         SQLQueryAdapter updateVersion = new SQLQueryAdapter(
@@ -601,25 +464,6 @@ public class MySQLTxInfer {
                         VERSION_ID, stmtId, VERSION_IS_DELETED, isDeleted, VERSION_TX_ID,
                         stmtResult.getStatement().getTransaction().getId(), VERSION_ID));
         updateVersion.execute(globalState);
-    }
-
-    private void queryWarningInfo(TxStatementExecutionResult stmtResult, String auxiliaryPrefix,
-                                  List<String> targetTableNames) throws SQLException {
-        SQLQueryAdapter sql = new SQLQueryAdapter("SHOW WARNINGS");
-        List<Object> warnings = QueryResultUtil.getQueryResult(sql.executeAndGet(globalState));
-        if (!warnings.isEmpty()) {
-            for (int i = 0; i < warnings.size(); i++) {
-                if ((i + 1) % 3 == 0) {
-                    String warningInfo = warnings.get(i).toString();
-                    for (String tableName : targetTableNames) {
-                        String auxiliaryTable = auxiliaryPrefix + "_" + tableName;
-                        warningInfo = warningInfo.replace(auxiliaryTable, tableName);
-                    }
-                    warnings.set(i, warningInfo);
-                }
-            }
-        }
-        stmtResult.setWarningInfo(warnings);
     }
 
     private static List<String> preprocessResultSet(List<Object> resultSet) {
@@ -666,9 +510,9 @@ public class MySQLTxInfer {
         return rowIds;
     }
 
-    private MySQLTable getTargetTable(String sql) {
-        MySQLTable targetTable = null;
-        for (MySQLTable t : tables) {
+    private GaussDBATable getTargetTable(String sql) {
+        GaussDBATable targetTable = null;
+        for (GaussDBATable t : tables) {
             if (sql.contains(t.getName())) {
                 targetTable = t;
             }
@@ -676,9 +520,9 @@ public class MySQLTxInfer {
         return targetTable;
     }
 
-    private List<MySQLTable> getTargetTables(String sql) {
-        List<MySQLTable> targetTables = new ArrayList<>();
-        for (MySQLTable t : tables) {
+    private List<GaussDBATable> getTargetTables(String sql) {
+        List<GaussDBATable> targetTables = new ArrayList<>();
+        for (GaussDBATable t : tables) {
             if (sql.contains(t.getName())) {
                 targetTables.add(t);
             }
@@ -689,13 +533,13 @@ public class MySQLTxInfer {
     private void createTableLike(String auxiliaryTable, String tableName) throws SQLException {
         dropTable(auxiliaryTable);
         SQLQueryAdapter createTable = new SQLQueryAdapter(
-                String.format("CREATE TABLE %s LIKE %s", auxiliaryTable, tableName), true);
+                String.format("CREATE TABLE %s (LIKE %s INCLUDING ALL)", auxiliaryTable, tableName), true);
         createTable.execute(globalState);
     }
 
     private void dropRowIdColumn(String tableName) throws SQLException {
         SQLQueryAdapter dropRowId = new SQLQueryAdapter(
-                String.format("ALTER TABLE %s DROP COLUMN %s", tableName, ROWID));
+                String.format("ALTER TABLE %s DROP COLUMN IF EXISTS %s", tableName, ROWID));
         dropRowId.execute(globalState);
     }
 

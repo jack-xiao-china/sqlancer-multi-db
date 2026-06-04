@@ -27,6 +27,13 @@ public abstract class TxTestGenerator<S extends SQLGlobalState<?, ?>> {
         for (int i = 1; i <= txNum; i++) {
             transactions.add(generateTransaction());
         }
+
+        // Conflict construction: inject shared operation targets between transaction pairs
+        // to increase lock conflict probability (references Troc TableTool.makeConflict)
+        if (transactions.size() >= 2 && globalState.getOptions().useConflictConstruction()) {
+            TxConflictConstructor.makeConflict(transactions, globalState);
+        }
+
         return transactions;
     }
 
@@ -67,6 +74,27 @@ public abstract class TxTestGenerator<S extends SQLGlobalState<?, ?>> {
             }
         }
         return schedules;
+    }
+
+    /**
+     * HYBRID schedule generation: exhaustive enumeration for small spaces,
+     * reservoir sampling for large spaces.
+     *
+     * Only applicable for exactly 2 transactions (matching Troc's fixed-2 model).
+     * Falls back to random genSchedules() for other transaction counts.
+     *
+     * References Troc ShuffleTool.genAllSubmittedTrace() + sampleSubmittedTrace().
+     */
+    public List<List<TxStatement>> genSchedulesHybrid(List<Transaction> transactions) {
+        if (transactions.size() != 2) {
+            return genSchedules(transactions);
+        }
+
+        List<TxStatement> tx1Stmts = transactions.get(0).getStatements();
+        List<TxStatement> tx2Stmts = transactions.get(1).getStatements();
+        int num = globalState.getOptions().getNrSchedules();
+
+        return ScheduleExhaustiveEnumerator.hybridGenerate(tx1Stmts, tx2Stmts, num);
     }
 
     public Integer countSchedules(List<Transaction> txs) {

@@ -88,7 +88,7 @@ public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
                     state.getState().getLocalState().log(testResult.toString());
                     state.getState().getLocalState().log("Oracle Result:");
                     state.getState().getLocalState().log(oracleResult.toString());
-                    throw new AssertionError("Transaction execution mismatches its oracles");
+                    throw new AssertionError(compareResultInfo);
                 } else {
                     state.getLogger().writeCurrent("============Is Same============");
                 }
@@ -111,7 +111,7 @@ public class PostgresWriteCheckOracle extends TxBase<PostgresGlobalState> {
                     state.getState().getLocalState().log(testResult.toString());
                     state.getState().getLocalState().log("Oracle Result:");
                     state.getState().getLocalState().log(oracleWithoutCommitAndRollbackResult.toString());
-                    throw new AssertionError("Transaction execution mismatches its oracles");
+                    throw new AssertionError(compareResultInfo);
                 } else {
                     state.getLogger().writeCurrent("============Is Same============");
                 }

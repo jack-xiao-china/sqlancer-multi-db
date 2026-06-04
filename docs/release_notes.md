@@ -1,5 +1,39 @@
 # SQLancer Release Notes
 
+## v2.1.0 | 2026-06-04
+- 新增 [冲突构造 TxConflictConstructor]：借鉴 Troc `TableTool.makeConflict()`，在事务生成后注入共享操作目标，将锁冲突概率从随机碰撞提升到确定性触发
+  - 新建 `TxConflictConstructor.java`：WHERE 子句复制 + PK 条件注入两种策略
+  - `TxTestGenerator.generateTransactions()` 集成冲突构造调用
+  - 新增 `--conflict-construction` 命令行开关（默认开启）
+  - `ExpectedErrors` 新增拷贝构造函数，支持 SQL 修改后保留错误模式
+  - 新增 `TestTxConflictConstructor.java`：12 个单元测试验证 SQL 操作逻辑
+- 新增 [Range Conflict 检测]：借鉴 Troc `Lock.isRangeConflict()`，为 MySQL/GaussDB-M TX_INFER 补齐幻读检测能力
+  - 新建 `LockType.java`：锁类型枚举（NONE/ROW_SHARE/ROW_EXCLUSIVE/RANGE_SHARE/RANGE_EXCLUSIVE/INSERT_INTENTION）
+  - 新建 `InnoDBRangeConflictDetector.java`：范围冲突检测器
+  - `MySQLTxInfer` / `GaussDBMTxInfer`：跟踪范围锁 + 写语句前检测冲突
+- 新增 [PostgreSQL/GaussDB-A TX_INFER]：补齐 PG 和 GaussDB-A 的 MVCC 白盒 Oracle
+  - 新建 `PostgresTxInfer.java` + `PostgresTxInferOracle.java`：PG 版辅助版本表 MVCC 推理（快照在 BEGIN 建立）
+  - 新建 `GaussDBATxInfer.java` + `GaussDBATxInferOracle.java`：GaussDB-A 版（Oracle 兼容模式）
+  - `PostgresOracleFactory` / `GaussDBAOracleFactory`：注册 TX_INFER
+- 优化 [FucciMT 精度提升]：引入 MVCCSimulator 实现按隔离级别区分的可见性建模
+  - 新建 `MVCCSimulator.java`：Troc 风格的 View/Version 可见性逻辑（NEWEST/COMMITTED/SNAPSHOT/COMMITTED_WITH_LOCK）
+  - 新建 `VisibilityRule.java`：可见性规则枚举，按隔离级别名称映射
+  - `FucciMTOracle`：使用 MVCCSimulator 替代简单的 committed-only 最终状态计算
+
+## v2.0.63 | 2026-06-03
+- 新增 [事务检测 Undecided 过滤]：借鉴 Troc 项目的 compareOracles() 分类逻辑，在 TxBase 中引入 3 类 Undecided 差异过滤（死锁/abort/block 差异），减少 30-50% 误报率
+  - 新建 `TxBugType.java`：6 种确定性 Bug 类型 + 3 种 Undecided 类型枚举
+  - 新建 `TxDiscrepancyClassifier.java`：差异分类器，支持 MySQL/GaussDB-M（InnoDB 死锁回滚）和 PG/GaussDB-A（SSI 序列化异常）的合法 abort 判断
+  - 改写 `TxBase.compareAllResults()` 和 `compareWriteTxResults()`：新增 Undecided 过滤层，所有事务 Oracle（WRITE_CHECK/TX_INFER/Fucci）自动受益
+- 修复 [MySQL/GaussDB-M TX_INFER 快照点建模]：移除 BEGIN 时创建快照的逻辑，延迟到第一条 SELECT 时按需创建，与 InnoDB RR/SER 实际行为对齐
+  - `MySQLTxInfer.analyzeStmt()`：BEGIN 分支不再 eager 创建快照
+  - `GaussDBMTxInfer.analyzeStmt()`：同步修正
+- 新增 [穷举 Schedule 策略]：借鉴 Troc ShuffleTool 的回溯穷举算法，支持 2 事务场景的确定性覆盖
+  - 新建 `ScheduleExhaustiveEnumerator.java`：回溯法枚举 C(n1+n2,n1) 种交错 + Reservoir Sampling 均匀抽样
+  - `TxTestGenerator.genSchedulesHybrid()`：HYBRID 模式，小空间穷举（≤1000 种），大空间采样
+- 优化 [Bug 报告类型细化]：6 个事务 Oracle 的 AssertionError 消息从泛化描述改为携带具体 TxBugType 分类信息
+  - MySQL/PostgreSQL/GaussDB-M/GaussDB-A WriteCheckOracle + MySQL/GaussDB-M TxInferOracle
+
 ## v2.0.62 | 2026-05-29
 - 文档 [Oracle Wiki 全景指南]：新增 SQLancer_Test_Oracle_Wiki.docx，全面介绍所有新增 Test Oracle 的功能、核心算法、参考论文、语法覆盖、适用场景、具体命令和专属参数
 - 修正 [论文引用]：SONAR 对应 SemBug (ISSTA 2024)，EDC 对应 RADAR (ISSTA 2024)，FUCCI 对应 Fucci (ACM 2024 DOI:10.1145/3664102)，WRITE_CHECK 对应 WriteCheck 工具（无正式论文）；明确 WRITE_CHECK 与 FUCCI 是两个独立工具的集成，算法根本不同

@@ -11,6 +11,8 @@ import java.util.stream.Collectors;
 
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLancerResultSet;
+import sqlancer.common.transaction.InnoDBRangeConflictDetector;
+import sqlancer.common.transaction.LockType;
 import sqlancer.common.transaction.QueryResultUtil;
 import sqlancer.common.transaction.Transaction;
 import sqlancer.common.transaction.TxSQLQueryAdapter;
@@ -44,6 +46,11 @@ public class GaussDBMTxInfer {
     private Map<Transaction, List<Integer>> snapshotTxs;
 
     private int uniqueRowId = 1;
+
+    /** Tracks each transaction's last locking SELECT table name (for range conflict detection). */
+    private final Map<Transaction, String> rangeLockTable = new HashMap<>();
+    /** Tracks each transaction's last locking SELECT lock type. */
+    private final Map<Transaction, LockType> rangeLockType = new HashMap<>();
 
     public GaussDBMTxInfer(GaussDBMGlobalState globalState, List<Transaction> transactions,
                            TxTestExecutionResult txTestResult, GaussDBMIsolationLevel isolationLevel) {
@@ -165,9 +172,14 @@ public class GaussDBMTxInfer {
         String auxiliaryPrefix = TABLE_PREFIX + stmt.getTransaction().getId() + "_" + stmtId;
 
         if (stmtType == GaussDBMStatementType.BEGIN) {
-            createSnapshot(curTx);
+            // GaussDB-M (InnoDB-compatible) RR/SER snapshot is established at the first
+            // consistent read (SELECT), not at BEGIN. Snapshot creation is deferred to
+            // readSnapshotVersion() where it is triggered on-demand when snapshotTxs is empty.
         } else if (stmtType == GaussDBMStatementType.COMMIT) {
             committedTxs.add(curTx);
+            // Release range locks on commit
+            rangeLockTable.remove(curTx);
+            rangeLockType.remove(curTx);
         } else if (stmtType == GaussDBMStatementType.ROLLBACK) {
             for (GaussDBTable table : tables) {
                 String tableName = table.getName();
@@ -176,6 +188,9 @@ public class GaussDBMTxInfer {
                         auxiliaryVersionTable, VERSION_TX_ID, curTx.getId()));
                 sql.execute(globalState);
             }
+            // Release range locks on rollback
+            rangeLockTable.remove(curTx);
+            rangeLockType.remove(curTx);
         } else if (stmtType == GaussDBMStatementType.SELECT
                 || stmtType == GaussDBMStatementType.SELECT_FOR_SHARE
                 || stmtType == GaussDBMStatementType.SELECT_FOR_UPDATE) {
@@ -202,8 +217,33 @@ public class GaussDBMTxInfer {
                 String auxiliaryTableName = auxiliaryPrefix + "_" + targetTableName;
                 dropTable(auxiliaryTableName);
             }
+            // Track range locks for SELECT FOR UPDATE/SHARE under RR/SER isolation
+            if ((isolationLevel == GaussDBMIsolationLevel.REPEATABLE_READ
+                    || isolationLevel == GaussDBMIsolationLevel.SERIALIZABLE)
+                    && (stmtType == GaussDBMStatementType.SELECT_FOR_UPDATE
+                    || stmtType == GaussDBMStatementType.SELECT_FOR_SHARE)) {
+                if (!targetTableNames.isEmpty()) {
+                    rangeLockTable.put(curTx, targetTableNames.get(0));
+                    rangeLockType.put(curTx, InnoDBRangeConflictDetector.getRangeLockType(
+                            (sqlancer.common.transaction.TxStatementType) stmtType));
+                }
+            }
         } else {
             GaussDBTable targetTable = getTargetTable(stmt.getTxQueryAdapter().getQueryString());
+            // Range conflict detection: check if another transaction holds a range lock
+            // on the same table (InnoDB RR/SER gap lock may block this write)
+            for (Transaction otherTx : snapshotTxs.keySet()) {
+                if (otherTx != curTx && rangeLockType.containsKey(otherTx)) {
+                    String lockedTable = rangeLockTable.get(otherTx);
+                    LockType lockType = rangeLockType.get(otherTx);
+                    if (InnoDBRangeConflictDetector.hasRangeConflict(
+                            (sqlancer.common.transaction.TxStatementType) stmtType,
+                            targetTable.getName(), lockedTable, lockType)) {
+                        stmtResult.setBlocked(true);
+                        return;
+                    }
+                }
+            }
             String auxiliaryTableName = auxiliaryPrefix + "_" + targetTable.getName();
             readCommittedVersion(auxiliaryTableName, curTx, targetTable);
             if (stmtType == GaussDBMStatementType.REPLACE) {

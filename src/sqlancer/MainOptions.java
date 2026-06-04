@@ -178,6 +178,9 @@ public class MainOptions {
     @Parameter(names = "--num-schedule", description = "Specifies the number of schedules to be generated for a group of transactions")
     private int nrSchedules = 10; // NOPMD
 
+    @Parameter(names = "--conflict-construction", description = "Enable conflict construction between transactions (Troc-style makeConflict)", arity = 1)
+    private boolean conflictConstruction = true; // NOPMD
+
     @Parameter(names = "--set-case", description = "Whether use a specified case", arity = 1)
     private boolean setCase = false; // NOPMD
 
@@ -407,6 +410,10 @@ public class MainOptions {
 
     public int getNrSchedules() {
         return nrSchedules;
+    }
+
+    public boolean useConflictConstruction() {
+        return conflictConstruction;
     }
 
     public boolean isSetCase() {

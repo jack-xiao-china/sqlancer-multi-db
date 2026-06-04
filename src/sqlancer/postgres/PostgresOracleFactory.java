@@ -33,6 +33,7 @@ import sqlancer.postgres.oracle.PostgresSonarOracle;
 import sqlancer.postgres.oracle.transaction.PostgresWriteCheckOracle;
 import sqlancer.postgres.oracle.transaction.PostgresWriteCheckReproduceOracle;
 import sqlancer.postgres.oracle.transaction.PostgresFucciOracle;
+import sqlancer.postgres.oracle.transaction.PostgresTxInferOracle;
 
 public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> {
     NOREC {
@@ -256,6 +257,21 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
             return new PostgresWriteCheckReproduceOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * TX_INFER Oracle for PostgreSQL.
+     * Uses auxiliary version tables to infer MVCC visibility and detect isolation bugs.
+     */
+    TX_INFER {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresTxInferOracle(globalState);
         }
 
         @Override

@@ -26,6 +26,7 @@ import sqlancer.gaussdba.oracle.tlp.GaussDBATLPHavingOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckReproduceOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBAFucciOracle;
+import sqlancer.gaussdba.oracle.transaction.GaussDBATxInferOracle;
 
 public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> {
 
@@ -190,6 +191,21 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         @Override
         public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
             return new GaussDBAWriteCheckReproduceOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * TX_INFER Oracle for GaussDB-A.
+     * Uses auxiliary version tables to infer MVCC visibility and detect isolation bugs.
+     */
+    TX_INFER {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBATxInferOracle(globalState);
         }
 
         @Override

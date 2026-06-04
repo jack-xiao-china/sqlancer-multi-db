@@ -1,4 +1,4 @@
-package sqlancer.gaussdbm.oracle.transaction;
+package sqlancer.gaussdba.oracle.transaction;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -9,25 +9,26 @@ import sqlancer.common.oracle.TxBase;
 import sqlancer.common.transaction.Transaction;
 import sqlancer.common.transaction.TxStatement;
 import sqlancer.common.transaction.TxTestExecutionResult;
-import sqlancer.gaussdbm.GaussDBMGlobalState;
-import sqlancer.gaussdbm.transaction.GaussDBMIsolation.GaussDBMIsolationLevel;
-import sqlancer.gaussdbm.transaction.GaussDBMTxTestExecutor;
-import sqlancer.gaussdbm.transaction.GaussDBMTxTestGenerator;
+import sqlancer.gaussdba.GaussDBAGlobalState;
+import sqlancer.gaussdba.transaction.GaussDBAIsolation.GaussDBAIsolationLevel;
+import sqlancer.gaussdba.transaction.GaussDBATxTestExecutor;
+import sqlancer.gaussdba.transaction.GaussDBATxTestGenerator;
 
 /**
- * GaussDB-M TX_INFER Oracle.
- * Inherits MySQL implementation since GaussDB-M uses MySQL-compatible mode.
+ * GaussDB-A TX_INFER Oracle.
+ * Detects transaction isolation level bugs by inferring expected results
+ * through MVCC version chain simulation using auxiliary tables.
  */
-public class GaussDBMTxInferOracle extends TxBase<GaussDBMGlobalState> {
+public class GaussDBATxInferOracle extends TxBase<GaussDBAGlobalState> {
 
-    public GaussDBMTxInferOracle(GaussDBMGlobalState state) {
+    public GaussDBATxInferOracle(GaussDBAGlobalState state) {
         super(state);
     }
 
     @Override
     public void check() throws SQLException {
         logger.writeCurrent("\n================= Generate new transaction list =================");
-        GaussDBMTxTestGenerator txTestGenerator = new GaussDBMTxTestGenerator(state);
+        GaussDBATxTestGenerator txTestGenerator = new GaussDBATxTestGenerator(state);
         List<Transaction> transactions = txTestGenerator.generateTransactions();
         for (Transaction tx : transactions) {
             logger.writeCurrent(tx.toString());
@@ -38,14 +39,15 @@ public class GaussDBMTxInferOracle extends TxBase<GaussDBMGlobalState> {
             for (List<TxStatement> schedule : schedules) {
                 logger.writeCurrent("Input schedule: " + schedule.stream().map(TxStatement::getStmtId).
                         collect(Collectors.joining(", ", "[", "]")));
-                GaussDBMIsolationLevel isoLevel = Randomly.fromOptions(GaussDBMIsolationLevel.values());
+                GaussDBAIsolationLevel isoLevel = Randomly.fromOptions(GaussDBAIsolationLevel.values());
                 logger.writeCurrent("Isolation level: " + isoLevel);
 
-                GaussDBMTxTestExecutor testExecutor = new GaussDBMTxTestExecutor(state, transactions, schedule, isoLevel);
+                GaussDBATxTestExecutor testExecutor = new GaussDBATxTestExecutor(
+                        state, transactions, schedule, isoLevel);
                 TxTestExecutionResult testResult = testExecutor.execute();
 
                 reproduceDatabase(state.getState().getStatements());
-                GaussDBMTxInfer infer = new GaussDBMTxInfer(state, transactions, testResult, isoLevel);
+                GaussDBATxInfer infer = new GaussDBATxInfer(state, transactions, testResult, isoLevel);
                 TxTestExecutionResult oracleResult = infer.inferOracle();
 
                 String compareResultInfo = compareAllResults(testResult, oracleResult);
