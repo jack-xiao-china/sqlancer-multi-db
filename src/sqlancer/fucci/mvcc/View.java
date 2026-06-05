@@ -20,6 +20,12 @@ public class View {
     /** 视图创建时间戳 */
     private long timestamp;
 
+    /** 列名数组，索引对应 Object[] 位置。null 表示未知。 */
+    private String[] columnNames;
+
+    /** 视图所属表名。null 表示多表视图。 */
+    private String tableName;
+
     public View() {
         this.data = new HashMap<>();
         this.deleted = new HashMap<>();
@@ -30,6 +36,12 @@ public class View {
         this.data = new HashMap<>();
         this.deleted = trackDeleted ? new HashMap<>() : null;
         this.timestamp = System.currentTimeMillis();
+    }
+
+    public View(String tableName, String[] columnNames) {
+        this();
+        this.tableName = tableName;
+        this.columnNames = columnNames;
     }
 
     public void putRow(int rowId, Object[] rowData) {
@@ -83,6 +95,8 @@ public class View {
 
     public View copy() {
         View newView = new View(deleted != null);
+        newView.tableName = this.tableName;
+        newView.columnNames = this.columnNames;
         for (Map.Entry<Integer, Object[]> entry : data.entrySet()) {
             Object[] rowData = entry.getValue();
             Object[] dataCopy = rowData != null ? rowData.clone() : null;
@@ -106,11 +120,33 @@ public class View {
     public Map<Integer, Object[]> getData() { return data; }
     public Map<Integer, Boolean> getDeleted() { return deleted; }
     public long getTimestamp() { return timestamp; }
+    public String[] getColumnNames() { return columnNames; }
+    public String getTableName() { return tableName; }
+
+    /**
+     * 按列名查找索引（大小写不敏感）。
+     *
+     * @param name 列名
+     * @return 列索引，未找到返回 -1
+     */
+    public int getColumnIndex(String name) {
+        if (columnNames == null || name == null) {
+            return -1;
+        }
+        for (int i = 0; i < columnNames.length; i++) {
+            if (columnNames[i].equalsIgnoreCase(name)) {
+                return i;
+            }
+        }
+        return -1;
+    }
 
     // Setter methods
     public void setData(Map<Integer, Object[]> data) { this.data = data; }
     public void setDeleted(Map<Integer, Boolean> deleted) { this.deleted = deleted; }
     public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+    public void setColumnNames(String[] columnNames) { this.columnNames = columnNames; }
+    public void setTableName(String tableName) { this.tableName = tableName; }
 
     @Override
     public String toString() {

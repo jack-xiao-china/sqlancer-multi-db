@@ -1,5 +1,8 @@
 package sqlancer.fucci.lock;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * 锁对象定义。
  * 表示锁定的范围，可以是表、行、间隙等。
@@ -24,6 +27,9 @@ public class LockObject {
     /** 间隙结束ID(Gap锁时使用) */
     private Integer gapEndId;
 
+    /** 谓词匹配的行ID集合（RANGE锁时使用） */
+    private Set<Integer> matchedRows;
+
     /**
      * 锁对象类型枚举
      */
@@ -37,7 +43,9 @@ public class LockObject {
         /** 下一键锁(行+间隙) */
         NEXT_KEY,
         /** 插入意向锁 */
-        INSERT_INTENTION
+        INSERT_INTENTION,
+        /** 范围锁（谓词匹配的行集合） */
+        RANGE
     }
 
     public LockObject() {
@@ -59,6 +67,15 @@ public class LockObject {
         this.tableName = tableName;
         this.gapStartId = gapStartId;
         this.gapEndId = gapEndId;
+    }
+
+    /**
+     * 创建范围锁（谓词匹配的行ID集合）。
+     */
+    public LockObject(String tableName, Set<Integer> matchedRows) {
+        this.objectType = LockObjectType.RANGE;
+        this.tableName = tableName;
+        this.matchedRows = matchedRows != null ? new HashSet<>(matchedRows) : new HashSet<>();
     }
 
     public static LockObject createGapLock(String tableName, int gapStartId, int gapEndId) {
@@ -93,6 +110,8 @@ public class LockObject {
                     return !intervalsOverlap(gapStartId, gapEndId, other.gapStartId, other.gapEndId);
                 case NEXT_KEY:
                     return rowId.equals(other.rowId);
+                case RANGE:
+                    return !rowsOverlap(matchedRows, other.matchedRows);
                 default:
                     return true;
             }
@@ -106,6 +125,13 @@ public class LockObject {
         if (objectType == LockObjectType.GAP && other.objectType == LockObjectType.ROW) {
             return !isRowInGap(other.rowId, gapStartId, gapEndId);
         }
+        // RANGE vs ROW: 冲突当且仅当行在匹配集合中
+        if (objectType == LockObjectType.RANGE && other.objectType == LockObjectType.ROW) {
+            return !matchedRows.contains(other.rowId);
+        }
+        if (objectType == LockObjectType.ROW && other.objectType == LockObjectType.RANGE) {
+            return !other.matchedRows.contains(rowId);
+        }
         return true;
     }
 
@@ -117,6 +143,18 @@ public class LockObject {
         return rowId > gapStart && rowId < gapEnd;
     }
 
+    private boolean rowsOverlap(Set<Integer> set1, Set<Integer> set2) {
+        if (set1 == null || set2 == null) {
+            return false;
+        }
+        for (Integer id : set1) {
+            if (set2.contains(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Getter methods
     public LockObjectType getObjectType() { return objectType; }
     public String getTableName() { return tableName; }
@@ -124,6 +162,7 @@ public class LockObject {
     public Integer getRowId() { return rowId; }
     public Integer getGapStartId() { return gapStartId; }
     public Integer getGapEndId() { return gapEndId; }
+    public Set<Integer> getMatchedRows() { return matchedRows; }
 
     // Setter methods
     public void setObjectType(LockObjectType objectType) { this.objectType = objectType; }

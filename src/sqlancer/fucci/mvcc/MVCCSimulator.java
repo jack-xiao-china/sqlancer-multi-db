@@ -83,7 +83,10 @@ public class MVCCSimulator {
     /**
      * Build the visible view for a transaction under the given visibility rule.
      * Returns: tableName → list of visible row data.
+     *
+     * @deprecated 使用 {@link #buildViewWithRowIds} 代替，保留原始 rowId 映射
      */
+    @Deprecated
     public Map<String, List<Object[]>> buildView(FucciTransaction curTx, VisibilityRule rule) {
         Map<String, List<Object[]>> view = new HashMap<>();
 
@@ -101,6 +104,38 @@ public class MVCCSimulator {
             view.put(tableName, visibleRows);
         }
         return view;
+    }
+
+    /**
+     * 构建事务可见视图，保留原始 rowId 映射。
+     * 返回: tableName → (rowId → visibleRowData)。
+     */
+    public Map<String, Map<Integer, Object[]>> buildViewWithRowIds(
+            FucciTransaction curTx, VisibilityRule rule) {
+        Map<String, Map<Integer, Object[]>> view = new HashMap<>();
+
+        for (Map.Entry<String, Map<Integer, List<Version>>> tableEntry : versionChains.entrySet()) {
+            String tableName = tableEntry.getKey();
+            Map<Integer, Object[]> visibleRows = new HashMap<>();
+
+            for (Map.Entry<Integer, List<Version>> rowEntry : tableEntry.getValue().entrySet()) {
+                int rowId = rowEntry.getKey();
+                List<Version> versions = rowEntry.getValue();
+                Object[] visibleData = findVisibleVersion(versions, curTx, rule);
+                if (visibleData != null) {
+                    visibleRows.put(rowId, visibleData);
+                }
+            }
+            view.put(tableName, visibleRows);
+        }
+        return view;
+    }
+
+    /**
+     * 获取指定表的版本链（供范围锁评估使用）。
+     */
+    public Map<Integer, List<Version>> getVersionChains(String tableName) {
+        return versionChains.getOrDefault(tableName, new HashMap<>());
     }
 
     /**

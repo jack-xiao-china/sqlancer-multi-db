@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 import sqlancer.Randomly;
+import sqlancer.common.transaction.ScheduleExhaustiveEnumerator;
 import sqlancer.common.transaction.Transaction;
+import sqlancer.common.transaction.TxConflictConstructor;
 import sqlancer.common.transaction.TxStatement;
 import sqlancer.common.transaction.TxTestGenerator;
 import sqlancer.fucci.FucciGlobalState;
@@ -27,9 +29,6 @@ public class FucciTxTestGenerator extends TxTestGenerator<FucciGlobalState> {
     /** 隔离级别 */
     private final FucciIsolationLevel isolationLevel;
 
-    /** 冲突构造策略 */
-    private final String conflictType;
-
     /**
      * 构造函数
      *
@@ -42,7 +41,6 @@ public class FucciTxTestGenerator extends TxTestGenerator<FucciGlobalState> {
         this.isolationLevel = FucciIsolation.getIsolationLevel(
                 isolationStr == null ? "RANDOM" : isolationStr,
                 globalState.getDbmsType());
-        this.conflictType = globalState.getFucciOptions().getConflictType();
     }
 
     /**
@@ -65,6 +63,11 @@ public class FucciTxTestGenerator extends TxTestGenerator<FucciGlobalState> {
             transactions.add(tx);
         }
 
+        // 使用TxConflictConstructor进行冲突注入
+        if (transactions.size() >= 2 && globalState.getOptions().useConflictConstruction()) {
+            TxConflictConstructor.makeConflict(transactions, globalState);
+        }
+
         return transactions;
     }
 
@@ -78,22 +81,6 @@ public class FucciTxTestGenerator extends TxTestGenerator<FucciGlobalState> {
         // 使用适配器生成FucciTransaction
         FucciTransaction tx = adapter.generateTransaction(globalState, isolationLevel);
 
-        // 生成冲突语句
-        if (conflictType.equals("random")) {
-            generateRandomConflictStatements(tx);
-        } else {
-            generateStructuredConflictStatements(tx);
-        }
-
-        return tx;
-    }
-
-    /**
-     * 生成随机冲突语句
-     *
-     * @param tx 事务
-     */
-    private void generateRandomConflictStatements(FucciTransaction tx) throws SQLException {
         // 使用标准SQLancer生成器生成语句
         List<TxStatement> statements = adapter.generateStatements(globalState, tx);
 
@@ -101,94 +88,153 @@ public class FucciTxTestGenerator extends TxTestGenerator<FucciGlobalState> {
             if (stmt instanceof FucciTxStatement) {
                 tx.addStatement(stmt);
             } else {
-                // 将普通TxStatement转换为FucciTxStatement
                 FucciTxStatement fucciStmt = new FucciTxStatement(tx, stmt.getTxQueryAdapter());
                 tx.addStatement(fucciStmt);
             }
         }
+
+        return tx;
     }
 
     /**
-     * 生成结构化冲突语句
-     *
-     * @param tx 事务
-     */
-    private void generateStructuredConflictStatements(FucciTransaction tx) throws SQLException {
-        // 根据冲突类型生成特定结构的语句序列
-        switch (conflictType.toLowerCase()) {
-            case "fully-shared":
-                generateFullySharedConflict(tx);
-                break;
-            case "part-shared":
-                generatePartSharedConflict(tx);
-                break;
-            case "tuple":
-                generateTupleConflict(tx);
-                break;
-            default:
-                generateRandomConflictStatements(tx);
-        }
-    }
-
-    /**
-     * 生成完全共享冲突(同一行)
-     */
-    private void generateFullySharedConflict(FucciTransaction tx) throws SQLException {
-        // 选择同一行进行并发操作
-        adapter.generateConflictStatements(globalState, tx, "fully-shared");
-    }
-
-    /**
-     * 生成部分共享冲突(部分行重叠)
-     */
-    private void generatePartSharedConflict(FucciTransaction tx) throws SQLException {
-        adapter.generateConflictStatements(globalState, tx, "part-shared");
-    }
-
-    /**
-     * 生成元组冲突
-     */
-    private void generateTupleConflict(FucciTransaction tx) throws SQLException {
-        adapter.generateConflictStatements(globalState, tx, "tuple");
-    }
-
-    /**
-     * 生成调度序列
+     * 生成调度序列。
+     * 使用穷举+过滤替代纯随机采样：
+     * 1. 穷举所有交错排列（或蓄水池采样）
+     * 2. 过滤非交错退化调度
+     * 3. 过滤异常历史（冲突必须在COMMIT之前）
      *
      * @param transactions 事务列表
      * @return 调度序列列表
      */
     @Override
     public List<List<TxStatement>> genSchedules(List<Transaction> transactions) {
-        // Fucci使用固定的调度数量配置
         int scheduleCount = globalState.getFucciOptions().getScheduleCount();
 
-        List<List<TxStatement>> schedules = new ArrayList<>();
-        Integer maxNum = countSchedules(transactions);
-        int num = Math.min(scheduleCount, maxNum);
+        if (transactions.size() == 2) {
+            List<TxStatement> tx1Stmts = transactions.get(0).getStatements();
+            List<TxStatement> tx2Stmts = transactions.get(1).getStatements();
 
-        int count = 0;
-        while (count < num) {
-            List<TxStatement> schedule = generateOneSchedule(transactions);
-            if (!schedules.contains(schedule)) {
-                schedules.add(schedule);
-                count++;
+            // 穷举或采样
+            List<List<TxStatement>> schedules = ScheduleExhaustiveEnumerator.hybridGenerate(
+                    tx1Stmts, tx2Stmts, scheduleCount);
+
+            // 过滤非交错调度
+            schedules = filterNonInterleaved(schedules, transactions);
+
+            // 过滤异常历史
+            schedules = filterAnomalousHistories(schedules, transactions);
+
+            return schedules;
+        }
+
+        // 回退: 非2事务时使用随机
+        return super.genSchedules(transactions);
+    }
+
+    /**
+     * 过滤非交错调度（排除 Tx1全在Tx2前 或 Tx2全在Tx1前 的退化情况）。
+     */
+    private List<List<TxStatement>> filterNonInterleaved(
+            List<List<TxStatement>> schedules, List<Transaction> transactions) {
+        if (transactions.size() != 2) {
+            return schedules;
+        }
+        int tx1Id = transactions.get(0).getId();
+        int tx2Id = transactions.get(1).getId();
+
+        List<List<TxStatement>> filtered = new ArrayList<>();
+        for (List<TxStatement> schedule : schedules) {
+            if (isInterleaved(schedule, tx1Id, tx2Id)) {
+                filtered.add(schedule);
             }
         }
-        return schedules;
+        return filtered.isEmpty() ? schedules : filtered;
+    }
+
+    /**
+     * 过滤异常历史（冲突语句必须出现在两个COMMIT之前）。
+     */
+    private List<List<TxStatement>> filterAnomalousHistories(
+            List<List<TxStatement>> schedules, List<Transaction> transactions) {
+        if (transactions.size() != 2) {
+            return schedules;
+        }
+
+        List<List<TxStatement>> filtered = new ArrayList<>();
+        for (List<TxStatement> schedule : schedules) {
+            if (hasConflictBeforeBothCommits(schedule, transactions)) {
+                filtered.add(schedule);
+            }
+        }
+        return filtered.isEmpty() ? schedules : filtered;
+    }
+
+    private boolean isInterleaved(List<TxStatement> schedule, int tx1Id, int tx2Id) {
+        boolean seenTx1 = false;
+        boolean seenTx2 = false;
+        boolean switched = false;
+        int lastTxId = -1;
+
+        for (TxStatement stmt : schedule) {
+            int curTxId = stmt.getTransaction().getId();
+            if (curTxId == tx1Id) {
+                seenTx1 = true;
+            }
+            if (curTxId == tx2Id) {
+                seenTx2 = true;
+            }
+            if (lastTxId != -1 && curTxId != lastTxId && seenTx1 && seenTx2) {
+                switched = true;
+            }
+            lastTxId = curTxId;
+        }
+        return switched;
+    }
+
+    private boolean hasConflictBeforeBothCommits(
+            List<TxStatement> schedule, List<Transaction> transactions) {
+        int tx1Id = transactions.get(0).getId();
+        int tx2Id = transactions.get(1).getId();
+        boolean tx1DataBeforeCommit = false;
+        boolean tx2DataBeforeCommit = false;
+        boolean bothCommitsSeen = false;
+        int commitCount = 0;
+
+        for (TxStatement stmt : schedule) {
+            int txId = stmt.getTransaction().getId();
+
+            if (stmt.isEndTxType()) {
+                commitCount++;
+                if (commitCount == 2) {
+                    bothCommitsSeen = true;
+                }
+            }
+
+            if (!bothCommitsSeen && !stmt.isEndTxType() && !isBeginStmt(stmt)) {
+                if (txId == tx1Id) {
+                    tx1DataBeforeCommit = true;
+                }
+                if (txId == tx2Id) {
+                    tx2DataBeforeCommit = true;
+                }
+            }
+        }
+        return tx1DataBeforeCommit && tx2DataBeforeCommit;
+    }
+
+    private boolean isBeginStmt(TxStatement stmt) {
+        if (stmt instanceof FucciTxStatement) {
+            return stmt.getType() == FucciTxStatement.FucciStatementType.BEGIN
+                    || stmt.getType() == FucciTxStatement.FucciStatementType.SET;
+        }
+        return false;
     }
 
     /**
      * 生成单个调度序列
      */
     public List<TxStatement> generateOneSchedule(List<Transaction> transactions) {
-        // 基于冲突概率的调度生成
-        if (conflictType.equals("random")) {
-            return genOneScheduleInternal(transactions);
-        } else {
-            // 生成冲突调度
-            return generateConflictSchedule(transactions);
-        }
+        return genOneScheduleInternal(transactions);
     }
 
     /**
@@ -211,48 +257,6 @@ public class FucciTxTestGenerator extends TxTestGenerator<FucciGlobalState> {
                 txs.remove(tx);
             }
         }
-        return schedule;
-    }
-
-    /**
-     * 生成冲突调度序列
-     *
-     * @param transactions 事务列表
-     * @return 冲突调度
-     */
-    private List<TxStatement> generateConflictSchedule(List<Transaction> transactions) {
-        List<Transaction> txs = new ArrayList<>(transactions);
-        List<TxStatement> schedule = new ArrayList<>();
-
-        // 简化实现: 使用随机调度
-        while (!txs.isEmpty()) {
-            Transaction tx = Randomly.fromList(txs);
-            if (tx.getStatements().isEmpty()) {
-                txs.remove(tx);
-                continue;
-            }
-
-            // 选择第一个未执行的语句
-            for (TxStatement stmt : tx.getStatements()) {
-                if (!schedule.contains(stmt)) {
-                    schedule.add(stmt);
-                    break;
-                }
-            }
-
-            // 如果事务所有语句都已执行，移除该事务
-            boolean allScheduled = true;
-            for (TxStatement stmt : tx.getStatements()) {
-                if (!schedule.contains(stmt)) {
-                    allScheduled = false;
-                    break;
-                }
-            }
-            if (allScheduled) {
-                txs.remove(tx);
-            }
-        }
-
         return schedule;
     }
 }

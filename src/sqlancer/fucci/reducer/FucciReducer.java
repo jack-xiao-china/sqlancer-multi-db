@@ -388,16 +388,24 @@ public class FucciReducer {
      * 尝试删除WHERE条件
      */
     private boolean tryDeleteWhereClause(FucciTestCase testCase) {
-        // 简化实现: 从语句中移除WHERE子句
-        // 完整实现需要SQL解析
-        return false;
+        boolean modified = false;
+        for (TxStatement stmt : getAllStatements(testCase)) {
+            String sql = stmt.getTxQueryAdapter().getQueryString();
+            String newSql = removeWhereClause(sql);
+            if (!newSql.equals(sql)) {
+                stmt.setTxSQLQueryAdapter(
+                        new sqlancer.common.transaction.TxSQLQueryAdapter(newSql));
+                modified = true;
+            }
+        }
+        return modified;
     }
 
     /**
      * 尝试删除INSERT列
      */
     private boolean tryDeleteInsertColumn(FucciTestCase testCase) {
-        // 简化实现
+        // INSERT列删除需要更精细的SQL解析，暂不实现
         return false;
     }
 
@@ -405,7 +413,7 @@ public class FucciReducer {
      * 尝试删除UPDATE列
      */
     private boolean tryDeleteUpdateColumn(FucciTestCase testCase) {
-        // 简化实现
+        // UPDATE列删除需要更精细的SQL解析，暂不实现
         return false;
     }
 
@@ -413,7 +421,7 @@ public class FucciReducer {
      * 尝试删除SELECT列
      */
     private boolean tryDeleteSelectColumn(FucciTestCase testCase) {
-        // 简化实现
+        // SELECT列删除需要更精细的SQL解析，暂不实现
         return false;
     }
 
@@ -421,16 +429,125 @@ public class FucciReducer {
      * 尝试删除ORDER BY
      */
     private boolean tryDeleteOrderBy(FucciTestCase testCase) {
-        // 简化实现
-        return false;
+        boolean modified = false;
+        for (TxStatement stmt : getAllStatements(testCase)) {
+            String sql = stmt.getTxQueryAdapter().getQueryString();
+            String newSql = removeOrderByClause(sql);
+            if (!newSql.equals(sql)) {
+                stmt.setTxSQLQueryAdapter(
+                        new sqlancer.common.transaction.TxSQLQueryAdapter(newSql));
+                modified = true;
+            }
+        }
+        return modified;
     }
 
     /**
      * 尝试删除LIMIT
      */
     private boolean tryDeleteLimit(FucciTestCase testCase) {
-        // 简化实现
-        return false;
+        boolean modified = false;
+        for (TxStatement stmt : getAllStatements(testCase)) {
+            String sql = stmt.getTxQueryAdapter().getQueryString();
+            String newSql = removeLimitClause(sql);
+            if (!newSql.equals(sql)) {
+                stmt.setTxSQLQueryAdapter(
+                        new sqlancer.common.transaction.TxSQLQueryAdapter(newSql));
+                modified = true;
+            }
+        }
+        return modified;
+    }
+
+    // ============ SQL简化辅助方法 ============
+
+    private List<TxStatement> getAllStatements(FucciTestCase testCase) {
+        List<TxStatement> all = new ArrayList<>();
+        if (testCase.getTransaction1() != null) {
+            all.addAll(testCase.getTransaction1().getStatements());
+        }
+        if (testCase.getTransaction2() != null) {
+            all.addAll(testCase.getTransaction2().getStatements());
+        }
+        return all;
+    }
+
+    /**
+     * 从SQL中移除WHERE子句（保留ORDER BY/LIMIT/FOR等后缀）。
+     */
+    private String removeWhereClause(String sql) {
+        String upper = sql.toUpperCase();
+        int whereIdx = upper.lastIndexOf("WHERE");
+        if (whereIdx < 0) {
+            return sql;
+        }
+
+        String afterWhere = sql.substring(whereIdx + 5);
+        String afterUpper = afterWhere.toUpperCase();
+        int endIdx = afterWhere.length();
+        for (String kw : new String[]{"ORDER BY", "LIMIT", "FOR UPDATE", "FOR SHARE",
+                "LOCK IN SHARE MODE", "GROUP BY", "HAVING"}) {
+            int kwIdx = afterUpper.indexOf(kw);
+            if (kwIdx >= 0 && kwIdx < endIdx) {
+                endIdx = kwIdx;
+            }
+        }
+
+        if (endIdx < afterWhere.length()) {
+            return sql.substring(0, whereIdx) + " " + afterWhere.substring(endIdx).trim();
+        }
+        return sql.substring(0, whereIdx).trim();
+    }
+
+    /**
+     * 从SQL中移除ORDER BY子句。
+     */
+    private String removeOrderByClause(String sql) {
+        String upper = sql.toUpperCase();
+        int orderIdx = upper.lastIndexOf("ORDER BY");
+        if (orderIdx < 0) {
+            return sql;
+        }
+
+        String afterOrder = sql.substring(orderIdx);
+        String afterUpper = afterOrder.toUpperCase();
+        int endIdx = afterOrder.length();
+        for (String kw : new String[]{"LIMIT", "FOR UPDATE", "FOR SHARE",
+                "LOCK IN SHARE MODE"}) {
+            int kwIdx = afterUpper.indexOf(kw);
+            if (kwIdx >= 0 && kwIdx < endIdx) {
+                endIdx = kwIdx;
+            }
+        }
+
+        if (endIdx < afterOrder.length()) {
+            return sql.substring(0, orderIdx) + " " + afterOrder.substring(endIdx).trim();
+        }
+        return sql.substring(0, orderIdx).trim();
+    }
+
+    /**
+     * 从SQL中移除LIMIT子句。
+     */
+    private String removeLimitClause(String sql) {
+        String upper = sql.toUpperCase();
+        int limitIdx = upper.lastIndexOf("LIMIT");
+        if (limitIdx < 0) {
+            return sql;
+        }
+
+        String afterLimit = sql.substring(limitIdx);
+        int endIdx = afterLimit.length();
+        int semiIdx = afterLimit.indexOf(';');
+        if (semiIdx >= 0) {
+            endIdx = semiIdx;
+        }
+
+        String result = sql.substring(0, limitIdx).trim();
+        if (endIdx < afterLimit.length()) {
+            result += afterLimit.substring(endIdx);
+        }
+        return result.trim();
     }
 
     // ============ 统计方法 ============

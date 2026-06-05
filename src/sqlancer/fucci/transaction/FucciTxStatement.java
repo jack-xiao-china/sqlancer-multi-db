@@ -1,10 +1,18 @@
 package sqlancer.fucci.transaction;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.transaction.Transaction;
 import sqlancer.common.transaction.TxSQLQueryAdapter;
 import sqlancer.common.transaction.TxStatement;
 import sqlancer.common.transaction.TxStatementType;
+import sqlancer.fucci.eval.ColumnResolver;
+import sqlancer.fucci.eval.PredicateEvaluator;
 import sqlancer.fucci.mvcc.View;
 
 /**
@@ -102,6 +110,55 @@ public class FucciTxStatement extends TxStatement {
             }
         }
         this.type = realType;
+        extractInvolvedRowIds();
+    }
+
+    /**
+     * 从WHERE子句中提取涉及的主键值。
+     * 匹配 "WHERE col = N" 或 "AND col = N" 模式。
+     */
+    private void extractInvolvedRowIds() {
+        String sql = txQueryAdapter.getQueryString();
+        if (sql == null) {
+            return;
+        }
+        List<Integer> rowIds = new ArrayList<>();
+        Pattern pattern = Pattern.compile(
+                "(?:WHERE|AND)\\s+\\w+\\s*=\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(sql);
+        while (matcher.find()) {
+            try {
+                rowIds.add(Integer.parseInt(matcher.group(1)));
+            } catch (NumberFormatException ignored) {
+                // skip non-integer matches
+            }
+        }
+        if (!rowIds.isEmpty()) {
+            this.involvedRowIds = rowIds.stream().mapToInt(Integer::intValue).toArray();
+        }
+    }
+
+    /**
+     * 用 PredicateEvaluator 精确提取涉及的行ID。
+     * 在视图和列名可用时调用，失败时回退到正则提取。
+     *
+     * @param view     当前可见视图
+     * @param resolver 列名到索引的映射器
+     */
+    public void extractInvolvedRowIds(View view, ColumnResolver resolver) {
+        String predicate = getPredicate();
+        if (predicate != null && view != null && resolver != null) {
+            try {
+                Set<Integer> matched = PredicateEvaluator.evaluate(predicate, resolver, view.getData());
+                if (!matched.isEmpty()) {
+                    this.involvedRowIds = matched.stream().mapToInt(Integer::intValue).toArray();
+                    return;
+                }
+            } catch (Exception e) {
+                // 求值失败: 回退到正则
+            }
+        }
+        extractInvolvedRowIds();
     }
 
     @Override

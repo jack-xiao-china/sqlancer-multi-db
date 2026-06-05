@@ -1,5 +1,31 @@
 # SQLancer Release Notes
 
+## v2.3.0 | 2026-06-05
+- 新增 [Fucci P0 增强：谓词求值引擎 + 精确范围锁]：基于 Troc 对比分析，修复两个 P0 级差距
+  - **谓词求值引擎**（新建 `eval/` 包）：使用 JSqlParser 4.6 解析 WHERE 表达式，在内存中对 View 数据逐行求值
+    - `ColumnResolver.java`：列名到 Object[] 索引的映射器（大小写不敏感，支持 `table.col` 形式）
+    - `ExpressionEvalVisitor.java`：实现 JSqlParser ExpressionVisitor，支持 15+ 种表达式类型（比较/逻辑/NULL/IN/BETWEEN/LIKE/算术/CASE），保守回退策略
+    - `PredicateEvaluator.java`：高层门面，封装解析+批量求值
+    - `PredicateEvaluatorTest.java`：20 个单元测试覆盖全部表达式类型
+  - **SELECT 谓词过滤 + 列投影**：`FucciMTOracle.buildPredictedData()` 使用 PredicateEvaluator 过滤 WHERE + JSqlParser 投影 SELECT 列
+  - **视图列元数据**：`View.java` 新增 `columnNames`/`tableName` 字段；`MVCCSimulator` 新增 `buildViewWithRowIds()` 保留 rowId 映射
+  - **精确范围锁检测**：`LockObject` 新增 `RANGE` 类型和 `matchedRows` 集合；`FucciLockAnalyzer` 用 PredicateEvaluator 替代正则提取
+
+## v2.2.1 | 2026-06-05
+- 新增 [Troc vs SQLancer 深度对比报告 v3]：基于 Troc 源码与 SQLancer v2.2.0 的全方位对比分析
+  - 新增 `docs/troc-sqlancer-comparison-v3.md`：覆盖功能实现、检测逻辑、多事务交互、隔离级别 4 个维度
+  - 识别 Troc 4 项可借鉴优势：SELECT 视图谓词求值、精确范围锁检测、Blocked 语句重处理、INSERT 冲突构造
+  - 总结 SQLancer 7 项独特优势：调度质量、冲突构造、DBMS 覆盖、Bug 分类、测试缩减、多事务支持、辅助版本表
+
+## v2.2.0 | 2026-06-04
+- 修复 [Fucci Oracle 架构缺陷]：基于论文审计，修复 3 项严重缺陷 + 2 项重要缺陷
+  - **P0 语句级锁分析**：新建顶层 `FucciLockAnalyzer.java`，实现锁类型推断、冲突检测、阻塞/释放/重处理逻辑；`TxTestExecutor` 新增 `postStatementComplete()` hook 驱动逐语句分析
+  - **P0 MVCC 模拟集成**：新建 `FucciMVCCAnalyzer.java`，包装 MVCCSimulator 逐语句更新版本链和构建隔离级别视图；`FucciMTOracle.simulateMVCCExecution()` 重写为语句级模拟，支持 SELECT 结果预测
+  - **P1 调度质量提升**：`FucciTxTestGenerator.genSchedules()` 改用 `ScheduleExhaustiveEnumerator.hybridGenerate()` 穷举+采样；新增 `filterNonInterleaved()` 和 `filterAnomalousHistories()` 过滤无效调度
+  - **P2 冲突构造集成**：`FucciTxTestGenerator` 调用 `TxConflictConstructor.makeConflict()` 替代 adapter stub；删除 5 个无用方法
+  - **P4 Reducer L2 实现**：`FucciReducer` 实现 `tryDeleteWhereClause()`、`tryDeleteOrderBy()`、`tryDeleteLimit()` 三个语句简化方法
+  - `FucciTxStatement` 新增 `extractInvolvedRowIds()` 从 WHERE 子句提取行 ID
+
 ## v2.1.0 | 2026-06-04
 - 新增 [冲突构造 TxConflictConstructor]：借鉴 Troc `TableTool.makeConflict()`，在事务生成后注入共享操作目标，将锁冲突概率从随机碰撞提升到确定性触发
   - 新建 `TxConflictConstructor.java`：WHERE 子句复制 + PK 条件注入两种策略

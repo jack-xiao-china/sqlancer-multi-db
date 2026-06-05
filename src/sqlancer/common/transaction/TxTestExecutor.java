@@ -86,6 +86,7 @@ public abstract class TxTestExecutor<S extends SQLGlobalState<?, ?>> {
 
                 if (stmtResult != null) {
                     stmtExecutionResults.add(stmtResult);
+                    postStatementComplete(curStmt);
                     if(stmtResult.reportDeadlock() || stmtResult.reportRollback()) {
                         handleAbortedTxn(stmtResult.getStatement().getTransaction());
                         rollbackTxs.add(stmtResult.getStatement().getTransaction().getId());
@@ -117,6 +118,7 @@ public abstract class TxTestExecutor<S extends SQLGlobalState<?, ?>> {
                             hasResumedTxs = true;
                             txIterator.remove();
                             stmtExecutionResults.add(blockedStmtResult);
+                            postStatementComplete(blockedTx.getStatements().get(0));
                             if(blockedStmtResult.reportDeadlock() || blockedStmtResult.reportRollback()) {
                                 handleAbortedTxn(blockedStmtResult.getStatement().getTransaction());
                                 rollbackTxs.add(blockedStmtResult.getStatement().getTransaction().getId());
@@ -194,6 +196,16 @@ public abstract class TxTestExecutor<S extends SQLGlobalState<?, ?>> {
     protected abstract void handleAbortedTxn(Transaction transaction) throws SQLException;
 
     protected abstract SQLancerResultSet showWarnings(Transaction transaction) throws SQLException;
+
+    /**
+     * Hook called after a statement completes successfully.
+     * Override in subclasses to perform analysis (lock tracking, MVCC updates, etc.).
+     *
+     * @param stmt the completed statement
+     */
+    protected void postStatementComplete(TxStatement stmt) {
+        // default: no-op
+    }
 
     private boolean hasStmtToSchedule(List<TxStatement> submittedStmts, List<Integer> rollbackTxs) {
         for (TxStatement stmt : schedule) {

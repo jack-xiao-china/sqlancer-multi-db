@@ -1,7 +1,10 @@
 package sqlancer.fucci.transaction;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.common.transaction.Transaction;
@@ -11,10 +14,15 @@ import sqlancer.common.transaction.TxTestExecutor;
 import sqlancer.common.transaction.TxTestExecutionResult;
 import sqlancer.fucci.FucciGlobalState;
 import sqlancer.fucci.FucciIsolation.FucciIsolationLevel;
+import sqlancer.fucci.FucciTable;
+import sqlancer.fucci.lock.FucciLockAnalyzer;
+import sqlancer.fucci.mvcc.FucciMVCCAnalyzer;
+import sqlancer.fucci.mvcc.MVCCSimulator;
+import sqlancer.fucci.mvcc.Version;
 
 /**
  * Fucci事务测试执行器。
- * 在TxTestExecutor基础上扩展锁分析和MVCC模拟。
+ * 在TxTestExecutor基础上集成锁分析和MVCC模拟。
  */
 public class FucciTxTestExecutor extends TxTestExecutor<FucciGlobalState> {
 
@@ -24,8 +32,8 @@ public class FucciTxTestExecutor extends TxTestExecutor<FucciGlobalState> {
     /** 锁分析器 */
     private FucciLockAnalyzer lockAnalyzer;
 
-    /** MVCC模拟器 */
-    private FucciMVCCSimulator mvccSimulator;
+    /** MVCC分析器 */
+    private FucciMVCCAnalyzer mvccAnalyzer;
 
     /**
      * 构造函数
@@ -42,41 +50,93 @@ public class FucciTxTestExecutor extends TxTestExecutor<FucciGlobalState> {
     }
 
     /**
-     * 执行事务测试(带MVCC和锁分析)
+     * 执行事务测试(带锁分析)
      *
      * @return 执行结果
      */
     @Override
     public TxTestExecutionResult execute() throws SQLException {
         // 初始化锁分析器
-        lockAnalyzer = new FucciLockAnalyzer(globalState, transactions);
+        lockAnalyzer = new FucciLockAnalyzer(transactions);
 
-        // 初始化MVCC模拟器
-        mvccSimulator = new FucciMVCCSimulator(globalState, fucciIsoLevel);
+        // 初始化MVCC分析器（从当前数据库状态构建版本链）
+        Map<String, Map<Integer, List<Version>>> versionChains = initializeVersionChains();
+        MVCCSimulator simulator = new MVCCSimulator(versionChains);
+        mvccAnalyzer = new FucciMVCCAnalyzer(simulator, fucciIsoLevel, globalState.getDbmsType());
 
-        // 执行标准事务流程
+        // 执行标准事务流程（postStatementComplete hook 会在每条语句完成后被调用）
         TxTestExecutionResult result = super.execute();
-
-        // 添加Fucci特有分析
-        addFucciAnalysis(result);
 
         return result;
     }
 
     /**
-     * 添加Fucci特有的分析结果
-     *
-     * @param result 执行结果
+     * 从当前数据库状态初始化版本链。
      */
-    private void addFucciAnalysis(TxTestExecutionResult result) {
-        // 分析锁冲突
-        if (lockAnalyzer != null) {
-            lockAnalyzer.analyzeLockConflicts(result);
-        }
+    private Map<String, Map<Integer, List<Version>>> initializeVersionChains() throws SQLException {
+        Map<String, Map<Integer, List<Version>>> versionChains = new HashMap<>();
+        List<FucciTable> tables = globalState.getSchema().getDatabaseTables();
+        for (FucciTable table : tables) {
+            String tableName = table.getName();
+            Map<Integer, List<Version>> tableVersions = new HashMap<>();
 
-        // MVCC模拟验证
-        if (mvccSimulator != null && globalState.getFucciOptions().isMTOracle()) {
-            mvccSimulator.verifyMVCC(result);
+            String query = "SELECT * FROM " + tableName;
+            sqlancer.common.query.SQLQueryAdapter sql = new sqlancer.common.query.SQLQueryAdapter(query);
+            sqlancer.common.query.SQLancerResultSet rs = sql.executeAndGet(globalState);
+
+            if (rs != null) {
+                int rowId = 0;
+                while (rs.next()) {
+                    int columnCount = rs.getMetaData().getColumnCount();
+                    Object[] rowData = new Object[columnCount];
+                    for (int i = 0; i < columnCount; i++) {
+                        rowData[i] = rs.getObject(i + 1);
+                    }
+                    Version initVersion = new Version(rowData, "initial", false);
+                    List<Version> versions = new ArrayList<>();
+                    versions.add(initVersion);
+                    tableVersions.put(rowId, versions);
+                    rowId++;
+                }
+                rs.close();
+            }
+            versionChains.put(tableName, tableVersions);
+        }
+        return versionChains;
+    }
+
+    /**
+     * 语句完成后的分析 hook。
+     * 由父类 TxTestExecutor.execute() 在每条语句执行完毕后调用。
+     */
+    @Override
+    protected void postStatementComplete(TxStatement stmt) {
+        if (!(stmt instanceof FucciTxStatement)) {
+            return;
+        }
+        FucciTxStatement fucciStmt = (FucciTxStatement) stmt;
+        FucciTransaction tx = (FucciTransaction) stmt.getTransaction();
+
+        // MVCC分析: 更新版本链和视图
+        mvccAnalyzer.processStatement(fucciStmt);
+
+        if (fucciStmt.isEndTxType()) {
+            // COMMIT/ROLLBACK: 释放锁并处理其他事务的阻塞语句
+            if (fucciStmt.getType() == FucciTxStatement.FucciStatementType.COMMIT) {
+                tx.setCommitted(true);
+            }
+            tx.setFinished(true);
+            lockAnalyzer.releaseLocks(tx);
+
+            // 处理其他事务的阻塞语句
+            for (Transaction otherTx : transactions) {
+                if (otherTx instanceof FucciTransaction && otherTx.getId() != tx.getId()) {
+                    lockAnalyzer.processBlockedStatements((FucciTransaction) otherTx);
+                }
+            }
+        } else if (!tx.isAborted()) {
+            // 非结束语句: 分析锁获取
+            lockAnalyzer.analyzeAndAcquire(tx, fucciStmt);
         }
     }
 
@@ -159,52 +219,19 @@ public class FucciTxTestExecutor extends TxTestExecutor<FucciGlobalState> {
 
     @Override
     protected void handleAbortedTxn(Transaction transaction) throws SQLException {
-        // 将FucciTransaction标记为中止
         if (transaction instanceof FucciTransaction) {
             FucciTransaction fucciTx = (FucciTransaction) transaction;
             fucciTx.setAborted(true);
-            fucciTx.clearLocks();
-        }
-    }
-
-    // ============ 内部类定义 ============
-
-    /**
-     * Fucci锁分析器(简化实现)
-     */
-    private static class FucciLockAnalyzer {
-        private final FucciGlobalState globalState;
-        private final List<Transaction> transactions;
-
-        public FucciLockAnalyzer(FucciGlobalState globalState, List<Transaction> transactions) {
-            this.globalState = globalState;
-            this.transactions = transactions;
-        }
-
-        public void analyzeLockConflicts(TxTestExecutionResult result) {
-            // 锁冲突分析逻辑由具体的Oracle实现
-            // 使用transactions进行锁分析记录
-            globalState.getState().getLocalState().log("Lock analysis for " + transactions.size() + " transactions");
-        }
-    }
-
-    /**
-     * Fucci MVCC模拟器(简化实现)
-     */
-    private static class FucciMVCCSimulator {
-        private final FucciGlobalState globalState;
-        private final FucciIsolationLevel isoLevel;
-
-        public FucciMVCCSimulator(FucciGlobalState globalState, FucciIsolationLevel isoLevel) {
-            this.globalState = globalState;
-            this.isoLevel = isoLevel;
-        }
-
-        public void verifyMVCC(TxTestExecutionResult result) {
-            // 根据隔离级别进行MVCC验证
-            result.setIsolationLevel(isoLevel);
-            // 使用globalState记录MVCC验证信息
-            globalState.getState().getLocalState().log("MVCC verification for isolation level: " + isoLevel);
+            fucciTx.setFinished(true);
+            if (lockAnalyzer != null) {
+                lockAnalyzer.releaseLocks(fucciTx);
+                // 处理其他事务的阻塞语句
+                for (Transaction otherTx : transactions) {
+                    if (otherTx instanceof FucciTransaction && otherTx.getId() != fucciTx.getId()) {
+                        lockAnalyzer.processBlockedStatements((FucciTransaction) otherTx);
+                    }
+                }
+            }
         }
     }
 }
