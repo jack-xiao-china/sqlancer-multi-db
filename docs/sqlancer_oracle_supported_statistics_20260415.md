@@ -1,33 +1,40 @@
 # SQLancer Test Oracle Support Statistics
 
-**Date**: 2026/04/15
-**Version**: SQLancer Extended (based on official SQLancer with additional oracles)
+**Date**: 2026/06/09
+**Version**: v2.4.5 (based on official SQLancer with additional oracles)
 
 ## Summary
 
-This document provides a comprehensive statistics of test oracle support across MySQL, PostgreSQL, and GaussDB-M databases.
+This document provides a comprehensive statistics of test oracle support across MySQL, PostgreSQL, GaussDB-A, and GaussDB-M databases.
 
 ---
 
 ## Oracle Support Matrix
 
-| Oracle | PostgreSQL | MySQL | GaussDB-M | Category | Notes |
-|--------|------------|-------|-----------|----------|-------|
-| **NOREC** | ✓ | ✓ | ✓ | Standard | IN vs EXISTS optimization test |
-| **PQS** | ✓ | ✓ | ✓ | Standard | Pivoted Query Synthesis |
-| **WHERE** | ✓ | - | - | Alias | PostgreSQL alias for TLP_WHERE |
-| **TLP_WHERE** | ✓ | ✓ | ✓ | Standard | WHERE clause partitioning |
-| **HAVING** | ✓ | ✓ | ✓ | Standard | HAVING clause partitioning |
-| **AGGREGATE** | ✓ | ✓ | ✓ | Standard | Aggregate function test |
-| **DISTINCT** | ✓ | ✓ | ✓ | Standard | DISTINCT handling |
-| **GROUP_BY** | ✓ | ✓ | ✓ | Standard | GROUP BY expressions |
-| **CERT** | ✓ | ✓ | ✓ | Standard | CERT optimization test |
-| **FUZZER** | ✓ | ✓ | ✓ | Standard | Random query generation |
-| **DQE** | ✓ | ✓ | ✓ | New | DELETE/UPDATE equivalence |
-| **DQP** | ✓ | ✓ | ✓ | New | Deterministic query test |
-| **EET** | ✓ | ✓ | ✓ | New | Expression transformation |
-| **CODDTEST** | ✓ | ✓ | ✓ | New | Expression folding (Codd's rules) |
-| **QUERY_PARTITIONING** | ✓ | ✓ | ✓ | Composite | Combined oracle |
+| Oracle | PostgreSQL | MySQL | GaussDB-M | GaussDB-A | Category | Notes |
+|--------|------------|-------|-----------|-----------|----------|-------|
+| **NOREC** | ✓ | ✓ | ✓ | ✓ | Standard | IN vs EXISTS optimization test |
+| **PQS** | ✓ | ✓ | ✓ | ✓ | Standard | Pivoted Query Synthesis |
+| **WHERE** | ✓ | - | - | - | Alias | PostgreSQL alias for TLP_WHERE |
+| **TLP_WHERE** | ✓ | ✓ | ✓ | ✓ | Standard | WHERE clause partitioning |
+| **HAVING** | ✓ | ✓ | ✓ | ✓ | Standard | HAVING clause partitioning |
+| **AGGREGATE** | ✓ | ✓ | ✓ | ✓ | Standard | Aggregate function test |
+| **DISTINCT** | ✓ | ✓ | ✓ | ✓ | Standard | DISTINCT handling |
+| **GROUP_BY** | ✓ | ✓ | ✓ | ✓ | Standard | GROUP BY expressions |
+| **CERT** | ✓ | ✓ | ✓ | ✓ | Standard | CERT optimization test |
+| **FUZZER** | ✓ | ✓ | ✓ | ✓ | Standard | Random query generation |
+| **DQE** | ✓ | ✓ | ✓ | ✓ | New | DELETE/UPDATE equivalence |
+| **DQP** | ✓ | ✓ | ✓ | ✓ | New | Deterministic query test |
+| **EET** | ✓ | ✓ | ✓ | ✓ | New | Expression transformation |
+| **CODDTEST** | ✓ | ✓ | ✓ | - | New | Expression folding (Codd's rules) |
+| **QUERY_PARTITIONING** | ✓ | ✓ | ✓ | ✓ | Composite | Combined oracle |
+| **EDC** | ✓ | ✓ | ✓ | ✓ | New | Equivalent Database Construction |
+| **SONAR** | ✓ | ✓ | ✓ | - | New | Optimized vs unoptimized comparison |
+| **WRITE_CHECK** | ✓ | ✓ | ✓ | ✓ | New | Transaction isolation testing |
+| **WRITE_CHECK_REPRODUCE** | ✓ | ✓ | ✓ | ✓ | New | Bug reproduction mode |
+| **FUCCI** | ✓ | ✓ | ✓ | ✓ | New | MVCC-based testing (DT/MT/CS) |
+| **TX_INFER** | ✓ | ✓ | ✓ | ✓ | New | MVCC version inference |
+| **JIR** | ✓ | ✓ | ✓ | ✓ | New | Join Implication Reasoning (6 rules, SIGMOD 2026) |
 
 ---
 
@@ -37,28 +44,29 @@ This document provides a comprehensive statistics of test oracle support across 
 
 | Database | Total Oracles | Unique Oracles | Composite Oracles |
 |----------|---------------|----------------|-------------------|
-| PostgreSQL | 15 | 14 | 1 (QUERY_PARTITIONING) |
-| MySQL | 14 | 13 | 1 (QUERY_PARTITIONING) |
-| GaussDB-M | 14 | 13 | 1 (QUERY_PARTITIONING) |
+| PostgreSQL | 24 | 23 | 1 (QUERY_PARTITIONING) |
+| MySQL | 24 | 23 | 1 (QUERY_PARTITIONING) |
+| GaussDB-M | 24 | 23 | 1 (QUERY_PARTITIONING) |
+| GaussDB-A | 21 | 20 | 1 (QUERY_PARTITIONING) |
 
 ### Category Distribution
 
-| Category | PostgreSQL | MySQL | GaussDB-M |
-|----------|------------|-------|-----------|
-| Standard Oracles | 10 | 10 | 10 |
-| New Oracles (DQE/DQP/EET/CODDTEST) | 4 | 4 | 4 |
-| Composite Oracles | 1 | 1 | 1 |
-| Alias Oracles | 1 (WHERE) | 0 | 0 |
+| Category | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
+|----------|------------|-------|-----------|-----------|
+| Standard Oracles | 10 | 10 | 10 | 10 |
+| New Oracles | 14 | 14 | 14 | 11 |
+| Composite Oracles | 1 | 1 | 1 | 1 |
+| Alias Oracles | 1 (WHERE) | 0 | 0 | 0 |
 
 ### Oracles Requiring All Tables to Contain Rows
 
-| Oracle | PostgreSQL | MySQL | GaussDB-M |
-|--------|------------|-------|-----------|
-| PQS | ✓ | ✓ | ✓ |
-| CERT | ✓ | ✓ | ✓ |
-| CODDTEST | - | ✓ | ✓ |
+| Oracle | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
+|--------|------------|-------|-----------|-----------|
+| PQS | ✓ | ✓ | ✓ | ✓ |
+| CERT | ✓ | ✓ | ✓ | ✓ |
+| CODDTEST | - | ✓ | ✓ | - |
 
-**Note**: PostgreSQL CODDTEST does not require all tables to contain rows, while MySQL and GaussDB-M versions do.
+**Note**: JIR Oracle does NOT require all tables to contain rows (LEFT JOIN produces valid results with empty tables).
 
 ---
 

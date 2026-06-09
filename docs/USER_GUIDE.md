@@ -1,13 +1,14 @@
 # SQLancer User Guide
 
-**Version**: v0.1.85 (2026-05-08)  
+**Version**: v2.4.5 (2026-06-09)  
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M, and 20+ other DBMS
 
 ## Introduction
 
 SQLancer is a tool for testing database management systems by generating random SQL queries and checking for bugs. This extended version includes:
 
-- **16 Test Oracles** for MySQL, PostgreSQL, and GaussDB (including EDC, Sonar, EET, DQE, DQP, CODDTEST)
+- **25+ Test Oracles** for MySQL, PostgreSQL, and GaussDB (including JIR, EDC, Sonar, EET, DQE, DQP, CODDTEST, FUCCI, TX_INFER)
+- **JIR Oracle**: Join Implication Reasoning — detects JOIN optimizer bugs via 6 semantic rules (SIGMOD 2026)
 - **GaussDB Support**: A-compatibility mode (Oracle-style), PG-compatibility mode, and M-compatibility mode (MySQL-style)
 - **Extended Data Types**: JSON, BLOB, temporal types, arrays, enums, spatial types
 - **Internationalization**: Handles non-English server error messages
@@ -35,17 +36,17 @@ ls -lh target/sqlancer-2.0.0.jar
 
 **Recommended** (all dependencies included in jar):
 ```bash
-java -jar target/sqlancer-2.0.0.jar mysql --oracle QUERY_PARTITIONING
-java -jar target/sqlancer-2.0.0.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
+java -jar target/sqlancer-2.4.5.jar mysql --oracle QUERY_PARTITIONING
+java -jar target/sqlancer-2.4.5.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
 ```
 
 **Alternative** (use external classpath):
 ```bash
 # Linux/macOS
-java -cp "target/sqlancer-2.0.0.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.4.5.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
 
 # Windows
-java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.4.5.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
 ```
 
 ---
@@ -56,11 +57,11 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | DBMS | Available Oracles |
 |------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, TX_INFER, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, WRITE_CHECK, FUCCI, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, WRITE_CHECK, WRITE_CHECK_REPRODUCE, TX_INFER, FUCCI, JIR, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, FUCCI, TX_INFER, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
 | CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT, WRITE_CHECK |
@@ -88,7 +89,7 @@ java -cp "target/sqlancer-2.0.0.jar;target/lib/*" sqlancer.Main mysql --oracle N
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.4.5.jar \
     --host localhost \
     --port 3306 \
     --username root \
@@ -336,6 +337,9 @@ This follows Oracle's schema-based isolation pattern.
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
 | WRITE_CHECK | Transaction isolation level correctness |
+| FUCCI | MVCC-based testing (DT/MT/CS) |
+| TX_INFER | MVCC version inference |
+| JIR | Join Implication Reasoning (6 rules) |
 | FUZZER | Random query generation |
 
 ## GaussDB-A Data Types
@@ -466,29 +470,62 @@ java -jar target/sqlancer-2.0.0.jar \
 
 ## Introduction
 
-GaussDB-M supports MySQL-style SQL syntax. Uses built-in openGauss JDBC driver with automatic M-compatibility database creation.
+GaussDB-M supports MySQL-style SQL syntax. Uses built-in openGauss JDBC driver.
+
+**⚠️ IMPORTANT: `--target-database` is REQUIRED**
+
+You must specify an M-compatible database. The tool will NOT auto-create databases.
+
+## Prerequisites
+
+**Step 1: Create M-compatible database (REQUIRED)**
+```sql
+-- Connect to GaussDB as administrator
+CREATE DATABASE testm WITH DBCOMPATIBILITY 'M';
+
+-- Verify compatibility mode
+SELECT datcompatibility FROM pg_database WHERE datname = 'testm';
+-- Should return: M
+```
+
+**Step 2: Grant permissions**
+```sql
+-- Grant CREATE/DROP SCHEMA permissions to test user
+GRANT ALL PRIVILEGES ON DATABASE testm TO your_user;
+```
 
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
-    --host localhost \
-    --port 19995 \
-    --username root \
-    --password password \
-    gaussdb-m --oracle QUERY_PARTITIONING
+java -jar target/sqlancer-2.4.5.jar \
+    --username your_user \
+    --password your_password \
+    --connection-url "jdbc:opengauss://your_host:19995/testm" \
+    gaussdb-m --target-database testm --oracle QUERY_PARTITIONING
 ```
 
-**Note**: GaussDB-M automatically creates M-compatible test databases. No `--target-database` required.
+## Error Handling
+
+**Without `--target-database`:**
+```
+ERROR: --target-database is REQUIRED for GaussDB-M testing.
+
+Please create an M-compatible database first:
+  CREATE DATABASE <db_name> WITH DBCOMPATIBILITY 'M';
+
+Then specify it with:
+  java -jar sqlancer.jar gaussdb-m --target-database <db_name> ...
+```
 
 ## Test Isolation Strategy
 
-GaussDB-M uses **Database isolation**:
-- Connects to `postgres` initially
-- Creates databases: `database0`, `database1`... with `DBCOMPATIBILITY 'M'`
-- Switches to test database for testing
+GaussDB-M now uses **Schema isolation** (consistent with GaussDB-A):
+- Connects to specified M-compatible database
+- Creates schemas: `database0`, `database1`, `database2`...
+- Sets `search_path` to test schema
+- Tables created within schema for isolation
 
-This follows MySQL's database-based isolation pattern.
+This approach is more reliable than auto-creating databases, which may fail due to syntax differences or permission restrictions.
 
 ## GaussDB-M Oracles
 
@@ -510,26 +547,29 @@ This follows MySQL's database-based isolation pattern.
 | EDC | Equivalent Database Construction (constraint-based testing) |
 | SONAR | Optimized vs unoptimized query comparison |
 | WRITE_CHECK | Transaction isolation level correctness |
+| FUCCI | MVCC-based testing (DT/MT/CS) |
+| TX_INFER | MVCC version inference |
+| JIR | Join Implication Reasoning (6 rules) |
 | FUZZER | Random query generation |
 
 ## GaussDB-M Options
 
-| Option | Description |
-|--------|-------------|
-| No specific options | Uses global MySQL-compatible settings |
+| Option | Required | Description |
+|--------|----------|-------------|
+| `--target-database` | **YES** | M-compatible database name (must exist) |
 
 ## Complete Example
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
-    --host localhost \
-    --port 19995 \
-    --username root \
-    --password password \
+java -jar target/sqlancer-2.4.5.jar \
+    --username your_user \
+    --password your_password \
+    --connection-url "jdbc:opengauss://your_host:19995/testm" \
     --num-tries 10 \
     --timeout-seconds 300 \
     gaussdb-m \
-    --oracle QUERY_PARTITIONING,AGGREGATE,DQP
+    --target-database testm \
+    --oracle QUERY_PARTITIONING,AGGREGATE,DQP,JIR
 ```
 
 ## GaussDB Compatibility Modes Comparison
@@ -538,7 +578,7 @@ java -jar target/sqlancer-2.0.0.jar \
 |------|-----------------|------------------|---------------------|
 | **GaussDB-A** | Oracle-style | Schema | **REQUIRED** |
 | **GaussDB-PG** | PostgreSQL-style | Schema | **REQUIRED** |
-| **GaussDB-M** | MySQL-style | Database | Optional (auto-creates) |
+| **GaussDB-M** | MySQL-style | Schema | **REQUIRED** |
 
 ---
 
@@ -578,8 +618,10 @@ java -jar sqlancer.jar gaussdb-pg --target-database gaussdb_pg_test \
 java -jar sqlancer.jar gaussdb-a --target-database gaussdb_a_test \
     --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
 
-# GaussDB-M (auto-creates database)
-java -jar sqlancer.jar gaussdb-m --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
+# GaussDB-M (requires target-database)
+java -jar sqlancer.jar --connection-url "jdbc:opengauss://host:port/testm" \
+    gaussdb-m --target-database testm \
+    --oracle TLP_WHERE --num-tries 50 --timeout-seconds 60
 ```
 
 ## Comprehensive Testing
@@ -665,7 +707,7 @@ java -jar sqlancer.jar gaussdb-a \
 
 | Error | Solution |
 |-------|----------|
-| `--target-database is required` | Create A/PG-compatible database and specify with `--target-database` |
+| `--target-database is required` | Create A/M/PG-compatible database and specify with `--target-database` |
 | "datcompatibility" field not found | PostgreSQL database connected, need GaussDB instance |
 | Compatibility mode is not 'A' or 'pg' | Recreate database: `CREATE DATABASE xxx WITH dbcompatibility 'A'` |
 | Session initialization failed | Check network connectivity and credentials |
@@ -680,8 +722,8 @@ CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 -- PG-compatibility (PostgreSQL-style)
 CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
 
--- M-compatibility (MySQL-style) - auto-created by SQLancer
--- CREATE DATABASE gaussdb_m_test WITH dbcompatibility 'B';
+-- M-compatibility (MySQL-style) - REQUIRED: pre-create and specify with --target-database
+CREATE DATABASE testm WITH DBCOMPATIBILITY 'M';
 ```
 
 ## Memory Issues
@@ -726,6 +768,7 @@ This section provides detailed information about each oracle's core algorithm, p
 
 | Oracle | Core Algorithm | Problem Solved | Applicable Scenarios | Reference Paper |
 |--------|----------------|----------------|----------------------|-----------------|
+| **JIR** | Join Implication Reasoning - Compares query results across different JOIN types using 6 semantic rules (LEFT→INNER+NOT EXISTS, LEFT/RIGHT symmetry, SEMI/ANTI complement, FULL→INNER+anti, CROSS→INNER ON TRUE, NATURAL→INNER ON equality) | JOIN optimizer bugs (incorrect LEFT/RIGHT/FULL/NATURAL JOIN results, EXISTS subquery bugs) | JOIN correctness testing; works with 2-table random selections | [SIGMOD 2026](https://sigmod2026.org/) |
 | **PQS** | Pivoted Query Synthesis - Randomly selects a pivot row and generates queries whose result should contain it | Logic bugs in query execution (missing rows, incorrect filtering) | General correctness testing; especially effective for WHERE clause bugs | [OSDI 2020](https://arxiv.org/pdf/2001.04174.pdf) |
 | **NoREC** | Non-Optimizing Reference Engine - Compares optimized query results with unoptimized (boolean-expression) results | Optimizer bugs where optimization changes query semantics | Testing WHERE clause optimization; predicate pushdown bugs | [FSE 2020](https://arxiv.org/abs/2007.08292) |
 | **TLP (WHERE/HAVING/AGGREGATE/DISTINCT/GROUP_BY)** | Ternary Logic Partitioning - Divides query into 3 partitions (TRUE/FALSE/NULL) and verifies sum equals original | Logic bugs in various query components | WHERE clauses, HAVING clauses, aggregate functions, DISTINCT, GROUP BY | [OOPSLA 2020](https://www.manuelrigger.at/preprints/TLP.pdf) |
@@ -996,6 +1039,55 @@ java -jar sqlancer.jar gaussdbm --oracle TX_INFER --num-queries 100
 
 **Best For**: MVCC bugs, isolation level violations, concurrent transaction anomalies.
 
+### JIR (Join Implication Reasoning)
+
+**Concept**: JIR detects JOIN optimizer bugs by comparing query results across different JOIN types using semantic implication rules. Based on the SIGMOD 2026 paper "Detecting Join Bugs in Database Engines via Join Implication Reasoning".
+
+**Algorithm**: 6 semantic rules that exploit logical implications between JOIN types:
+1. **LEFT_JOIN_DECOMPOSITION**: `L LEFT JOIN R ON cond` = `(L INNER JOIN R ON cond) ∪ (L WHERE NOT EXISTS(SELECT 1 FROM R WHERE cond))` with right columns → NULL
+2. **LEFT_RIGHT_SYMMETRY**: `L LEFT JOIN R ON cond` = `R RIGHT JOIN L ON cond`
+3. **SEMI_ANTI_COMPLEMENT**: `L {JOIN} R ON cond` = `(L {JOIN} R ON cond WHERE EXISTS(...)) ∪ (L {JOIN} R ON cond WHERE NOT EXISTS(...))`
+4. **FULL_JOIN_DECOMPOSITION**: `L FULL JOIN R ON cond` = `(L INNER JOIN R ON cond) ∪ (L WHERE NOT EXISTS(...)) ∪ (R WHERE NOT EXISTS(...))` — only for PostgreSQL and GaussDB-A
+5. **CROSS_JOIN_EQUIVALENCE**: `L CROSS JOIN R` = `L INNER JOIN R ON TRUE`
+6. **NATURAL_JOIN_EXPLICATION**: `L NATURAL JOIN R` = `L INNER JOIN R ON (equality of common columns)`
+
+**Key Design Features**:
+- Shared fetch columns: source and target queries use the same randomly selected column (prevents comparison invalidity)
+- Single-column verification: Rule 1 picks one random column from either table, ensuring NULL substitution is precisely verified via `getString(1)`
+- Multiset comparison: Uses `assumeResultSetsAreEqualMultiset()` with `canonicalizeResultValue` for bag semantics
+- ORDER BY support: Low-probability `ORDER BY 1` on source query to test different optimizer paths
+- Reproducer: `JIRReproducer` verifies bug reproducibility by replaying queries
+
+**Supported DBMS and Rules**:
+
+| Rule | MySQL | PostgreSQL | GaussDB-M | GaussDB-A |
+|------|:-----:|:----------:|:---------:|:---------:|
+| Rule 1: LEFT_JOIN_DECOMPOSITION | ✓ | ✓ | ✓ | ✓ |
+| Rule 2: LEFT_RIGHT_SYMMETRY | ✓ | ✓ | ✓ | ✓ |
+| Rule 3: SEMI_ANTI_COMPLEMENT | ✓ | ✓ | ✓ | ✓ |
+| Rule 4: FULL_JOIN_DECOMPOSITION | ✗ | ✓ | ✗ | ✓ |
+| Rule 5: CROSS_JOIN_EQUIVALENCE | ✓ | ✓ | ✓ | ✓ |
+| Rule 6: NATURAL_JOIN_EXPLICATION | ✓ | ✓ | ✓ | ✓ |
+
+**Usage**:
+```bash
+# MySQL JIR (5 rules)
+java -jar sqlancer.jar mysql --oracle JIR --num-queries 500
+
+# PostgreSQL JIR (6 rules, including FULL JOIN and NATURAL JOIN AST)
+java -jar sqlancer.jar postgres --oracle JIR --num-queries 500
+
+# GaussDB-M JIR (5 rules, requires --target-database)
+java -jar sqlancer.jar --connection-url "jdbc:opengauss://host:port/testm" \
+    gaussdb-m --target-database testm --oracle JIR --num-queries 500
+
+# GaussDB-A JIR (6 rules, requires --target-database)
+java -jar sqlancer.jar --connection-url "jdbc:opengauss://host:port/testa" \
+    gaussdb-a --target-database testa --oracle JIR --num-queries 500
+```
+
+**Best For**: JOIN optimizer bugs, LEFT/RIGHT/FULL JOIN incorrect results, NATURAL JOIN semantic bugs, EXISTS subquery bugs.
+
 ### FUCCI (MVCC-based Testing)
 
 **Concept**: FUCCI combines three MVCC testing approaches — Differential Testing (DT), Metamorphic Testing (MT), and Constraint Solving (CS) — to detect concurrency and isolation bugs.
@@ -1029,6 +1121,7 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
 |--------------|----------------|-------------------|
 | **New DBMS integration** | QUERY_PARTITIONING | PQS, NoREC |
 | **Optimizer regression testing** | EDC, SONAR | NoREC, DQP |
+| **JOIN optimizer bugs** | JIR | EDC, DQP |
 | **Performance regression** | CERT | NoREC |
 | **Constraint correctness** | EDC | DQE |
 | **Expression handling** | EET | TLP_WHERE |
@@ -1041,11 +1134,37 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
 | **Concurrency bug detection** | WRITE_CHECK, FUCCI | CERT |
 | **MVCC version tracking** | TX_INFER | WRITE_CHECK |
 | **Optimizer coverage** | QPG | CERT, EET |
-| **Comprehensive testing** | QUERY_PARTITIONING + EDC + EET + DQE + WRITE_CHECK | All others |
+| **Comprehensive testing** | QUERY_PARTITIONING + JIR + EDC + EET + DQE + WRITE_CHECK | All others |
 
 ---
 
 # Version History
+
+## v2.4.5 (2026-06-09)
+- **GaussDB-M Provider Fix**: Connection changed from `CREATE DATABASE ... DBCOMPATIBILITY 'M'` to schema isolation with `--target-database` (consistent with GaussDB-A)
+  - `--target-database` is now REQUIRED (previously optional/auto-create)
+  - `DROP SCHEMA ... CASCADE` removed (M-compatibility mode doesn't support CASCADE)
+  - All 4 DBMS smoke tests passed for 10+ oracles
+
+## v2.4.4 (2026-06-09)
+- **JIR Oracle**: Third-round deep alignment
+  - **P0: Rules 2-6 shared fetch columns** (critical BUG fix) — source/target queries now use same randomly selected column
+  - **P1: PostgreSQL NATURAL JOIN AST** — eliminated raw SQL concatenation in Rule 6
+  - **P3: MySQL createBaseSelect condition simplification**
+
+## v2.4.3 (2026-06-08)
+- **JIR Oracle**: Second-round alignment
+  - **P0: Rule 1 random single-column** — fixed `getString(1)` only comparing first column bug
+  - **P1: ORDER BY support** — low-probability `ORDER BY 1` for optimizer path testing
+  - **P2: Reproducer verification** — `JIRReproducer` confirms bug reproducibility
+  - **P3: Rule 2-6 random left table columns** — improved column coverage diversity
+
+## v2.4.2 (2026-06-05)
+- **JIR Oracle**: First-round integration
+  - Rule 1 core algorithm: multi-column fetch + NULL substitution
+  - MULTISET comparison: `assumeResultSetsAreEqualMultiset()` + `canonicalizeResultValue`
+  - GaussDB-A NATURAL JOIN AST + ON TRUE (`1 = 1` instead of `ON 1`)
+  - PostgreSQL GaussDB-A FULL JOIN support (Rule 4)
 
 ## v2.0.60 (2026-05-27)
 - **GaussDB-M EET Alignment**: ExpressionTree expanded from 16 to 32 node types, matching MySQL coverage

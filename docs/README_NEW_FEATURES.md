@@ -204,7 +204,7 @@ java -jar sqlancer.jar \
 
 ## Available Oracles
 
-All 14 oracles are available for **both PostgreSQL and MySQL**:
+All 25+ oracles are available for **both PostgreSQL and MySQL**, plus GaussDB variants:
 
 | Oracle | Description | Requires Rows |
 |--------|-------------|---------------|
@@ -222,6 +222,12 @@ All 14 oracles are available for **both PostgreSQL and MySQL**:
 | **DQP** | Deterministic Query Partitioning (NEW) | No |
 | **EET** | Equivalent Expression Transformation (NEW) | No |
 | **CODDTEST** | Expression folding test (NEW) | No |
+| **EDC** | Equivalent Database Construction (NEW) | No |
+| **SONAR** | Optimized vs unoptimized comparison (NEW) | No |
+| **WRITE_CHECK** | Transaction isolation testing (NEW) | No |
+| **FUCCI** | MVCC-based testing (NEW) | No |
+| **TX_INFER** | MVCC version inference (NEW) | No |
+| **JIR** | Join Implication Reasoning (NEW — SIGMOD 2026) | No |
 
 ## Configuration Options Summary
 

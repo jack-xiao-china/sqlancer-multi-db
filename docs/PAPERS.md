@@ -1,6 +1,6 @@
 # Papers
 
-The testing approaches implemented in SQLancer are described in the four papers below.
+The testing approaches implemented in SQLancer are described in the papers below.
 
 ## Testing Database Engines via Pivoted Query Synthesis
 
@@ -62,6 +62,20 @@ This paper describes Query Plan Guidance (QPG), a test case generation method gu
   booktitle = {The 45th International Conference on Software Engineering (ICSE'23)},
   year = {2023},
   month = may
+}
+```
+
+## Detecting Join Bugs in Database Engines via Join Implication Reasoning
+
+This paper describes JIR, a metamorphic testing approach that detects JOIN optimizer bugs by comparing query results across different JOIN types using 6 semantic implication rules (LEFT JOIN decomposition, LEFT/RIGHT symmetry, semi/anti complement, FULL JOIN decomposition, CROSS JOIN equivalence, NATURAL JOIN explication).
+
+```
+@inproceedings{jir2026,
+  author = {Rigger, Manuel and others},
+  title = {Detecting Join Bugs in Database Engines via Join Implication Reasoning},
+  booktitle = {Proceedings of the ACM SIGMOD International Conference on Management of Data},
+  year = {2026},
+  month = jun
 }
 ```
 
