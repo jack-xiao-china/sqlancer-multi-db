@@ -9,15 +9,18 @@ import com.beust.jcommander.Parameters;
 import sqlancer.DBMSSpecificOptions;
 import sqlancer.fucci.FucciOptions.FucciOracleType;
 
-@Parameters(separators = "=", commandDescription = "GaussDB-M (MySQL-compatible mode) - automatically creates M-compatible test databases")
+@Parameters(separators = "=", commandDescription = "GaussDB-M (MySQL-compatible mode)")
 public class GaussDBMOptions implements DBMSSpecificOptions<GaussDBMOracleFactory> {
 
     @Parameter(names = { "--help",
             "-h" }, description = "Lists all supported options for the GaussDB-M command", help = true, hidden = true)
     public boolean help;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, FUCCI, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, FUCCI, FUZZER, GROUP_BY, HAVING, JIR, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
     public List<GaussDBMOracleFactory> oracles = Arrays.asList(GaussDBMOracleFactory.QUERY_PARTITIONING);
+
+    @Parameter(names = "--target-database", description = "M-compatible database to connect (REQUIRED). Must be created with DBCOMPATIBILITY 'M'")
+    public String targetDatabase = null;
 
     // Fucci Oracle parameters
     @Parameter(names = "--fucci-oracle-type", description = "Fucci Oracle type: DT/MT/CS/ALL (default: ALL)")

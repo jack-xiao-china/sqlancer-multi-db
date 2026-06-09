@@ -130,7 +130,7 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
     @Override
     public void generateDatabase(GaussDBMGlobalState globalState) throws Exception {
         // Create tables - similar to MySQLProvider's approach
-        while (globalState.getSchema().getDatabaseTables().size() < Randomly.getNotCachedInteger(1, 2)) {
+        while (globalState.getSchema().getDatabaseTables().size() < Randomly.getNotCachedInteger(2, 4)) {
             String tableName = DBMSCommon.createTableName(globalState.getSchema().getDatabaseTables().size());
             SQLQueryAdapter createTable = GaussDBMTableGenerator.generate(globalState, tableName);
             globalState.executeStatement(createTable);
@@ -155,24 +155,37 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         MainOptions options = globalState.getOptions();
         String username = options.getUserName();
         String password = options.getPassword();
-        String host = options.getHost();
-        int port = options.getPort();
 
-        // Default connection to postgres for creating test databases
-        String baseConnectionDatabase = "postgres";
+        GaussDBMOptions gaussdbmOptions = globalState.getDbmsSpecificOptions();
+        String targetDatabase = gaussdbmOptions != null ? gaussdbmOptions.targetDatabase : null;
 
+        // Require user to specify M-compatible target database
+        if (targetDatabase == null || targetDatabase.isBlank()) {
+            String msg = "ERROR: --target-database is REQUIRED for GaussDB-M testing.\n\n";
+            msg += "Please create an M-compatible database first:\n";
+            msg += "  CREATE DATABASE <db_name> WITH DBCOMPATIBILITY 'M';\n\n";
+            msg += "Then specify it with:\n";
+            msg += "  java -jar sqlancer.jar gaussdb-m --target-database <db_name> ...\n\n";
+            msg += "Example:\n";
+            msg += "  CREATE DATABASE gaussdb_m_test WITH DBCOMPATIBILITY 'M';\n";
+            msg += "  java -jar sqlancer.jar gaussdb-m --target-database gaussdb_m_test --oracle QUERY_PARTITIONING";
+            throw new SQLException(msg);
+        }
+
+        // Build JDBC URL using opengauss scheme
         String baseParams = "sslmode=disable&connectTimeout=10&socketTimeout=30";
+        String jdbcUrl;
+        String configuredUrl = options.getConnectionURL();
 
         Connection con = null;
         SQLException lastError = null;
-        String jdbcUrl = null;
 
-        String configuredUrl = options.getConnectionURL();
         if (configuredUrl != null && !configuredUrl.isBlank()) {
             jdbcUrl = configuredUrl.trim();
             if (!jdbcUrl.startsWith("jdbc:")) {
                 jdbcUrl = "jdbc:" + jdbcUrl;
             }
+            // Add base params if not already present
             if (!jdbcUrl.contains("sslmode")) {
                 jdbcUrl = jdbcUrl + (jdbcUrl.contains("?") ? "&" : "?") + baseParams;
             }
@@ -193,12 +206,19 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
                 System.err.println("[ERROR] Connection failed: " + e.getMessage());
             }
         } else {
-            // Use opengauss JDBC URL scheme
+            String host = options.getHost();
+            int port = options.getPort();
+            if (host == null) {
+                host = "localhost";
+            }
+            if (port == MainOptions.NO_SET_PORT) {
+                port = 19995;
+            }
+
             String[] urlSchemes = { "opengauss" };
 
             for (String scheme : urlSchemes) {
-                jdbcUrl = String.format("jdbc:%s://%s:%d/%s?%s", scheme, host, port, baseConnectionDatabase,
-                        baseParams);
+                jdbcUrl = String.format("jdbc:%s://%s:%d/%s?%s", scheme, host, port, targetDatabase, baseParams);
                 System.err.println("[INFO] Trying connection URL: " + jdbcUrl);
 
                 Properties props = parseJdbcProperties(options.getJdbcProperties());
@@ -223,101 +243,65 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
         }
 
         if (con == null) {
-            String msg = "Connection failed to GaussDB-M. Last error: "
-                    + (lastError != null ? lastError.getMessage() : "null");
-            msg += "\n\nPossible solutions:";
-            msg += "\n1. Ensure lib/opengauss-jdbc.jar is in classpath";
-            msg += "\n2. Use --connection-url to specify full JDBC URL (jdbc:opengauss://host:port/database)";
-            msg += "\n3. Verify host, port, username, password are correct";
+            String msg = "Connection failed to GaussDB-M database '" + targetDatabase + "'.\n";
+            msg += "Last error: " + (lastError != null ? lastError.getMessage() : "null") + "\n\n";
+            msg += "Possible solutions:\n";
+            msg += "1. Verify the database exists and is M-compatible:\n";
+            msg += "   SELECT datcompatibility FROM pg_database WHERE datname = '" + targetDatabase + "';\n";
+            msg += "   (Should return 'M')\n\n";
+            msg += "2. If not M-compatible, create it:\n";
+            msg += "   CREATE DATABASE " + targetDatabase + " WITH DBCOMPATIBILITY 'M';\n\n";
+            msg += "3. Verify host, port, username, password are correct\n";
+            msg += "4. Check network connectivity to GaussDB server";
             throw new SQLException(msg, lastError);
         }
 
         // Print connection info
         try {
             java.sql.DatabaseMetaData md = con.getMetaData();
-            System.err.println(
-                    "[INFO] Connected to: " + md.getDatabaseProductName() + " " + md.getDatabaseProductVersion());
+            System.err.println("[INFO] Connected to: " + md.getDatabaseProductName() + " " + md.getDatabaseProductVersion());
             System.err.println("[INFO] JDBC Driver: " + md.getDriverName() + " " + md.getDriverVersion());
         } catch (SQLException e) {
             System.err.println("[WARN] Could not get database metadata: " + e.getMessage());
         }
 
-        // Get test database name - use lowercase for consistent information_schema matching
-        String databaseName = globalState.getDatabaseName().toLowerCase();
-
-        // Create M-compatible test database (like MySQL does)
-        globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
-        String createDbSql = "CREATE DATABASE " + databaseName + " DBCOMPATIBILITY 'M'";
-        globalState.getState().logStatement(createDbSql);
-        // Note: GaussDB-M (PostgreSQL-based) does not support MySQL's "USE database" syntax
-        // We reconnect to the new database instead
-
-        try (Statement s = con.createStatement()) {
-            try {
-                s.execute("DROP DATABASE IF EXISTS " + databaseName);
-            } catch (SQLException e) {
-                // Ignore if database doesn't exist
-            }
-            s.execute(createDbSql);
-            System.err.println("[INFO] Created M-compatible database: " + databaseName);
-        }
-
-        // Reconnect to the new M-compatible database
-        String newUrl;
-        if (configuredUrl != null && !configuredUrl.isBlank()) {
-            // Replace database name in configured URL
-            newUrl = jdbcUrl;
-            // Try to replace the database name in the URL
-            if (jdbcUrl.contains("/postgres?")) {
-                newUrl = jdbcUrl.replace("/postgres?", "/" + databaseName + "?");
-            } else if (jdbcUrl.contains("/postgres")) {
-                newUrl = jdbcUrl.replace("/postgres", "/" + databaseName);
-            } else {
-                // Extract the database part and replace it
-                int lastSlash = jdbcUrl.lastIndexOf('/');
-                int questionMark = jdbcUrl.indexOf('?');
-                if (lastSlash > 0) {
-                    if (questionMark > lastSlash) {
-                        newUrl = jdbcUrl.substring(0, lastSlash + 1) + databaseName + jdbcUrl.substring(questionMark);
-                    } else {
-                        newUrl = jdbcUrl.substring(0, lastSlash + 1) + databaseName;
-                    }
-                }
-            }
-        } else {
-            // Build new URL with test database
-            newUrl = String.format("jdbc:opengauss://%s:%d/%s?%s", host, port, databaseName, baseParams);
-        }
-
-        System.err.println("[INFO] Reconnecting to: " + newUrl);
-        con.close();
-
-        Properties props = parseJdbcProperties(options.getJdbcProperties());
-        if (username != null) {
-            props.setProperty("user", username);
-        }
-        if (password != null) {
-            props.setProperty("password", password);
-        }
-
-        con = DriverManager.getConnection(newUrl, props);
-        System.err.println("[INFO] Connected to M-compatible database: " + databaseName);
-
         // Verify M-compatibility
         try (Statement s = con.createStatement()) {
-            try (ResultSet rs = s
-                    .executeQuery("SELECT datcompatibility FROM pg_database WHERE datname = '" + databaseName + "'")) {
+            try (ResultSet rs = s.executeQuery(
+                    "SELECT datcompatibility FROM pg_database WHERE datname = '" + targetDatabase + "'")) {
                 if (rs.next()) {
                     String compat = rs.getString("datcompatibility");
                     System.err.println("[INFO] Verified database compatibility mode: " + compat);
                     if (!"M".equals(compat)) {
-                        System.err
-                                .println("[WARN] Database is not M-compatible! Expected 'M' but got '" + compat + "'");
+                        System.err.println("[WARN] Database is not M-compatible! Expected 'M' but got '" + compat + "'");
                     }
                 }
             }
         } catch (SQLException e) {
             System.err.println("[WARN] Could not verify compatibility mode: " + e.getMessage());
+        }
+
+        // Use schema-based isolation (consistent with GaussDB-A approach)
+        String schemaName = globalState.getDatabaseName().toLowerCase();
+
+        try (Statement s = con.createStatement()) {
+            // M-compatibility mode does not support CASCADE in DROP SCHEMA
+            String dropSql = "DROP SCHEMA IF EXISTS " + schemaName;
+            String createSql = "CREATE SCHEMA " + schemaName;
+            String setPathSql = "SET search_path TO " + schemaName;
+
+            globalState.getState().logStatement(dropSql);
+            System.err.println("[DEBUG] Executing: " + dropSql);
+            s.execute(dropSql);
+
+            globalState.getState().logStatement(createSql);
+            System.err.println("[DEBUG] Executing: " + createSql);
+            s.execute(createSql);
+
+            System.err.println("[DEBUG] Executing: " + setPathSql);
+            s.execute(setPathSql);
+
+            System.err.println("[INFO] Schema created: " + schemaName);
         }
 
         return new SQLConnection(con);

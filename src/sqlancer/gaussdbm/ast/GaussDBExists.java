@@ -24,16 +24,20 @@ public class GaussDBExists implements GaussDBExpression {
 
     /**
      * Creates an EXISTS expression by extracting the expected value from the subquery.
+     * Tolerates null expected values (e.g., in JIR context where expected values are not computed).
      *
      * @param expr
-     *            the subquery expression (must have a non-null expected value)
+     *            the subquery expression
      */
     public GaussDBExists(GaussDBExpression expr) {
         this.expr = expr;
-        this.expectedValue = expr.getExpectedValue();
-        if (expectedValue == null) {
-            throw new AssertionError("Expected value cannot be null for EXISTS expression");
+        GaussDBConstant ev = null;
+        try {
+            ev = expr.getExpectedValue();
+        } catch (Exception e) {
+            // ignore — expected value may be null in some contexts
         }
+        this.expectedValue = ev;
     }
 
     public GaussDBExpression getExpr() {

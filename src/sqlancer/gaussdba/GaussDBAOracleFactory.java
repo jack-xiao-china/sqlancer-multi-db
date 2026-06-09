@@ -27,6 +27,7 @@ import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBAWriteCheckReproduceOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBAFucciOracle;
 import sqlancer.gaussdba.oracle.transaction.GaussDBATxInferOracle;
+import sqlancer.gaussdba.oracle.GaussDBAJIRTransformer;
 
 public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> {
 
@@ -227,6 +228,23 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true; // Fucci needs tables with data for transaction testing
+        }
+    },
+    /**
+     * JIR (Join Implication Reasoning) Oracle for GaussDB-A.
+     * Detects JOIN optimizer bugs using semantic implication rules (SIGMOD 2026).
+     * Supports all 6 rules (Oracle compat has FULL OUTER JOIN and NATURAL JOIN).
+     */
+    JIR {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new sqlancer.common.oracle.jir.JIROracle<>(globalState, new GaussDBAJIRTransformer(),
+                    sqlancer.common.oracle.jir.JIRRule.forGaussDBA());
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // JIR works with empty tables (LEFT JOIN produces valid SQL)
         }
     };
 }

@@ -289,12 +289,15 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
             case CROSS:
                 sb.append("CROSS JOIN");
                 break;
+            case NATURAL:
+                sb.append("NATURAL JOIN");
+                break;
             default:
                 throw new AssertionError(j.getType());
             }
             sb.append(" ");
             visit(j.getTableReference());
-            if (j.getType() != PostgresJoinType.CROSS) {
+            if (j.getType() != PostgresJoinType.CROSS && j.getType() != PostgresJoinType.NATURAL) {
                 sb.append(" ON ");
                 visit(j.getOnClause());
             }

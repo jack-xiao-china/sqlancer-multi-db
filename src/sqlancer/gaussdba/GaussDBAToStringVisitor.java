@@ -215,11 +215,18 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
         case CROSS:
             sb.append("CROSS JOIN ");
             break;
+        case FULL:
+            sb.append("FULL JOIN ");
+            break;
+        case NATURAL:
+            sb.append("NATURAL JOIN ");
+            break;
         default:
             throw new AssertionError(join.getJoinType());
         }
         visit(join.getTableReference());
-        if (join.getJoinType() != GaussDBAJoin.GaussDBAJoinType.CROSS) {
+        if (join.getJoinType() != GaussDBAJoin.GaussDBAJoinType.CROSS
+                && join.getJoinType() != GaussDBAJoin.GaussDBAJoinType.NATURAL) {
             sb.append(" ON ");
             visit(join.getOnCondition());
         }

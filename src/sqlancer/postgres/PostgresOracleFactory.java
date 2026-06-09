@@ -294,6 +294,24 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
         public boolean requiresAllTablesToContainRows() {
             return true; // Fucci needs tables with data for transaction testing
         }
+    },
+    /**
+     * JIR (Join Implication Reasoning) Oracle.
+     * Detects JOIN optimizer bugs by comparing results across different JOIN types
+     * using semantic implication rules (SIGMOD 2026).
+     */
+    JIR {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new sqlancer.common.oracle.jir.JIROracle<>(globalState,
+                    new sqlancer.postgres.oracle.ext.PostgresJIRTransformer(),
+                    sqlancer.common.oracle.jir.JIRRule.forPostgres());
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // JIR works with empty tables (LEFT JOIN produces valid SQL)
+        }
     };
 
 }

@@ -15,7 +15,7 @@ import sqlancer.postgres.gen.PostgresExpressionGenerator;
 public class PostgresJoin implements PostgresExpression, Join<PostgresExpression, PostgresTable, PostgresColumn> {
 
     public enum PostgresJoinType {
-        INNER, LEFT, RIGHT, FULL, CROSS;
+        INNER, LEFT, RIGHT, FULL, CROSS, NATURAL;
 
         public static PostgresJoinType getRandom() {
             return Randomly.fromOptions(values());
@@ -54,7 +54,7 @@ public class PostgresJoin implements PostgresExpression, Join<PostgresExpression
 
     public static PostgresJoin createJoin(PostgresExpression left, PostgresExpression right, PostgresJoinType type,
             PostgresExpression onClause) {
-        if (type == PostgresJoinType.CROSS) {
+        if (type == PostgresJoinType.CROSS || type == PostgresJoinType.NATURAL) {
             return new PostgresJoin(left, right, type, null);
         } else {
             return new PostgresJoin(left, right, type, onClause);

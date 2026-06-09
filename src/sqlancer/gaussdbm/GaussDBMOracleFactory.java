@@ -32,6 +32,7 @@ import sqlancer.gaussdbm.oracle.transaction.GaussDBMWriteCheckOracle;
 import sqlancer.gaussdbm.oracle.transaction.GaussDBMWriteCheckReproduceOracle;
 import sqlancer.gaussdbm.oracle.transaction.GaussDBMFucciOracle;
 import sqlancer.gaussdbm.oracle.transaction.GaussDBMTxInferOracle;
+import sqlancer.gaussdbm.oracle.GaussDBMJIRTransformer;
 
 /**
  * GaussDB-M test oracles. Enum declaration order matches {@link sqlancer.mysql.MySQLOracleFactory} for CLI/help
@@ -247,6 +248,23 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true; // TX_INFER needs tables with data
+        }
+    },
+    /**
+     * JIR (Join Implication Reasoning) Oracle for GaussDB-M.
+     * Detects JOIN optimizer bugs using semantic implication rules (SIGMOD 2026).
+     * Supports 5 rules (MySQL compat has no FULL OUTER JOIN).
+     */
+    JIR {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new sqlancer.common.oracle.jir.JIROracle<>(globalState, new GaussDBMJIRTransformer(),
+                    sqlancer.common.oracle.jir.JIRRule.forGaussDBM());
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // JIR works with empty tables (LEFT JOIN produces valid SQL)
         }
     },
     QUERY_PARTITIONING {

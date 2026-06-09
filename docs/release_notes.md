@@ -1,5 +1,87 @@
 # SQLancer Release Notes
 
+## v2.4.5 | 2026-06-09
+- 修复 [GaussDB-M Provider] 连接方式从 CREATE DATABASE 改为 schema 隔离（对齐 GaussDB-A 模式）
+  - **关键修复**：`CREATE DATABASE ... DBCOMPATIBILITY 'M'` 语法在远程服务器不被支持 → 改用 `--target-database` + schema 隔离
+  - 新增 `--target-database` 参数（与 GaussDB-A 保持一致）
+  - `DROP SCHEMA ... CASCADE` 在 M 兼容模式不支持 → 去掉 CASCADE
+  - 4 DBMS 集成测试全部通过：MySQL ✅ PostgreSQL ✅ GaussDB-M ✅ GaussDB-A ✅
+
+## v2.4.4 | 2026-06-09
+- 优化 [JIR Oracle] 第三轮深度对齐 — 共享 Fetch Columns + PostgreSQL NATURAL AST + 条件简化
+  - **P0: Rules 2-6 共享 Fetch Columns（关键 BUG 修复）**：source/target 查询使用同一 fetch columns
+    - 修复 Rules 2-6 独立调用 `getLeftTableFetchColumns()` 导致 source/target 可能选中不同列的 BUG
+    - 新增 `createBaseSelectWithCols()` 方法接受外部传入的 fetch columns（替代内部独立随机选列）
+    - 覆盖 MySQL / PostgreSQL / GaussDB-M / GaussDB-A 全部 4 个 Transformer × 4-5 条规则
+  - **P1: PostgreSQL NATURAL JOIN AST 支持**：消除 Rule 6 原始 SQL 拼接
+    - `PostgresJoinType` 新增 `NATURAL` 枚举值
+    - `PostgresToStringVisitor` 添加 `NATURAL JOIN` 渲染 + ON clause 跳过
+    - `PostgresJoin.createJoin()` 添加 NATURAL 处理（与 CROSS 一致，跳过 ON clause）
+    - PostgresJIRTransformer Rule 6 改用 AST 渲染（替代 `String.format` 拼接）
+  - **P3: MySQL createBaseSelect 条件简化**：冗余条件 `joinType != null && joinType != JoinType.CROSS || joinType == JoinType.CROSS` 简化为 `joinType != null`
+
+## v2.4.3 | 2026-06-08
+- 优化 [JIR Oracle] 二次深度对齐 — 列选择修复 + ORDER BY + Reproducer
+  - **P0: Rule 1 随机单列修复**：`generateRandomFetchColumns()` 从多列改为随机选取一列（来自左表或右表）
+    - 修复 `getString(1)` 只比较第一列导致右表列 NULL 替换无法验证的 BUG
+    - 覆盖 MySQL / PostgreSQL / GaussDB-M / GaussDB-A 全部 4 个 Transformer
+  - **P3: Rule 2-6 随机左表列**：`getLeftTableFetchColumns()` 从固定第一列改为随机选取左表一列
+    - 提升所有规则的列覆盖多样性
+  - **P1: ORDER BY 支持**：JIROracle 以低概率为 source query 添加 `ORDER BY 1`
+    - 对齐原始 `GeneralJIROracle` 的 `generateOrderBys()` 行为
+    - 测试不同优化器执行路径
+  - **P2: Reproducer 验证模式**：JIROracle 实现 `getLastReproducer()` 方法
+    - 检测到 mismatch 后创建 `JIRReproducer`，重放查询确认 Bug 可复现
+    - 区分确定性 optimizer Bug 和瞬时性数据不一致
+
+## v2.4.2 | 2026-06-05
+- 优化 [JIR Oracle] Rule 1 核心算法重构 + MULTISET 比较语义修复
+  - **Rule 1 (LEFT_JOIN_DECOMPOSITION) 核心算法重构**：严格对齐原始 `GeneralJIROracle` 实现
+    - 随机选择两表列的非空子集作为 fetch columns（替代固定左表第一列）
+    - Anti-Join 中右表列替换为 NULL 常量，左表列保留（原始 NULL 替换逻辑）
+    - 覆盖 MySQL / PostgreSQL / GaussDB-M / GaussDB-A 全部 4 个 Transformer
+  - **MULTISET 比较语义修复**：`ComparatorHelper` 新增 `assumeResultSetsAreEqualMultiset()` 方法
+    - 使用排序 List 比较替代 HashSet（保留重复行，符合论文 UNION ALL bag union 语义）
+    - JIROracle 调用处添加 `canonicalizeResultValue`（规范化 `-0.0` → `0.0`）
+  - **GaussDB-A NATURAL JOIN AST 支持**：`GaussDBAJoinType` 新增 `NATURAL` 枚举值
+    - `GaussDBAToStringVisitor` 添加 `NATURAL JOIN ` 渲染
+    - Rule 6 改用 AST 构建（消除原始 SQL 拼接的 identifier quoting 风险）
+  - **GaussDB-A Rule 5 ON TRUE 语义修复**：`ON 1` 改为 `ON 1 = 1`（显式布尔比较）
+
+## v2.4.1 | 2026-06-05
+- 新增 [JIR Oracle] GaussDB-M / GaussDB-A 适配
+  - **GaussDB-M JIR 变换器**：实现 5 条规则（MySQL 兼容模式无 FULL JOIN）
+    - Rule 1: Left Join 分解（LEFT = INNER ∪ ANTI）
+    - Rule 2: Left/Right 对称（LEFT↔RIGHT 交换表序）
+    - Rule 3: Semi/Anti 互补（EXISTS + NOT EXISTS 划分）
+    - Rule 5: Cross Join 等价（CROSS = INNER ON TRUE）
+    - Rule 6: Natural Join 显式化（NATURAL = INNER + 等值条件，利用 JoinType.NATURAL 枚举）
+  - **GaussDB-A JIR 变换器**：实现全部 6 条规则（Oracle 兼容模式支持 FULL JOIN 和 NATURAL JOIN）
+    - Rule 4: Full Join 分解（FULL = INNER ∪ LEFT_ANTI ∪ RIGHT_ANTI）
+    - Rule 6: NATURAL JOIN 使用 raw SQL（GaussDBAJoinType 无 NATURAL 枚举）
+    - ON TRUE → ON 1（Oracle 无 BOOLEAN 类型，用 NUMBER(1) 表示）
+  - 扩展 GaussDBAJoinType 新增 FULL 枚举值 + ToStringVisitor 渲染 "FULL JOIN "
+  - 扩展 JIRRule 新增 forGaussDBM() / forGaussDBA() 过滤方法
+
+## v2.4.0 | 2026-06-05
+- 新增 [JIR Oracle]：集成 Join Implication Reasoning 检测 JOIN 优化器 Bug（SIGMOD 2026）
+  - **通用框架**（`common/oracle/jir/`）：JIROracle 通用基类 + JIRTransformer 接口 + 6 条 JIR 推理规则枚举
+  - **MySQL JIR 变换器**：实现 5 条规则（MySQL 无 FULL JOIN），复用现有 JOIN 生成器和 AST
+    - Rule 1: Left Join 分解（LEFT = INNER ∪ ANTI）
+    - Rule 2: Left/Right 对称（LEFT↔RIGHT 交换表序）
+    - Rule 3: Semi/Anti 互补（EXISTS + NOT EXISTS 划分）
+    - Rule 5: Cross Join 等价（CROSS = INNER ON TRUE）
+    - Rule 6: Natural Join 显式化（NATURAL = INNER + 等值条件）
+  - **PostgreSQL JIR 变换器**：实现全部 6 条规则（含 FULL JOIN 分解）
+    - Rule 4: Full Join 分解（FULL = INNER ∪ LEFT_ANTI ∪ RIGHT_ANTI）
+  - 通过 `--oracle JIR` 使用，需表非空（`requiresAllTablesToContainRows`）
+
+## v2.3.1 | 2026-06-05
+- 新增 [JIR 论文深度解读]：分析 SIGMOD 2026 论文《Detecting Join Bugs via Join Implication Reasoning》
+  - 新增 `docs/jir-paper-analysis.md`：6 条推理规则详解、代码实现分析、实验结果、适用场景评估
+  - JIR 核心思想：利用不同 JOIN 类型的语义蕴含关系，从已知执行结果推断目标 JOIN 的预期结果
+  - 在 11 个 DBMS 上发现 100 个唯一 Bug（69 个逻辑 Bug），核心实现仅 ~210 行
+
 ## v2.3.0 | 2026-06-05
 - 新增 [Fucci P0 增强：谓词求值引擎 + 精确范围锁]：基于 Troc 对比分析，修复两个 P0 级差距
   - **谓词求值引擎**（新建 `eval/` 包）：使用 JSqlParser 4.6 解析 WHERE 表达式，在内存中对 View 数据逐行求值

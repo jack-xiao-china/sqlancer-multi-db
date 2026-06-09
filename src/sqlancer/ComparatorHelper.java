@@ -3,6 +3,7 @@ package sqlancer;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -139,6 +140,64 @@ public final class ComparatorHelper {
                 .collect(Collectors.toList());
         assumeResultSetsAreEqual(canonicalizedResultSet, canonicalizedSecondResultSet, originalQueryString,
                 combinedString, state);
+    }
+
+    /**
+     * Multiset (bag) comparison: preserves duplicate row counts. Required for JIR Oracle where UNION ALL semantics
+     * demand bag equality (not set equality). Also applies a canonicalization rule to normalize values like -0.0 to 0.0.
+     */
+    public static void assumeResultSetsAreEqualMultiset(List<String> resultSet, List<String> secondResultSet,
+            String originalQueryString, List<String> combinedString, SQLGlobalState<?, ?> state,
+            UnaryOperator<String> canonicalizationRule) {
+        List<String> canonicalizedFirst = resultSet.stream().map(canonicalizationRule).collect(Collectors.toList());
+        List<String> canonicalizedSecond = secondResultSet.stream().map(canonicalizationRule)
+                .collect(Collectors.toList());
+
+        if (canonicalizedFirst.size() != canonicalizedSecond.size()) {
+            String queryFormatString = "-- %s;" + System.lineSeparator() + "-- cardinality: %d"
+                    + System.lineSeparator();
+            String firstQueryString = String.format(queryFormatString, originalQueryString, canonicalizedFirst.size());
+            String combinedQueryString = String.join(";", combinedString);
+            String secondQueryString = String.format(queryFormatString, combinedQueryString,
+                    canonicalizedSecond.size());
+            state.getState().getLocalState()
+                    .log(String.format("%s" + System.lineSeparator() + "%s", firstQueryString, secondQueryString));
+            String assertionMessage = String.format(
+                    "The size of the result sets mismatch (%d and %d)!" + System.lineSeparator()
+                            + "First query: \"%s\", whose cardinality is: %d" + System.lineSeparator()
+                            + "Second query:\"%s\", whose cardinality is: %d",
+                    canonicalizedFirst.size(), canonicalizedSecond.size(), originalQueryString,
+                    canonicalizedFirst.size(), combinedQueryString, canonicalizedSecond.size());
+            throw new AssertionError(assertionMessage);
+        }
+
+        boolean validateResultSizeOnly = state.getOptions().validateResultSizeOnly();
+        if (!validateResultSizeOnly) {
+            List<String> sortedFirst = new ArrayList<>(canonicalizedFirst);
+            List<String> sortedSecond = new ArrayList<>(canonicalizedSecond);
+            Collections.sort(sortedFirst);
+            Collections.sort(sortedSecond);
+
+            if (!sortedFirst.equals(sortedSecond)) {
+                // Find differences for diagnostic output
+                List<String> firstMisses = new ArrayList<>(sortedFirst);
+                firstMisses.removeAll(sortedSecond);
+                List<String> secondMisses = new ArrayList<>(sortedSecond);
+                secondMisses.removeAll(sortedFirst);
+
+                String queryFormatString = "-- Query: \"%s\"; It misses: \"%s\"";
+                String firstQueryString = String.format(queryFormatString, originalQueryString, firstMisses);
+                String secondQueryString = String.format(queryFormatString, String.join(";", combinedString),
+                        secondMisses);
+                state.getState().getLocalState().log(
+                        String.format("%s" + System.lineSeparator() + "%s", firstQueryString, secondQueryString));
+                String assertionMessage = String.format(
+                        "The content of the result sets mismatch (multiset comparison)!" + System.lineSeparator()
+                                + "First query : \"%s\"" + System.lineSeparator() + "Second query: \"%s\"",
+                        originalQueryString, secondQueryString);
+                throw new AssertionError(assertionMessage);
+            }
+        }
     }
 
     public static List<String> getCombinedResultSet(String firstQueryString, String secondQueryString,

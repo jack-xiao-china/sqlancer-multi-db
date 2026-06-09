@@ -34,6 +34,7 @@ import sqlancer.mysql.oracle.eet.MySQLEETOracle;
 import sqlancer.mysql.oracle.eet.MySQLEETUpdateOracle;
 import sqlancer.mysql.oracle.eet.MySQLEETDeleteOracle;
 import sqlancer.mysql.oracle.eet.MySQLEETInsertSelectOracle;
+import sqlancer.mysql.oracle.MySQLJIRTransformer;
 
 public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
 
@@ -260,6 +261,23 @@ public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true; // TX_INFER needs tables with data
+        }
+    },
+    /**
+     * JIR (Join Implication Reasoning) Oracle.
+     * Detects JOIN optimizer bugs by comparing results across different JOIN types
+     * using semantic implication rules (SIGMOD 2026).
+     */
+    JIR {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws Exception {
+            return new sqlancer.common.oracle.jir.JIROracle<>(globalState, new MySQLJIRTransformer(),
+                    sqlancer.common.oracle.jir.JIRRule.forMySQL());
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // JIR works with empty tables (LEFT JOIN produces valid SQL)
         }
     },
     QUERY_PARTITIONING {

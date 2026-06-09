@@ -12,7 +12,7 @@ import sqlancer.gaussdba.GaussDBASchema.GaussDBATable;
 public class GaussDBAJoin implements GaussDBAExpression, Join<GaussDBAExpression, GaussDBATable, GaussDBAColumn> {
 
     public enum GaussDBAJoinType {
-        INNER, LEFT, RIGHT, CROSS;
+        INNER, LEFT, RIGHT, CROSS, FULL, NATURAL;
 
         public static GaussDBAJoinType getRandom() {
             return Randomly.fromOptions(values());
