@@ -1,5 +1,23 @@
 # SQLancer Release Notes
 
+## v2.4.6 | 2026-06-09
+- 重构 [README.md] 从冗长中文用户手册改为英文项目门户文档
+  - 删除逐 DBMS Oracle 详细列表（已由 USER_GUIDE.md 覆盖）
+  - 删除过时性能数据（v0.1.73）、旧版本历史（v0.1.x 系列）
+  - 新增 Oracle 分类表 + 跨 DBMS 支持矩阵
+  - 更正 GaussDB-M `--target-database` 必须指定（旧文档写"无需手动创建"）
+- 重构 [中文用户指南 user_guide_cn.md] 同步所有变更
+  - 版本号/jar 名：v0.1.82 / sqlancer-2.0.0 → v2.4.6 / sqlancer-2.4.6
+  - GaussDB-M：从"自动创建数据库, 无需target-database"改为"必须 --target-database + schema 隔离"
+  - Oracle 列表：16→24（新增 JIR、WRITE_CHECK_REPRODUCE、EET 变体等）
+  - 新增 JIR Oracle 深度解析章节（6 规则 + DBMS 支持矩阵 + 使用示例）
+  - Oracle 算法对比表新增 JIR 行
+  - Oracle 选择指南新增 "JOIN 优化器 Bug → JIR" 行
+  - GaussDB 兼容模式对比表更正：M 从"可选"→"必需"
+  - 创建兼容数据库：M 从"SQLancer自动创建"→"必须手动创建"
+  - 版本历史新增 v2.4.2-v2.4.6 条目
+  - 版本号/jar 名统一更新为 v2.4.5 / sqlancer-2.4.5.jar
+
 ## v2.4.5 | 2026-06-09
 - 修复 [GaussDB-M Provider] 连接方式从 CREATE DATABASE 改为 schema 隔离（对齐 GaussDB-A 模式）
   - **关键修复**：`CREATE DATABASE ... DBCOMPATIBILITY 'M'` 语法在远程服务器不被支持 → 改用 `--target-database` + schema 隔离
