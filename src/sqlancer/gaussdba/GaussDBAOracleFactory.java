@@ -14,6 +14,7 @@ import sqlancer.gaussdba.oracle.GaussDBACERTOracle;
 import sqlancer.gaussdba.oracle.GaussDBADQEOracle;
 import sqlancer.gaussdba.oracle.GaussDBADQPOracle;
 import sqlancer.gaussdba.oracle.GaussDBAFuzzer;
+import sqlancer.gaussdba.oracle.edcdata.GaussDBAEDCDataOracle;
 import sqlancer.gaussdba.oracle.GaussDBAPivotedQuerySynthesisOracle;
 import sqlancer.gaussdba.oracle.eet.GaussDBAEETOracle;
 import sqlancer.gaussdba.oracle.eet.GaussDBAEETInsertSelectOracle;
@@ -167,6 +168,22 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         @Override
         public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
             return new GaussDBAFuzzer(globalState);
+        }
+    },
+    /**
+     * EDC_DATA (Equivalent Data Construction - Data Operation) Oracle.
+     * Tests data operation implementation bugs by comparing expressions with precomputed values.
+     * Based on SIGMOD 2026 EDC paper methodology.
+     */
+    EDC_DATA {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBAEDCDataOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // EDC_DATA creates its own tables
         }
     },
     /**

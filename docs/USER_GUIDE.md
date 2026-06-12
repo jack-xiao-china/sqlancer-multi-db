@@ -1,13 +1,13 @@
 # SQLancer User Guide
 
-**Version**: v2.4.5 (2026-06-09)  
+**Version**: v2.5.6 (2026-06-12)  
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-PG, GaussDB-M, and 20+ other DBMS
 
 ## Introduction
 
 SQLancer is a tool for testing database management systems by generating random SQL queries and checking for bugs. This extended version includes:
 
-- **25+ Test Oracles** for MySQL, PostgreSQL, and GaussDB (including JIR, EDC, Sonar, EET, DQE, DQP, CODDTEST, FUCCI, TX_INFER)
+- **25+ Test Oracles** for MySQL, PostgreSQL, and GaussDB (including JIR, EDC_RADAR, EDC_DATA, Sonar, EET, DQE, DQP, CODDTEST, FUCCI, TX_INFER)
 - **JIR Oracle**: Join Implication Reasoning — detects JOIN optimizer bugs via 6 semantic rules (SIGMOD 2026)
 - **GaussDB Support**: A-compatibility mode (Oracle-style), PG-compatibility mode, and M-compatibility mode (MySQL-style)
 - **Extended Data Types**: JSON, BLOB, temporal types, arrays, enums, spatial types
@@ -29,24 +29,24 @@ cd sqlancer-multi-db
 mvn clean package -DskipTests
 
 # Output: ~387MB single jar with all dependencies
-ls -lh target/sqlancer-2.0.0.jar
+ls -lh target/sqlancer-2.5.6.jar
 ```
 
 ### Run
 
 **Recommended** (all dependencies included in jar):
 ```bash
-java -jar target/sqlancer-2.4.5.jar mysql --oracle QUERY_PARTITIONING
-java -jar target/sqlancer-2.4.5.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
+java -jar target/sqlancer-2.5.6.jar mysql --oracle QUERY_PARTITIONING
+java -jar target/sqlancer-2.5.6.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
 ```
 
 **Alternative** (use external classpath):
 ```bash
 # Linux/macOS
-java -cp "target/sqlancer-2.4.5.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.5.6.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
 
 # Windows
-java -cp "target/sqlancer-2.4.5.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.5.6.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
 ```
 
 ---
@@ -57,11 +57,11 @@ java -cp "target/sqlancer-2.4.5.jar;target/lib/*" sqlancer.Main mysql --oracle N
 
 | DBMS | Available Oracles |
 |------|-------------------|
-| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
-| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, WRITE_CHECK, WRITE_CHECK_REPRODUCE, TX_INFER, FUCCI, JIR, FUZZER |
+| **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
+| **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, EDC_DATA, WRITE_CHECK, WRITE_CHECK_REPRODUCE, TX_INFER, FUCCI, JIR, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
-| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
+| **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
 | CockroachDB | NOREC, WHERE, HAVING, AGGREGATE, GROUP_BY, DISTINCT, QUERY_PARTITIONING, CERT, WRITE_CHECK |
@@ -89,7 +89,7 @@ java -cp "target/sqlancer-2.4.5.jar;target/lib/*" sqlancer.Main mysql --oracle N
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --host localhost \
     --port 3306 \
     --username root \
@@ -114,10 +114,12 @@ java -jar target/sqlancer-2.4.5.jar \
 | DQE | SELECT/UPDATE/DELETE equivalence | ~23 queries/s |
 | EET | Equivalent Expression Transformation | ~340 queries/s |
 | CODDTEST | Constant-driven optimization testing | Moderate |
-| EDC | Equivalent Database Construction (constraint-based testing) | Moderate |
+| EDC_RADAR | Equivalent Database Construction (constraint-based testing) | Moderate |
 | SONAR | Optimized vs unoptimized query comparison | Moderate |
 | WRITE_CHECK | Transaction isolation level correctness | ~10 schedules/s |
-| FUZZER | Random query generation | ~3000 queries/s |
+| FUZZER | Random query generation |
+| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) | ~3000 queries/s |
+| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) | Moderate |
 
 ## MySQL Data Types
 
@@ -164,7 +166,7 @@ mysql --engines InnoDB,MyISAM,MEMORY
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --host localhost \
     --port 5432 \
     --username postgres \
@@ -189,17 +191,18 @@ java -jar target/sqlancer-2.0.0.jar \
 | DQE | SELECT/UPDATE/DELETE equivalence | Moderate |
 | EET | Equivalent Expression Transformation | Moderate |
 | CODDTEST | Constant-driven optimization | Moderate |
-| EDC | Equivalent Database Construction (constraint-based testing) | Moderate |
+| EDC_RADAR | Equivalent Database Construction (constraint-based testing) | Moderate |
 | SONAR | Optimized vs unoptimized query comparison | Moderate |
 | WRITE_CHECK | Transaction isolation level correctness | ~10 schedules/s |
 | FUZZER | Random queries | ~3000 queries/s |
+| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) | Moderate |
 
 ### PQS and CERT Recommended Parameters
 
 PQS and CERT oracles require tables to contain rows for proper testing. Use these recommended parameters:
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --username postgres \
     --password your_password \
     --num-threads 20 \
@@ -287,7 +290,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO root;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -341,16 +344,18 @@ This follows Oracle's schema-based isolation pattern.
 | TX_INFER | MVCC version inference |
 | JIR | Join Implication Reasoning (6 rules) |
 | FUZZER | Random query generation |
+| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) |
 
 ## GaussDB-A Data Types
 
 | Type Category | Types Supported |
 |---------------|-----------------|
-| Numeric | NUMBER, INTEGER, BIGINT, FLOAT, DOUBLE |
-| String | VARCHAR2, CHAR, CLOB (optional) |
-| Temporal | DATE, TIMESTAMP |
-| Binary | BLOB (optional, enable with `--enable-clob-blob`) |
+| Numeric | NUMBER, NUMERIC, INTEGER, BIGINT, SMALLINT, TINYINT, FLOAT, REAL, DOUBLE PRECISION, DECIMAL |
+| String | VARCHAR2, CHAR, TEXT, CLOB |
+| Temporal | DATE, TIME, TIMESTAMP |
+| Binary | RAW, BLOB |
 | Boolean | BOOLEAN |
+| Other | JSON |
 
 ## GaussDB-A Options
 
@@ -366,7 +371,7 @@ This follows Oracle's schema-based isolation pattern.
 # CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 
 # 2. Run comprehensive test
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -399,7 +404,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -431,6 +436,7 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
 | FUZZER | Random query generation |
+| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) |
 
 ## GaussDB-PG Data Types
 
@@ -454,7 +460,7 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 # Create PG-compatible database first
 # CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
 
-java -jar target/sqlancer-2.0.0.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -497,7 +503,7 @@ GRANT ALL PRIVILEGES ON DATABASE testm TO your_user;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \
@@ -544,13 +550,14 @@ This approach is more reliable than auto-creating databases, which may fail due 
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
 | CODDTEST | Constant-driven optimization testing |
-| EDC | Equivalent Database Construction (constraint-based testing) |
+| EDC_RADAR | Equivalent Database Construction (constraint-based testing) |
 | SONAR | Optimized vs unoptimized query comparison |
 | WRITE_CHECK | Transaction isolation level correctness |
 | FUCCI | MVCC-based testing (DT/MT/CS) |
 | TX_INFER | MVCC version inference |
 | JIR | Join Implication Reasoning (6 rules) |
 | FUZZER | Random query generation |
+| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) |
 
 ## GaussDB-M Options
 
@@ -561,7 +568,7 @@ This approach is more reliable than auto-creating databases, which may fail due 
 ## Complete Example
 
 ```bash
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.5.6.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \
@@ -754,9 +761,9 @@ java -Xmx4g -jar sqlancer.jar ...
 | DML correctness | DQE |
 | Expression bugs | EET |
 | Semantic correctness | CODDTEST |
-| Optimizer bugs | EDC, SONAR |
+| Optimizer bugs | EDC_RADAR, SONAR |
 | Crash detection | FUZZER |
-| Comprehensive | QUERY_PARTITIONING + EET + DQE + DQP + EDC |
+| Comprehensive | QUERY_PARTITIONING + EET + DQE + DQP + EDC_RADAR |
 
 ---
 
@@ -777,15 +784,15 @@ This section provides detailed information about each oracle's core algorithm, p
 | **DQE** | Differential Query Equivalence - Compares SELECT, UPDATE, DELETE results on same dataset | DML correctness bugs where modifications don't match queries | UPDATE/DELETE correctness; transaction isolation bugs | Internal extension |
 | **EET** | Equivalent Expression Transformation - Tests semantically equivalent expressions | Expression evaluation bugs (e.g., `a AND b` vs `NOT(NOT a OR NOT b)`) | Boolean expression handling; NULL logic; expression simplification bugs | Internal extension |
 | **CODDTEST** | Constant-driven optimization testing - Uses literal constants to trigger specific optimizations | Optimizer behavior with constant expressions | Constant folding; parameterized query optimization | Internal extension |
-| **EDC** | Equivalent Database Construction - Creates raw DB without constraints, compares query results with original | Constraint-related optimizer bugs (constraints ignored or mishandled) | Foreign key, CHECK constraint, UNIQUE constraint testing; constraint-aware optimization | [OSDI 2020] (PQS extension) |
+| **EDC_RADAR** | Equivalent Database Construction (RADAR) - Creates raw DB without constraints, compares query results with original | Constraint-related optimizer bugs (constraints ignored or mishandled) | Foreign key, CHECK constraint, UNIQUE constraint testing; constraint-aware optimization | [ISSTA 2024] (RADAR) |
 | **SONAR** | Optimized vs Unoptimized comparison - Uses flag-based filtering to compare execution paths | Optimizer bugs where optimization changes semantics | Index usage bugs; predicate evaluation order bugs; optimization correctness | Internal extension (Sonar paper pending) |
 | **FUZZER** | Random query generation - Generates syntactically valid but semantically random queries | Crash bugs, syntax edge cases, unexpected errors | Stress testing; crash detection; syntax boundary testing | Basic fuzzing approach |
 
 ## Oracle Deep Dive
 
-### EDC (Equivalent Database Construction)
+### EDC_RADAR (Equivalent Database Construction - RADAR)
 
-**Concept**: EDC detects optimizer bugs by comparing query results between two database states:
+**Concept**: EDC_RADAR detects optimizer bugs by comparing query results between two database states:
 1. **Original DB**: Contains tables with constraints (FK, CHECK, UNIQUE, NOT NULL)
 2. **Raw DB**: Same data but WITHOUT constraints
 
@@ -799,9 +806,9 @@ This section provides detailed information about each oracle's core algorithm, p
 
 **Usage**:
 ```bash
-java -jar sqlancer.jar mysql --oracle EDC --num-tries 100
-java -jar sqlancer.jar postgres --oracle EDC --num-tries 100
-java -jar sqlancer.jar gaussdb-m --oracle EDC --num-tries 100
+java -jar sqlancer.jar mysql --oracle EDC_RADAR --num-tries 100
+java -jar sqlancer.jar postgres --oracle EDC_RADAR --num-tries 100
+java -jar sqlancer.jar gaussdb-m --oracle EDC_RADAR --num-tries 100
 ```
 
 ### SONAR Oracle
@@ -1120,21 +1127,21 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
 | Testing Goal | Primary Oracle | Supporting Oracles |
 |--------------|----------------|-------------------|
 | **New DBMS integration** | QUERY_PARTITIONING | PQS, NoREC |
-| **Optimizer regression testing** | EDC, SONAR | NoREC, DQP |
-| **JOIN optimizer bugs** | JIR | EDC, DQP |
+| **Optimizer regression testing** | EDC_RADAR, SONAR | NoREC, DQP |
+| **JOIN optimizer bugs** | JIR | EDC_RADAR, DQP |
 | **Performance regression** | CERT | NoREC |
-| **Constraint correctness** | EDC | DQE |
+| **Constraint correctness** | EDC_RADAR | DQE |
 | **Expression handling** | EET | TLP_WHERE |
 | **DML expression handling** | EET_UPDATE, EET_DELETE | EET, DQE |
 | **DML operations** | DQE | QUERY_PARTITIONING |
-| **Cross-version testing** | DQP | EDC |
+| **Cross-version testing** | DQP | EDC_RADAR |
 | **Stress testing** | FUZZER | NoREC |
 | **Quick bug hunting** | TLP_WHERE + NoREC | PQS |
 | **Transaction isolation testing** | WRITE_CHECK | DQE |
 | **Concurrency bug detection** | WRITE_CHECK, FUCCI | CERT |
 | **MVCC version tracking** | TX_INFER | WRITE_CHECK |
 | **Optimizer coverage** | QPG | CERT, EET |
-| **Comprehensive testing** | QUERY_PARTITIONING + JIR + EDC + EET + DQE + WRITE_CHECK | All others |
+| **Comprehensive testing** | QUERY_PARTITIONING + JIR + EDC_RADAR + EET + DQE + WRITE_CHECK | All others |
 
 ---
 
@@ -1191,13 +1198,13 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
 ## v0.1.84 (2026-04-30)
 - **New Documentation**: Comprehensive Oracle Reference Guide added
   - Oracle Algorithm Comparison Table: Core algorithm, problem solved, applicable scenarios, reference papers
-  - EDC Oracle deep dive: Equivalent Database Construction concept and usage
+  - EDC_RADAR Oracle deep dive: Equivalent Database Construction concept and usage
   - SONAR Oracle deep dive: Optimized vs unoptimized query comparison
   - Oracle Selection Guide: When to choose which oracle for specific testing goals
-- **Oracle Support Update**: EDC and SONAR added to all supported DBMS tables
-  - MySQL: 16 oracles (added EDC, SONAR)
-  - PostgreSQL: 16 oracles (added EDC, SONAR)
-  - GaussDB-M: 16 oracles (added EDC, SONAR)
+- **Oracle Support Update**: EDC_RADAR and SONAR added to all supported DBMS tables
+  - MySQL: 16 oracles (added EDC_RADAR, SONAR)
+  - PostgreSQL: 16 oracles (added EDC_RADAR, SONAR)
+  - GaussDB-M: 16 oracles (added EDC_RADAR, SONAR)
 
 ## v0.1.83 (2026-04-25)
 - **GaussDB-A/PG**: `--target-database` now REQUIRED

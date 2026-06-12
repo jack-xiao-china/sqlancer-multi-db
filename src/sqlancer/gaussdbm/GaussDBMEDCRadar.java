@@ -15,9 +15,9 @@ import sqlancer.SQLConnection;
 import sqlancer.gaussdbm.GaussDBMSchema.GaussDBTable;
 
 /**
- * GaussDB-M Raw Database Construction Helper for EDC Oracle.
+ * GaussDB-M Raw Database Construction Helper for EDC_RADAR Oracle.
  *
- * Creates "raw database" (equivalent database without constraints) for EDC testing.
+ * Creates "raw database" (equivalent database without constraints) for EDC_RADAR testing.
  * Raw DB contains only pure data copies of tables, removing all constraints:
  * - NOT NULL constraints removed
  * - UNIQUE constraints removed
@@ -32,7 +32,7 @@ import sqlancer.gaussdbm.GaussDBMSchema.GaussDBTable;
  * against non-optimized execution (raw DB without constraints) to detect
  * optimizer bugs where constraints are incorrectly handled.
  */
-public class GaussDBMEDC {
+public class GaussDBMEDCRadar {
 
     private final GaussDBMGlobalState state;
 
@@ -41,7 +41,7 @@ public class GaussDBMEDC {
      */
     public final Map<String, String> createTableStatements = new HashMap<>();
 
-    public GaussDBMEDC(GaussDBMGlobalState state) {
+    public GaussDBMEDCRadar(GaussDBMGlobalState state) {
         this.state = state;
     }
 

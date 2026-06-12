@@ -15,9 +15,9 @@ import java.util.stream.Collectors;
 import com.beust.jcommander.Strings;
 
 import sqlancer.Randomly;
-import sqlancer.common.oracle.EDCBase;
+import sqlancer.common.oracle.EDCRadarBase;
 import sqlancer.common.oracle.TestOracle;
-import sqlancer.gaussdbm.GaussDBMEDC;
+import sqlancer.gaussdbm.GaussDBMEDCRadar;
 import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
 import sqlancer.gaussdbm.GaussDBMSchema;
@@ -31,14 +31,14 @@ import sqlancer.gaussdbm.ast.GaussDBTableReference;
 import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
 
 /**
- * GaussDB-M EDC (Equivalent Database Construction) Oracle Implementation.
+ * GaussDB-M EDC_RADAR (Equivalent Database Construction - RADAR) Oracle Implementation.
  *
  * Detects GaussDB-M optimizer bugs by comparing query results between:
  * - Original Database: Has constraints (NOT NULL, UNIQUE, FK, CHECK, GENERATED)
  *   that affect query optimization
  * - Raw Database: No constraints, pure data copy (non-optimized execution)
  *
- * GaussDB-M uses MySQL compatibility mode, so implementation follows MySQL EDC pattern.
+ * GaussDB-M uses MySQL compatibility mode, so implementation follows MySQL EDC_RADAR pattern.
  *
  * If the same query produces different results on original vs raw database,
  * it indicates an optimizer bug where constraints were incorrectly handled
@@ -50,9 +50,9 @@ import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
  * - Generated column evaluation bugs
  * - CHECK constraint bypass bugs
  */
-public class GaussDBMEDCOracle extends EDCBase<GaussDBMGlobalState> implements TestOracle<GaussDBMGlobalState> {
+public class GaussDBMEDCRadarOracle extends EDCRadarBase<GaussDBMGlobalState> implements TestOracle<GaussDBMGlobalState> {
 
-    public GaussDBMEDCOracle(GaussDBMGlobalState originalState) {
+    public GaussDBMEDCRadarOracle(GaussDBMGlobalState originalState) {
         super(originalState);
         GaussDBMErrors.addExpressionErrors(errors);
     }
@@ -253,7 +253,7 @@ public class GaussDBMEDCOracle extends EDCBase<GaussDBMGlobalState> implements T
         try {
             // Close previous equivalent state connection before creating new raw DB
             closeEquState();
-            GaussDBMEDC edc = new GaussDBMEDC(state);
+            GaussDBMEDCRadar edc = new GaussDBMEDCRadar(state);
             return edc.createRawDB();
         } catch (SQLException e) {
             throw new RuntimeException(e);

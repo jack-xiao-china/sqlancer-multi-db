@@ -1,3 +1,5 @@
+> **⚠️ 命名变更说明（v2.4.9）**：本文档为历史设计文档。原始 EDC Oracle 已重命名为 **EDC_RADAR**（`EDCRadarBase`、`MySQLEDCRadarOracle` 等），工厂枚举从 `EDC` 改为 `EDC_RADAR`，以区别于 EDC_DATA（SIGMOD 2026 数据操作检测 Oracle）。
+
 # RADAR EDC Oracle Integration Design
 
 ## 1. Overview

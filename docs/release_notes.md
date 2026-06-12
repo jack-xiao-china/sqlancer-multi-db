@@ -1,5 +1,95 @@
 # SQLancer Release Notes
 
+## v2.5.6 | 2026-06-12
+- 优化 [GaussDB-A EDC_DATA Seed File 第二轮审计]：基于 PDF 全量扫描 + 3 轮 JDBC 实测（116 个场景），消除无效函数，补充线性回归全集
+  - func.txt: 新增 8 个函数（REGEXP_LIKE/GENERATE_SERIES/WIDTH_BUCKET/JUSTIFY_HOURS/JUSTIFY_INTERVAL/CHECKSUM/QUOTE_LITERAL/QUOTE_IDENT）。73→81 项
+  - agg.txt: 移除 2 个 0% 有效函数（XMLAGG 不存在、LISTAGG 需 WITHIN GROUP 语法）；新增 9 个线性回归聚合（REGR_AVGX/AVGY/COUNT/INTERCEPT/R2/SLOPE/SXX/SXY/SYY）。22→29 项
+  - 0-arg 函数：getZeroArgFunctions() 新增 VERSION、RANDOM
+  - 集成测试：语句成功率 60%→63%，function does not exist 0，unsupported function/type 0
+
+## v2.5.5 | 2026-06-12
+- 优化 [GaussDB-A EDC_DATA Seed File]：基于 GaussDB-A 实测对比，系统性优化 seed file
+  - func.txt: 移除 8 个无效函数（SYSTIMESTAMP/SOUNDEX/NVL2/COSH/SINH/TANH/TO_BLOB/EXTRACT），新增 17 个实测可用函数（BTRIM/REGEXP_REPLACE 系列/POSITION/BIT_LENGTH/MD5/CBRT/NULLIF/NOW/CLOCK_TIMESTAMP 等）。65→74 项
+  - agg.txt: 新增 8 个聚合函数（BIT_AND/OR/BOOL_AND/OR/STRING_AGG/CORR/COVAR_POP/SAMP）。14→22 项
+  - type.txt: 新增 6 个类型（TINYINT/NUMBER/FLOAT/TEXT/TIME/JSON）。15→21 项
+  - pred.txt: 新增 4 个谓词（XOR/REGEXP/NOT REGEXP/ILIKE）。13→17 项
+  - 代码适配：GaussDBAEDCDataOracle 覆盖 getZeroArgFunctions()（CURRENT_DATE/SYSDATE/NOW 等 8 个）；EDCDataOracleBase 新增 ILIKE 支持；EDCDataExpressionBuilder 新增 NUMBER 类型值生成
+  - 集成测试：function does not exist 0，not yet supported 0，CLOCK_TIMESTAMP() 正确生成
+
+## v2.5.4 | 2026-06-12
+- 优化 [GaussDB-M EDC_DATA Seed File 第三轮审视]：消除 0% 有效函数，补充缺失函数
+  - func.txt: 移除 4 个 0% 有效函数（CAST/EXTRACT 需特殊语法，IN/NOT IN 与 pred.txt 重复）；新增 6 个日期函数（CURDATE/CURRENT_DATE/CURRENT_TIME/CURRENT_TIMESTAMP/CURTIME/LAST_DAY）。205→207 项
+  - agg.txt: 新增 ANY_VALUE 聚合函数。9→10 项
+  - pred.txt: 新增 NOT REGEXP 谓词。17→18 项
+  - 代码适配：ZERO_ARG_FUNCTIONS 新增 5 个日期函数；EDCDataOracleBase 新增 NOT REGEXP 列数约束和表达式生成
+  - 集成测试：syntax error 0，function does not exist 0，语句成功率 85%
+
+## v2.5.3 | 2026-06-12
+- 增强 [EDC_DATA 0-arg 函数支持]：改造 EDCDataOracleBase 支持无参数函数调用
+  - 代码改造：新增 `ZERO_ARG_FUNCTIONS` 集合 + `getZeroArgFunctions()` 可覆盖方法；`generateTestScenario()` 对 0-arg 函数设置 testColumn=0；`generateTestExpression()` 生成 `FUNC()` 而非 `FUNC(c0,...)`
+  - func.txt 恢复 14 个 0-arg 函数：PI/NOW/DATABASE/USER/UUID/UUID_SHORT/CONNECTION_ID/FOUND_ROWS/VERSION/LOCALTIME/LOCALTIMESTAMP/SCHEMA/SYSTEM_USER/UTC_DATE。191→205 项
+  - 集成测试：语句成功率从 83% 提升至 86%，NOW() 正确生成为 `NOW()` 无参数形式
+
+## v2.5.2 | 2026-06-12
+- 优化 [GaussDB-M EDC_DATA Seed File 二次审视]：基于 MySQL vs GaussDB-M 实测对比，进一步精简和优化 seed file
+  - func.txt: 实测验证 14 个 PDF 未记录函数，5 个保留（SOUNDEX/IS_IPV4_COMPAT/IS_IPV4_MAPPED/CHARSET/SESSION_USER），9 个移除（UUID_TO_BIN/IS_UUID/COERCIBILITY/WEIGHT_STRING/NAME_CONST/UpdateXML/ExtractValue/FORMAT_BYTES/FORMAT_PICO_TIME）；移除 14 个 0-arg 函数（代码限制）；去重 CONV/CRC32；新增 RANDOM_BYTES/SHA/INTERVAL。215→191 项
+  - pred.txt: 新增 `<=>`（NULL 安全等于）和 `REGEXP`（正则匹配）操作符，15→17 项
+  - type.txt: 新增 NUMERIC/FLOAT4/FLOAT8/REAL 浮点类型别名，28→32 项
+  - 代码适配：EDCDataOracleBase 增加 `<=>` 和 REGEXP 的列数约束和表达式生成；EDCDataExpressionBuilder 增加 FLOAT4/FLOAT8 值生成；GaussDBMEDCDataOracle 增加 REGEXP 相关 ExpectedErrors
+  - 集成测试验证：function does not exist 0，unsupported type 0，Out of range 0，NumberFormatException 0，语句成功率 83%
+
+## v2.5.1 | 2026-06-12
+- 优化 [GaussDB-M EDC_DATA Seed File]：基于 GaussDB-M 官方文档裁剪和增强 seed file
+  - func.txt: 移除 133 项不支持的函数（MySQL 内部 29 + 窗口 7 + JSON 8 + 空间 ~85），新增 8 项（DIV/REPEAT/SPACE/BIT_LENGTH/CONV/CRC32/RAND/MID），340→215 项
+  - agg.txt: 移除 10 项不支持的聚合函数（STDDEV 系列/VARIANCE 系列/JSON_ARRAYAGG/MEDIAN/ST_Collect），20→10 项
+  - type.txt: 移除空间类型 7 项 + 二进制类型 6 项（JDBC 驱动 bug），新增 UNSIGNED 5 项 + YEAR，35→29 项
+  - 代码适配：EDCDataOracleBase 增加 DIV 二元操作符，EDCDataExpressionBuilder 增加 UNSIGNED 类型值生成，mapType() 扩展 UNSIGNED/YEAR/BIT 映射
+  - 集成测试验证：NumberFormatException 0，function does not exist 0，unsupported type 0
+
+## v2.5.0 | 2026-06-11
+- 适配 [EDC DATA Oracle GaussDB 支持]：完成 EDC_DATA 在 GaussDB-M 和 GaussDB-A 上的适配和集成测试
+  - GaussDB-M 两步法：因 GaussDB-M 不支持 CTAS 表达式，实现 probe query 类型推断 + CREATE TABLE + INSERT SELECT 方案
+  - GaussDB-A catalog 修复：`all_tab_columns` 视图不存在，改用 `information_schema.columns` + `current_schema`
+  - ExpectedErrors 补充：GaussDB-M 从 4 个增至 22 个模式，GaussDB-A 从 4 个增至 18 个模式
+  - 集成测试：GaussDB-M 200 次运行，81% 成功率，0 次派生表创建失败
+  - 类型映射：实现 JDBC 类型名（int8/text/numeric 等）到 GaussDB-M 兼容类型的自动映射
+
+## v2.4.9 | 2026-06-11
+- 重构 [EDC Oracle 重命名]：将原始 EDC Oracle 重命名为 EDC_RADAR 消除命名歧义
+  - 基础类：`EDCBase` → `EDCRadarBase`
+  - MySQL：`MySQLEDC` → `MySQLEDCRadar`，`MySQLEDCOracle` → `MySQLEDCRadarOracle`
+  - PostgreSQL：`PostgresEDC` → `PostgresEDCRadar`，`PostgresEDCOracle` → `PostgresEDCRadarOracle`
+  - GaussDB-M：`GaussDBMEDC` → `GaussDBMEDCRadar`，`GaussDBMEDCOracle` → `GaussDBMEDCRadarOracle`
+  - 工厂枚举：`EDC` → `EDC_RADAR`（MySQL、PostgreSQL、GaussDB-M 三个 OracleFactory）
+  - 单元测试：同步更新 3 个测试类（类名、import、字符串字面量）
+  - EDC_DATA Oracle 保持不变，两者命名清晰区分：`EDC_RADAR`（约束优化检测）vs `EDC_DATA`（数据操作检测）
+  - 文档同步更新：README.md（Oracle 表格、特性列表）、对比分析文档（类名引用）、5 个历史设计文档（顶部添加重命名说明）
+
+## v2.4.8 | 2026-06-11
+- 实现 [EDC DATA Oracle]：完成 SIGMOD 2026 EDC 论文的 Java 集成实现
+  - 核心基础设施：9 个 Java 类实现完整 EDC 算法（EDCDataOracleBase、EDCDataExpressionBuilder、EDCDataQueryBuilder、EDCDataTableBuilder 等）
+  - Seed 文件集成：从 EDC Python 项目导入 MySQL（340 函数）、PostgreSQL（2692 函数）、GaussDB-M/A 的操作列表和类型定义
+  - MySQL 实现：MySQLEDCDataOracle + MySQLEDCDataTableBuilder，已注册到 MySQLOracleFactory
+  - PostgreSQL 实现：PostgresEDCDataOracle + PostgresEDCDataTableBuilder，已注册到 PostgresOracleFactory
+  - GaussDB-M 实现：GaussDBMEDCDataOracle（MySQL 兼容模式），已注册到 GaussDBMOracleFactory
+  - GaussDB-A 实现：GaussDBAEDCDataOracle（Oracle 兼容模式），已注册到 GaussDBAOracleFactory
+  - 功能完整性：支持 3 种操作类型（AGGREGATE/FUNCTION/PREDICATE）、40+ 数据类型、深度控制的表达式生成
+  - 隔离性：每个测试场景创建独立表（edc_t0_N, edc_t1_N），测试后自动清理，不影响其他 Oracle
+  - 错误处理：集成 ExpectedErrors 系统，支持 DBMS 特定的预期错误过滤
+
+## v2.4.7 | 2026-06-11
+- 文档 [EDC DATA Oracle 集成架构设计]：完成 SIGMOD 2026 EDC 论文与 SQLancer 的全方位对比分析和集成方案设计
+  - 新增 `docs/edc-data-oracle-integration-architecture.md`：完整的 EDC_DATA Oracle 集成架构设计文档
+  - 深入分析 EDC Python 项目源码（1,380 行核心逻辑）和 SIGMOD 2026 论文方法论
+  - 对比 EDC 与 SQLancer 全部 24 种 Test Oracle，确认完全互补（论文实测 35 个独有 Bug 与现有工具零重叠）
+  - 设计 EDC_DATA 作为独立 Oracle 集成到 SQLancer（CLI 选项 `--oracle EDC_DATA`）
+  - 严格保留 EDC 全部功能：3 种操作类型（AGGREGATE/FUNCTION/PREDICATE）、40+ 数据类型、seed 文件机制
+  - 设计 8 个核心组件：EDCDataOracleBase、EDCDataTestScenario、EDCDataOperationDefinition、EDCDataExpressionBuilder、EDCDataQueryBuilder、EDCDataTableBuilder、EDCDataResultComparator、EDCDataConfig
+  - 规划 4 DBMS 实现：MySQL、PostgreSQL、GaussDB-M、GaussDB-A（优先实现，后续可扩展到 ClickHouse、TiDB 等）
+  - 设计 Seed 文件管理：从 EDC Python 项目导入操作列表（MySQL 340 函数、PostgreSQL 2692 函数等）
+  - 设计 6 周实施计划：Phase 1-2 核心基础设施、Phase 3-4 MySQL/PostgreSQL 实现、Phase 5-6 GaussDB 实现和回归测试
+  - 风险评估：类型不兼容（高概率低影响）、性能开销（低概率中影响）、误报（中概率中影响）
+
 ## v2.4.6 | 2026-06-09
 - 重构 [README.md] 从冗长中文用户手册改为英文项目门户文档
   - 删除逐 DBMS Oracle 详细列表（已由 USER_GUIDE.md 覆盖）

@@ -74,7 +74,8 @@ java -jar target/sqlancer-2.4.5.jar \
 | **TLP Extensions** | WHERE (PostgreSQL alias for TLP_WHERE) | Alias |
 | **Expression Transform** | EET, CODDTEST | Semantic equivalence & constant folding |
 | **Mutation Equivalence** | DQE, DQP | DELETE/UPDATE equivalence & determinism |
-| **Database Construction** | EDC | Equivalent database construction |
+| **Database Construction** | EDC_RADAR | Equivalent database construction (constraint optimization) |
+| **Data Operation** | EDC_DATA | Equivalent data construction (data operation testing) |
 | **Performance** | SONAR (MySQL/PG/GaussDB-M) | Optimized vs unoptimized comparison |
 | **Transaction/MVCC** | WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER | Isolation & MVCC testing |
 | **JOIN Optimizer** | **JIR** (SIGMOD 2026) | Join Implication Reasoning — 6 rules |
@@ -97,7 +98,8 @@ java -jar target/sqlancer-2.4.5.jar \
 | DQP | ✅ | ✅ | ✅ | ✅ | ✅ |
 | EET | ✅ | ✅ | ✅ | ✅ | ✅ |
 | CODDTEST | ✅ | ✅ | ✅ | — | — |
-| EDC | ✅ | ✅ | ✅ | ✅ | ✅ |
+| EDC_RADAR | ✅ | ✅ | ✅ | — | — |
+| EDC_DATA | ✅ | ✅ | ✅ | ✅ | — |
 | SONAR | ✅ | ✅ | ✅ | — | — |
 | WRITE_CHECK | ✅ | ✅ | ✅ | ✅ | ✅ |
 | WRITE_CHECK_REPRODUCE | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -175,7 +177,7 @@ java -jar target/sqlancer-2.4.5.jar \
 
 | Feature | Description |
 |---------|-------------|
-| **25+ Test Oracles** | 14 standard + 11 new (JIR, EDC, SONAR, DQE, DQP, EET, CODDTEST, WRITE_CHECK, FUCCI, TX_INFER, WRITE_CHECK_REPRODUCE) |
+| **25+ Test Oracles** | 14 standard + 11 new (JIR, EDC_RADAR, EDC_DATA, SONAR, DQE, DQP, EET, CODDTEST, WRITE_CHECK, FUCCI, TX_INFER, WRITE_CHECK_REPRODUCE) |
 | **GaussDB Multi-Mode** | A/PG/M compatibility modes with schema isolation |
 | **Extended Data Types** | PG: Temporal, JSONB, Array, UUID · MySQL: JSON, Spatial, Full-text, CTE |
 | **SQLSTATE Error Handling** | Works on non-English (Chinese, German, Japanese) servers — no English-only error matching |

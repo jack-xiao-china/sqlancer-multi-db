@@ -1,3 +1,5 @@
+> **⚠️ 命名变更说明（v2.4.9）**：本文档为历史分析文档。原始 EDC Oracle 已重命名为 **EDC_RADAR**（工厂枚举 `EDC_RADAR`），以区别于 EDC_DATA。
+
 # RADAR Integration Scenario Coverage Analysis
 
 ## 1. Database Coverage Comparison

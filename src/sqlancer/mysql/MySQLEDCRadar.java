@@ -12,9 +12,9 @@ import sqlancer.SQLConnection;
 import sqlancer.mysql.MySQLSchema.MySQLTable;
 
 /**
- * MySQL Raw Database Construction Helper for EDC Oracle.
+ * MySQL Raw Database Construction Helper for EDC_RADAR Oracle.
  *
- * Creates "raw database" (equivalent database without constraints) for EDC testing.
+ * Creates "raw database" (equivalent database without constraints) for EDC_RADAR testing.
  * Raw DB contains only pure data copies of tables, removing all constraints:
  * - NOT NULL constraints removed
  * - UNIQUE constraints removed
@@ -27,7 +27,7 @@ import sqlancer.mysql.MySQLSchema.MySQLTable;
  * against non-optimized execution (raw DB without constraints) to detect
  * optimizer bugs where constraints are incorrectly handled.
  */
-public class MySQLEDC {
+public class MySQLEDCRadar {
 
     private final MySQLGlobalState state;
 
@@ -36,7 +36,7 @@ public class MySQLEDC {
      */
     public final Map<String, String> createTableStatements = new HashMap<>();
 
-    public MySQLEDC(MySQLGlobalState state) {
+    public MySQLEDCRadar(MySQLGlobalState state) {
         this.state = state;
     }
 

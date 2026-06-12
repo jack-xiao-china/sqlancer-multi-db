@@ -19,9 +19,9 @@ import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLancerResultSet;
 
 /**
- * EDC (Equivalent Database Construction) Oracle Base Class.
+ * EDC_RADAR (Equivalent Database Construction - RADAR) Oracle Base Class.
  *
- * EDC Oracle detects optimizer bugs by creating an "equivalent" database without constraints
+ * EDC_RADAR Oracle detects optimizer bugs by creating an "equivalent" database without constraints
  * (NOT NULL, UNIQUE, FOREIGN KEY, CHECK, GENERATED columns) and comparing query results:
  * - Original DB: Has constraints that affect query optimization
  * - Raw DB: No constraints, pure data copy (non-optimized execution)
@@ -29,9 +29,11 @@ import sqlancer.common.query.SQLancerResultSet;
  * Result mismatch indicates potential optimizer bug where constraints are incorrectly
  * optimized away or handled improperly.
  *
+ * Based on SIGMOD 2020 paper: "Equivalent Database Construction" (EDC/RADAR approach).
+ *
  * @param <S> GlobalState type for the specific DBMS
  */
-public abstract class EDCBase<S extends SQLGlobalState<?, ?>> implements TestOracle<S> {
+public abstract class EDCRadarBase<S extends SQLGlobalState<?, ?>> implements TestOracle<S> {
 
     protected final S originalState;
     protected S equivalentState; // Raw database state (without constraints)
@@ -41,7 +43,7 @@ public abstract class EDCBase<S extends SQLGlobalState<?, ?>> implements TestOra
     protected final SQLConnection con;
     protected String queryString;
 
-    public EDCBase(S originalState) {
+    public EDCRadarBase(S originalState) {
         this.originalState = originalState;
         this.con = originalState.getConnection();
         this.logger = originalState.getLogger();

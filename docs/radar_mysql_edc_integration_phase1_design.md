@@ -1,3 +1,5 @@
+> **⚠️ 命名变更说明（v2.4.9）**：本文档为历史设计文档。原始 EDC Oracle 已重命名为 **EDC_RADAR**（`EDCRadarBase`、`MySQLEDCRadar`、`MySQLEDCRadarOracle`），工厂枚举从 `EDC` 改为 `EDC_RADAR`。
+
 # RADAR EDC Oracle MySQL Integration - Detailed Design & Development Plan
 
 ## Phase 1: MySQL EDC Integration (First Implementation)

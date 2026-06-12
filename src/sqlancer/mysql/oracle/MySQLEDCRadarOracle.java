@@ -15,9 +15,9 @@ import java.util.stream.Collectors;
 import com.beust.jcommander.Strings;
 
 import sqlancer.Randomly;
-import sqlancer.common.oracle.EDCBase;
+import sqlancer.common.oracle.EDCRadarBase;
 import sqlancer.common.oracle.TestOracle;
-import sqlancer.mysql.MySQLEDC;
+import sqlancer.mysql.MySQLEDCRadar;
 import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLGlobalState;
 import sqlancer.mysql.MySQLSchema;
@@ -31,7 +31,7 @@ import sqlancer.mysql.ast.MySQLTableReference;
 import sqlancer.mysql.gen.MySQLExpressionGenerator;
 
 /**
- * MySQL EDC (Equivalent Database Construction) Oracle Implementation.
+ * MySQL EDC_RADAR (Equivalent Database Construction - RADAR) Oracle Implementation.
  *
  * Detects MySQL optimizer bugs by comparing query results between:
  * - Original Database: Has constraints (NOT NULL, UNIQUE, FK, CHECK, GENERATED)
@@ -48,9 +48,9 @@ import sqlancer.mysql.gen.MySQLExpressionGenerator;
  * - Generated column evaluation bugs
  * - CHECK constraint bypass bugs
  */
-public class MySQLEDCOracle extends EDCBase<MySQLGlobalState> implements TestOracle<MySQLGlobalState> {
+public class MySQLEDCRadarOracle extends EDCRadarBase<MySQLGlobalState> implements TestOracle<MySQLGlobalState> {
 
-    public MySQLEDCOracle(MySQLGlobalState originalState) {
+    public MySQLEDCRadarOracle(MySQLGlobalState originalState) {
         super(originalState);
         MySQLErrors.addExpressionErrors(errors);
     }
@@ -248,7 +248,7 @@ public class MySQLEDCOracle extends EDCBase<MySQLGlobalState> implements TestOra
     @Override
     public MySQLGlobalState constructEquivalentState(MySQLGlobalState state) {
         try {
-            MySQLEDC edc = new MySQLEDC(state);
+            MySQLEDCRadar edc = new MySQLEDCRadar(state);
             return edc.createRawDB();
         } catch (SQLException e) {
             throw new RuntimeException(e);

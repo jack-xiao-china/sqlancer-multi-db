@@ -16,7 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import sqlancer.Randomly;
-import sqlancer.common.oracle.EDCBase.TableStructure;
+import sqlancer.common.oracle.EDCRadarBase.TableStructure;
 import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLOracleFactory;
 import sqlancer.mysql.MySQLSchema.MySQLColumn;
@@ -29,19 +29,19 @@ import sqlancer.mysql.ast.MySQLSelect;
 import sqlancer.mysql.ast.MySQLTableReference;
 
 /**
- * Unit tests for MySQLEDCOracle and EDCBase.
+ * Unit tests for MySQLEDCRadarOracle and EDCRadarBase.
  *
  * Tests verify:
- * 1. EDCBase core functionality (structure hashing, result comparison)
- * 2. MySQLEDCOracle query generation
- * 3. OracleFactory EDC registration
+ * 1. EDCRadarBase core functionality (structure hashing, result comparison)
+ * 2. MySQLEDCRadarOracle query generation
+ * 3. OracleFactory EDC_RADAR registration
  * 4. Error handling configuration
- * 5. EDC query pattern structures
+ * 5. EDC_RADAR query pattern structures
  *
- * Note: MySQLEDCOracle constructor requires a database connection for full
+ * Note: MySQLEDCRadarOracle constructor requires a database connection for full
  * testing. This test class tests components without database connection.
  */
-class MySQLEDCOracleTest {
+class MySQLEDCRadarOracleTest {
 
     private MySQLColumn col0;
     private MySQLColumn col1;
@@ -63,51 +63,51 @@ class MySQLEDCOracleTest {
     // ==================== OracleFactory Tests ====================
 
     @Test
-    void testOracleFactory_edcExists() {
-        // Verify EDC is available in MySQLOracleFactory
+    void testOracleFactory_edcRadarExists() {
+        // Verify EDC_RADAR is available in MySQLOracleFactory
         MySQLOracleFactory[] factories = MySQLOracleFactory.values();
 
-        boolean hasEdc = Arrays.stream(factories).anyMatch(f -> f.name().equals("EDC"));
+        boolean hasEdcRadar = Arrays.stream(factories).anyMatch(f -> f.name().equals("EDC_RADAR"));
 
-        assertTrue(hasEdc, "EDC oracle should be registered in MySQLOracleFactory");
+        assertTrue(hasEdcRadar, "EDC_RADAR oracle should be registered in MySQLOracleFactory");
     }
 
     @Test
-    void testOracleFactory_edcNameCorrect() {
-        // Verify EDC factory enum name is correct
-        MySQLOracleFactory edcFactory = MySQLOracleFactory.valueOf("EDC");
+    void testOracleFactory_edcRadarNameCorrect() {
+        // Verify EDC_RADAR factory enum name is correct
+        MySQLOracleFactory edcRadarFactory = MySQLOracleFactory.valueOf("EDC_RADAR");
 
-        assertNotNull(edcFactory);
-        assertEquals("EDC", edcFactory.name());
+        assertNotNull(edcRadarFactory);
+        assertEquals("EDC_RADAR", edcRadarFactory.name());
     }
 
     @Test
-    void testOracleFactory_edcRequiresTables() {
-        // Verify EDC requires tables to contain rows (like PQS)
-        MySQLOracleFactory edcFactory = MySQLOracleFactory.valueOf("EDC");
+    void testOracleFactory_edcRadarRequiresTables() {
+        // Verify EDC_RADAR requires tables to contain rows (like PQS)
+        MySQLOracleFactory edcRadarFactory = MySQLOracleFactory.valueOf("EDC_RADAR");
 
-        assertTrue(edcFactory.requiresAllTablesToContainRows(),
-                "EDC oracle should require tables to contain rows for testing");
+        assertTrue(edcRadarFactory.requiresAllTablesToContainRows(),
+                "EDC_RADAR oracle should require tables to contain rows for testing");
     }
 
     @Test
     void testOracleFactory_allOraclesCount() {
-        // Verify total oracle count including EDC
+        // Verify total oracle count including EDC_RADAR
         MySQLOracleFactory[] factories = MySQLOracleFactory.values();
 
         // Should have: AGGREGATE, HAVING, GROUP_BY, DISTINCT, NOREC, TLP_WHERE, PQS,
-        // CERT, FUZZER, DQP, DQE, EET, CODDTEST, EDC, QUERY_PARTITIONING = 15
-        assertEquals(15, factories.length, "Total oracle count should be 15 including EDC");
+        // CERT, FUZZER, DQP, DQE, EET, CODDTEST, EDC_RADAR, QUERY_PARTITIONING = 15
+        assertEquals(15, factories.length, "Total oracle count should be 15 including EDC_RADAR");
     }
 
     // ==================== Error Handling Tests ====================
 
     @Test
     void testErrorHandling_expressionErrorsAvailable() {
-        // Verify EDC oracle uses MySQLErrors for expected errors
+        // Verify EDC_RADAR oracle uses MySQLErrors for expected errors
         List<String> expressionErrors = MySQLErrors.getExpressionErrors();
 
-        // EDC should handle standard expression errors
+        // EDC_RADAR should handle standard expression errors
         assertFalse(expressionErrors.isEmpty(), "Expression errors list should not be empty");
         assertTrue(expressionErrors.contains("BIGINT value is out of range"));
         assertTrue(expressionErrors.contains("Incorrect DATETIME value"));
@@ -115,7 +115,7 @@ class MySQLEDCOracleTest {
 
     @Test
     void testErrorHandling_regexErrorsAvailable() {
-        // Verify EDC oracle uses regex errors
+        // Verify EDC_RADAR oracle uses regex errors
         List<java.util.regex.Pattern> regexErrors = MySQLErrors.getExpressionRegexErrors();
 
         assertFalse(regexErrors.isEmpty(), "Regex errors list should not be empty");
@@ -125,7 +125,7 @@ class MySQLEDCOracleTest {
 
     @Test
     void testQueryGeneration_selectStructure() {
-        // Test basic SELECT query structure (as EDC generates)
+        // Test basic SELECT query structure (as EDC_RADAR generates)
         MySQLSelect select = new MySQLSelect();
         select.setSelectType(MySQLSelect.SelectType.ALL);
         select.setFetchColumns(List.of(new MySQLColumnReference(col0, null)));
@@ -142,7 +142,7 @@ class MySQLEDCOracleTest {
 
     @Test
     void testQueryGeneration_multipleColumns() {
-        // Test SELECT with multiple columns (EDC pattern)
+        // Test SELECT with multiple columns (EDC_RADAR pattern)
         MySQLSelect select = new MySQLSelect();
         select.setFetchColumns(Arrays.asList(
                 new MySQLColumnReference(col0, null),
@@ -166,7 +166,7 @@ class MySQLEDCOracleTest {
         assertTrue(tableRefStr.contains("t0"));
     }
 
-    // ==================== EDCBase Structure Tests ====================
+    // ==================== EDCRadarBase Structure Tests ====================
 
     @Test
     void testTableStructure_hashCodeConsistency() {
@@ -337,8 +337,8 @@ class MySQLEDCOracleTest {
     // ==================== Integration Pattern Tests ====================
 
     @Test
-    void testEDCPattern_queryComparisonConcept() {
-        // Test the EDC concept: same query on different databases
+    void testEDCRadarPattern_queryComparisonConcept() {
+        // Test the EDC_RADAR concept: same query on different databases
         // Original DB: SELECT * FROM t0 WHERE c0 > 0 (optimized with constraints)
         // Raw DB: SELECT * FROM t0 WHERE c0 > 0 (non-optimized, no constraints)
 
@@ -359,7 +359,7 @@ class MySQLEDCOracleTest {
 
     @Test
     void testConstraintMetadata_notNullDetection() {
-        // Test NOT NULL constraint detection for EDC
+        // Test NOT NULL constraint detection for EDC_RADAR
         String columnMetadata = "INT NOT NULL DEFAULT 0";
 
         assertTrue(columnMetadata.contains("NOT NULL"));

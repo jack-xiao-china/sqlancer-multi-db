@@ -12,9 +12,9 @@ import sqlancer.SQLConnection;
 import sqlancer.postgres.PostgresSchema.PostgresTable;
 
 /**
- * PostgreSQL Raw Database Construction Helper for EDC Oracle.
+ * PostgreSQL Raw Database Construction Helper for EDC_RADAR Oracle.
  *
- * Creates "raw database" (equivalent database without constraints) for EDC testing.
+ * Creates "raw database" (equivalent database without constraints) for EDC_RADAR testing.
  * Raw DB contains only pure data copies of tables, removing all constraints:
  * - NOT NULL constraints removed
  * - UNIQUE constraints removed
@@ -27,7 +27,7 @@ import sqlancer.postgres.PostgresSchema.PostgresTable;
  * against non-optimized execution (raw DB without constraints) to detect
  * optimizer bugs where constraints are incorrectly handled.
  */
-public class PostgresEDC {
+public class PostgresEDCRadar {
 
     private final PostgresGlobalState state;
 
@@ -36,7 +36,7 @@ public class PostgresEDC {
      */
     public final Map<String, String> createTableStatements = new HashMap<>();
 
-    public PostgresEDC(PostgresGlobalState state) {
+    public PostgresEDCRadar(PostgresGlobalState state) {
         this.state = state;
     }
 

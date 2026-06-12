@@ -15,7 +15,8 @@ import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 import sqlancer.postgres.ast.PostgresSelect.LockingClauseContext;
-import sqlancer.postgres.oracle.PostgresEDCOracle;
+import sqlancer.postgres.oracle.PostgresEDCRadarOracle;
+import sqlancer.postgres.oracle.edcdata.PostgresEDCDataOracle;
 import sqlancer.postgres.oracle.PostgresFuzzer;
 import sqlancer.postgres.oracle.PostgresPivotedQuerySynthesisOracle;
 import sqlancer.postgres.oracle.ext.PostgresCODDTestOracle;
@@ -219,19 +220,35 @@ public enum PostgresOracleFactory implements OracleFactory<PostgresGlobalState> 
         }
     },
     /**
-     * EDC (Equivalent Database Construction) Oracle.
+     * EDC_RADAR (Equivalent Database Construction - RADAR) Oracle.
      * Detects optimizer bugs by comparing query results between original DB (with constraints)
      * and raw DB (without constraints).
      */
-    EDC {
+    EDC_RADAR {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
-            return new PostgresEDCOracle(globalState);
+            return new PostgresEDCRadarOracle(globalState);
         }
 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    /**
+     * EDC_DATA (Equivalent Data Construction - Data Operation) Oracle.
+     * Tests data operation implementation bugs by comparing expressions with precomputed values.
+     * Based on SIGMOD 2026 EDC paper methodology.
+     */
+    EDC_DATA {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresEDCDataOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // EDC_DATA creates its own tables
         }
     },
     /**

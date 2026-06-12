@@ -13,7 +13,8 @@ import sqlancer.common.oracle.NoRECOracle;
 import sqlancer.common.oracle.TLPWhereOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.mysql.oracle.MySQLCODDTestOracle;
-import sqlancer.mysql.oracle.MySQLEDCOracle;
+import sqlancer.mysql.oracle.MySQLEDCRadarOracle;
+import sqlancer.mysql.oracle.edcdata.MySQLEDCDataOracle;
 import sqlancer.mysql.oracle.MySQLSonarOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLancerResultSet;
@@ -188,20 +189,36 @@ public enum MySQLOracleFactory implements OracleFactory<MySQLGlobalState> {
         }
     },
     /**
-     * EDC (Equivalent Database Construction) Oracle.
+     * EDC_RADAR (Equivalent Database Construction - RADAR) Oracle.
      * Detects optimizer bugs by comparing query results between:
      * - Original DB: with constraints (NOT NULL, UNIQUE, FK, CHECK, GENERATED)
      * - Raw DB: without constraints (pure data copy)
      */
-    EDC {
+    EDC_RADAR {
         @Override
         public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
-            return new MySQLEDCOracle(globalState);
+            return new MySQLEDCRadarOracle(globalState);
         }
 
         @Override
         public boolean requiresAllTablesToContainRows() {
-            return true; // EDC needs tables with data
+            return true; // EDC_RADAR needs tables with data
+        }
+    },
+    /**
+     * EDC_DATA (Equivalent Data Construction - Data Operation) Oracle.
+     * Tests data operation implementation bugs by comparing expressions with precomputed values.
+     * Based on SIGMOD 2026 EDC paper methodology.
+     */
+    EDC_DATA {
+        @Override
+        public TestOracle<MySQLGlobalState> create(MySQLGlobalState globalState) throws SQLException {
+            return new MySQLEDCDataOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // EDC_DATA creates its own tables
         }
     },
     /**

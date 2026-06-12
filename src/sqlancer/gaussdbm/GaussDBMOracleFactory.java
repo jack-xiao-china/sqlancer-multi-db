@@ -12,7 +12,8 @@ import sqlancer.common.oracle.TLPWhereOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
-import sqlancer.gaussdbm.oracle.GaussDBMEDCOracle;
+import sqlancer.gaussdbm.oracle.GaussDBMEDCRadarOracle;
+import sqlancer.gaussdbm.oracle.edcdata.GaussDBMEDCDataOracle;
 import sqlancer.gaussdbm.oracle.GaussDBCODDTestOracle;
 import sqlancer.gaussdbm.oracle.GaussDBMCERTExplainParser;
 import sqlancer.gaussdbm.oracle.GaussDBMDQEOracle;
@@ -177,15 +178,31 @@ public enum GaussDBMOracleFactory implements OracleFactory<GaussDBMGlobalState> 
             return new GaussDBMSonarOracle(globalState);
         }
     },
-    EDC {
+    EDC_RADAR {
         @Override
         public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
-            return new GaussDBMEDCOracle(globalState);
+            return new GaussDBMEDCRadarOracle(globalState);
         }
 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    /**
+     * EDC_DATA (Equivalent Data Construction - Data Operation) Oracle.
+     * Tests data operation implementation bugs by comparing expressions with precomputed values.
+     * Based on SIGMOD 2026 EDC paper methodology.
+     */
+    EDC_DATA {
+        @Override
+        public TestOracle<GaussDBMGlobalState> create(GaussDBMGlobalState globalState) throws Exception {
+            return new GaussDBMEDCDataOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return false; // EDC_DATA creates its own tables
         }
     },
     /**

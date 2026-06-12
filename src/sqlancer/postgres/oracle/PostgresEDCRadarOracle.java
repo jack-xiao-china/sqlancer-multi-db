@@ -14,9 +14,9 @@ import java.util.stream.Collectors;
 import com.beust.jcommander.Strings;
 
 import sqlancer.Randomly;
-import sqlancer.common.oracle.EDCBase;
+import sqlancer.common.oracle.EDCRadarBase;
 import sqlancer.common.oracle.TestOracle;
-import sqlancer.postgres.PostgresEDC;
+import sqlancer.postgres.PostgresEDCRadar;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.PostgresSchema;
 import sqlancer.postgres.PostgresSchema.PostgresColumn;
@@ -30,7 +30,7 @@ import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 /**
- * PostgreSQL EDC (Equivalent Database Construction) Oracle Implementation.
+ * PostgreSQL EDC_RADAR (Equivalent Database Construction - RADAR) Oracle Implementation.
  *
  * Detects PostgreSQL optimizer bugs by comparing query results between:
  * - Original Database: Has constraints (NOT NULL, UNIQUE, FK, CHECK, GENERATED)
@@ -47,9 +47,9 @@ import sqlancer.postgres.gen.PostgresExpressionGenerator;
  * - Generated column evaluation bugs
  * - CHECK constraint bypass bugs
  */
-public class PostgresEDCOracle extends EDCBase<PostgresGlobalState> implements TestOracle<PostgresGlobalState> {
+public class PostgresEDCRadarOracle extends EDCRadarBase<PostgresGlobalState> implements TestOracle<PostgresGlobalState> {
 
-    public PostgresEDCOracle(PostgresGlobalState originalState) {
+    public PostgresEDCRadarOracle(PostgresGlobalState originalState) {
         super(originalState);
         PostgresCommon.addCommonExpressionErrors(errors);
         PostgresCommon.addCommonFetchErrors(errors);
@@ -232,7 +232,7 @@ public class PostgresEDCOracle extends EDCBase<PostgresGlobalState> implements T
     @Override
     public PostgresGlobalState constructEquivalentState(PostgresGlobalState state) {
         try {
-            PostgresEDC edc = new PostgresEDC(state);
+            PostgresEDCRadar edc = new PostgresEDCRadar(state);
             return edc.createRawDB();
         } catch (SQLException e) {
             throw new RuntimeException(e);
