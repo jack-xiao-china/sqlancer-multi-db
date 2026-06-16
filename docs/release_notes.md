@@ -1,5 +1,12 @@
 # SQLancer Release Notes
 
+## v2.6.1 | 2026-06-16
+- 修复 [编译警告]：移除 CODDTEST Oracle 中 unused import 和 unused field，解决 `-failOnWarning` 编译失败
+  - GaussDBCODDTestOracle: 移除 unused import `CODDTestModel`
+  - MySQLCODDTestOracle: 移除 unused import `CODDTestModel`
+  - PostgresCODDTestOracle: 移除 unused field `useSubqueryMode` 及赋值语句
+- 冒烟验证 [CODDTEST Oracle] 在 MySQL/PostgreSQL/GaussDB-M 上正常运行 ✅
+
 ## v2.6.0 | 2026-06-16
 - 新增 [PostgreSQL 全量集成测试验证（42 组合）]：覆盖所有 Oracle + 参数组合，确认 CODDTEST 修复生效
   - 20 查询类 Oracle + 3 CODDTEST 模式 + 16 FUCCI 组合 + 3 事务类 = 42 组合全部完成

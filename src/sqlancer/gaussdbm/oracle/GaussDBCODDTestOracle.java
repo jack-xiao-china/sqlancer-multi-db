@@ -12,7 +12,6 @@ import java.util.Map;
 
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
-import sqlancer.common.oracle.CODDTestBase.CODDTestModel;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMGlobalState;

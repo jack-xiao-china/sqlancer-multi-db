@@ -40,8 +40,6 @@ import sqlancer.postgres.gen.PostgresExpressionGenerator;
 public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalState>
         implements TestOracle<PostgresGlobalState> {
 
-    private boolean useSubqueryMode;
-
     public PostgresCODDTestOracle(PostgresGlobalState globalState) {
         super(globalState);
         PostgresCommon.addCommonExpressionErrors(errors);
@@ -51,8 +49,6 @@ public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalSta
 
     @Override
     public void check() throws SQLException {
-        useSubqueryMode = useSubquery();
-
         sqlancer.common.schema.AbstractTables<PostgresTable, PostgresColumn> tables = TestOracleUtils
                 .getRandomTableNonEmptyTables(state.getSchema());
         PostgresExpression foldedExpr = generateRowInvariantBooleanExpression(0);
