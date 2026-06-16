@@ -1,5 +1,16 @@
 # SQLancer Release Notes
 
+## v2.7.0 | 2026-06-16
+- 新增 [GaussDB-A CODDTEST Oracle]：完整 3 模式实现（EXPRESSION/SUBQUERY/CORRELATED_SUBQUERY）
+  - 新增 `GaussDBAOracleAlias` 和 `GaussDBAOracleExpressionBag` AST 类
+  - 注册到 `GaussDBAToStringVisitor` 支持 SQL 渲染
+  - 新增 `GaussDBACODDTestOracle` 核心实现，继承 `CODDTestBase`
+  - 注册到 `GaussDBAOracleFactory` 和 `GaussDBAOptions`
+  - 新增 `--coddtest-model` 参数支持 EXPRESSION/SUBQUERY/RANDOM 模式选择
+  - Oracle 语义适配：NUMBER(1) 模拟 BOOLEAN、空字符串=NULL、ORA 错误码
+- 修复 [GaussDB-A DQP NPE]：`GaussDBAToStringVisitor.visit(GaussDBAColumnReference)` 对 null 列做防御处理
+- 修复 [GaussDB-A EET_DELETE DateTimeException]：`generateConstant(DATE/TIMESTAMP)` 限制 plusDays 范围为 ±365
+
 ## v2.6.1 | 2026-06-16
 - 修复 [编译警告]：移除 CODDTEST Oracle 中 unused import 和 unused field，解决 `-failOnWarning` 编译失败
   - GaussDBCODDTestOracle: 移除 unused import `CODDTestModel`

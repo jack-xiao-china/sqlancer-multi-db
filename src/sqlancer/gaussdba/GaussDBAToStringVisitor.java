@@ -20,6 +20,8 @@ import sqlancer.gaussdba.ast.GaussDBAInOperation;
 import sqlancer.gaussdba.ast.GaussDBAJoin;
 import sqlancer.gaussdba.ast.GaussDBALikeOperation;
 import sqlancer.gaussdba.ast.GaussDBAMinusSelect;
+import sqlancer.gaussdba.ast.GaussDBAOracleAlias;
+import sqlancer.gaussdba.ast.GaussDBAOracleExpressionBag;
 import sqlancer.gaussdba.ast.GaussDBAPrintedExpression;
 import sqlancer.gaussdba.ast.GaussDBASelect;
 import sqlancer.gaussdba.ast.GaussDBAText;
@@ -85,6 +87,10 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
             visit((GaussDBADerivedTable) expr);
         } else if (expr instanceof GaussDBAAlias) {
             visit((GaussDBAAlias) expr);
+        } else if (expr instanceof GaussDBAOracleAlias) {
+            visit((GaussDBAOracleAlias) expr);
+        } else if (expr instanceof GaussDBAOracleExpressionBag) {
+            visit((GaussDBAOracleExpressionBag) expr);
         } else if (expr instanceof GaussDBAText) {
             visit((GaussDBAText) expr);
         } else {
@@ -141,6 +147,10 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
     }
 
     public void visit(GaussDBAColumnReference column) {
+        if (column.getColumn() == null) {
+            sb.append("*");
+            return;
+        }
         if (column.getColumn().getTable() != null) {
             sb.append(column.getColumn().getTable().getName());
             sb.append(".");
@@ -383,6 +393,18 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
 
     public void visit(GaussDBAText text) {
         sb.append(text.getText());
+    }
+
+    public void visit(GaussDBAOracleAlias oracleAlias) {
+        visit(oracleAlias.getOriginalExpression());
+        if (oracleAlias.getAliasExpression() != null) {
+            sb.append(" AS ");
+            visit(oracleAlias.getAliasExpression());
+        }
+    }
+
+    public void visit(GaussDBAOracleExpressionBag bag) {
+        visit(bag.getInnerExpr());
     }
 
     public static String asString(GaussDBAExpression expr) {

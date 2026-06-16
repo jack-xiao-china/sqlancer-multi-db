@@ -7,6 +7,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 
 import sqlancer.DBMSSpecificOptions;
+import sqlancer.common.oracle.CODDTestBase.CODDTestModel;
 import sqlancer.fucci.FucciOptions.FucciOracleType;
 
 @Parameters(separators = "=", commandDescription = "GaussDB A Compatibility Mode (Oracle Style)")
@@ -15,7 +16,7 @@ public class GaussDBAOptions implements DBMSSpecificOptions<GaussDBAOracleFactor
     @Parameter(names = { "--help", "-h" }, description = "Lists all supported options for GaussDB A", help = true, hidden = true)
     public boolean help;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, DISTINCT, DQE, DQP, EDC_DATA, EET, EET_DELETE, EET_INSERT_SELECT, EET_UPDATE, FUCCI, FUZZER, GROUP_BY, HAVING, JIR, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC_DATA, EET, EET_DELETE, EET_INSERT_SELECT, EET_UPDATE, FUCCI, FUZZER, GROUP_BY, HAVING, JIR, NOREC, PQS, QUERY_PARTITIONING, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
     public List<GaussDBAOracleFactory> oracles = Arrays.asList(GaussDBAOracleFactory.QUERY_PARTITIONING);
 
     @Parameter(names = "--enable-clob-blob", description = "Enable CLOB/BLOB types")
@@ -23,6 +24,9 @@ public class GaussDBAOptions implements DBMSSpecificOptions<GaussDBAOracleFactor
 
     @Parameter(names = "--target-database", description = "A-compatible database to connect (REQUIRED). Must be created with 'CREATE DATABASE xxx WITH dbcompatibility A'", required = true)
     public String targetDatabase = null;
+
+    @Parameter(names = { "--coddtest-model" }, description = "Apply CODDTest on EXPRESSION, SUBQUERY, or RANDOM")
+    public CODDTestModel coddTestModel = CODDTestModel.RANDOM;
 
     // Fucci Oracle parameters
     @Parameter(names = "--fucci-oracle-type", description = "Fucci Oracle type: DT/MT/CS/ALL (default: ALL)")

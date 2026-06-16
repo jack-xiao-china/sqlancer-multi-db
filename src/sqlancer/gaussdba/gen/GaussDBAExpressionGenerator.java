@@ -185,9 +185,11 @@ public class GaussDBAExpressionGenerator
         case VARCHAR2:
             return GaussDBAConstant.createVarchar2Constant(state.getRandomly().getString());
         case DATE:
-            return GaussDBAConstant.createDateConstant(java.time.LocalDate.now().plusDays(state.getRandomly().getInteger()));
+            int dayOffset = (int) Randomly.getNotCachedInteger(-365, 365);
+            return GaussDBAConstant.createDateConstant(java.time.LocalDate.now().plusDays(dayOffset));
         case TIMESTAMP:
-            return GaussDBAConstant.createTimestampConstant(java.time.LocalDateTime.now().plusDays(state.getRandomly().getInteger()));
+            int dayOffset2 = (int) Randomly.getNotCachedInteger(-365, 365);
+            return GaussDBAConstant.createTimestampConstant(java.time.LocalDateTime.now().plusDays(dayOffset2));
         default:
             return GaussDBAConstant.createRandomConstant(state.getRandomly());
         }

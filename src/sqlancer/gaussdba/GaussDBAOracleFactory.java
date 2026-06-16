@@ -11,6 +11,7 @@ import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.gaussdba.gen.GaussDBAExpressionGenerator;
 import sqlancer.gaussdba.oracle.GaussDBACERTOracle;
+import sqlancer.gaussdba.oracle.GaussDBACODDTestOracle;
 import sqlancer.gaussdba.oracle.GaussDBADQEOracle;
 import sqlancer.gaussdba.oracle.GaussDBADQPOracle;
 import sqlancer.gaussdba.oracle.GaussDBAFuzzer;
@@ -262,6 +263,22 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return false; // JIR works with empty tables (LEFT JOIN produces valid SQL)
+        }
+    },
+    /**
+     * CODDTEST Oracle for GaussDB-A.
+     * Tests query optimization correctness by comparing folded/unfolded query results.
+     * Supports EXPRESSION, SUBQUERY, and CORRELATED_SUBQUERY modes.
+     */
+    CODDTEST {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new GaussDBACODDTestOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
         }
     };
 }
