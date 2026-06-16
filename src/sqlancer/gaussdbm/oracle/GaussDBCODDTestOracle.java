@@ -12,6 +12,7 @@ import java.util.Map;
 
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
+import sqlancer.common.oracle.CODDTestBase.CODDTestModel;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
@@ -368,7 +369,16 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
     }
 
     public boolean useSubquery() {
-        return Randomly.getBoolean();
+        CODDTestModel model = state.getDbmsSpecificOptions().coddTestModel;
+        if (model.isRandom()) {
+            return Randomly.getBoolean();
+        } else if (model.isExpression()) {
+            return false;
+        } else if (model.isSubquery()) {
+            return true;
+        } else {
+            return Randomly.getBoolean();
+        }
     }
 
     public boolean useCorrelatedSubquery() {

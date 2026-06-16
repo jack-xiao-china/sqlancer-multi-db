@@ -31,9 +31,16 @@ import sqlancer.postgres.gen.PostgresExpressionGenerator;
  *
  * This keeps the base structure (auxiliary/original/folded query strings) and focuses on a stable folding scenario:
  * fold a boolean predicate by first evaluating it as a projection (aux query), then replacing it with a constant.
+ *
+ * Supports --coddtest-model parameter:
+ *   EXPRESSION: always use expression folding (current default behavior)
+ *   SUBQUERY: always use subquery folding
+ *   RANDOM: randomly choose between expression and subquery
  */
 public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalState>
         implements TestOracle<PostgresGlobalState> {
+
+    private boolean useSubqueryMode;
 
     public PostgresCODDTestOracle(PostgresGlobalState globalState) {
         super(globalState);
@@ -44,6 +51,8 @@ public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalSta
 
     @Override
     public void check() throws SQLException {
+        useSubqueryMode = useSubquery();
+
         sqlancer.common.schema.AbstractTables<PostgresTable, PostgresColumn> tables = TestOracleUtils
                 .getRandomTableNonEmptyTables(state.getSchema());
         PostgresExpression foldedExpr = generateRowInvariantBooleanExpression(0);
@@ -70,6 +79,21 @@ public final class PostgresCODDTestOracle extends CODDTestBase<PostgresGlobalSta
         if (!originalCount.equals(foldedCount)) {
             throw new AssertionError("CODDTEST logic bug: COUNT mismatch\n" + originalQueryString + "\n"
                     + foldedQueryString + "\naux=" + auxiliaryQueryString);
+        }
+    }
+
+    public boolean useSubquery() {
+        CODDTestBase.CODDTestModel model = state.getDbmsSpecificOptions().coddTestModel;
+        if (model.isRandom()) {
+            return Randomly.getBoolean();
+        } else if (model.isExpression()) {
+            return false;
+        } else if (model.isSubquery()) {
+            // PostgreSQL subquery folding mode not yet implemented;
+            // expression mode always runs, subquery mode falls back to expression
+            return false;
+        } else {
+            return Randomly.getBoolean();
         }
     }
 

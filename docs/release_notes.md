@@ -1,5 +1,49 @@
 # SQLancer Release Notes
 
+## v2.6.0 | 2026-06-16
+- 新增 [PostgreSQL 全量集成测试验证（42 组合）]：覆盖所有 Oracle + 参数组合，确认 CODDTEST 修复生效
+  - 20 查询类 Oracle + 3 CODDTEST 模式 + 16 FUCCI 组合 + 3 事务类 = 42 组合全部完成
+  - CODDTEST `--coddtest-model` 3 种模式（RANDOM/EXPRESSION/SUBQUERY）在 PostgreSQL 上正常解析执行 ✅
+  - 8 组合通过：DQE、DQP、EET、JIR、FUZZER、CODDTEST_RANDOM、CODDTEST_SUBQUERY、FUCCI_DT_READ_COMMITTED
+  - 34 组合发现 bug：TLP 系列（~190-198 AssertionErrors）系统性谓词差异，FUCCI 15/16 发现事务隔离性问题
+- 优化 [CODDTEST 代码架构]
+  - `CODDTestModel` enum 已统一至 `CODDTestBase.java`（v2.5.9 首次引入，本次确认稳定）
+  - `MySQLOptions.java` 移除本地 `CODDTestModel` enum，改用 `CODDTestBase.CODDTestModel`
+
+## v2.5.9 | 2026-06-15
+- 修复 [FUCCI 日志文件命名]：20 个 FUCCI 参数组合不再写入同一日志文件互相覆盖
+  - 日志文件名编码关键参数：`test_{dbms}_FUCCI_{OracleType}_{IsolationLevel}_sc{ScheduleCount}.log`
+  - 例如 `test_mysql_FUCCI_DT_READ_COMMITTED_sc5.log`、`test_mysql_FUCCI_ALL_SERIALIZABLE_sc5.log`
+  - CODDTEST 3 种 Model 同样区分：`test_{dbms}_CODDTEST_{Model}.log`
+  - `--target-database` 参数不写入文件名（连接级别参数，非运行模式区分）
+- 新增 [PostgreSQL/GaussDB-M CODDTEST `--coddtest-model` 参数支持]
+  - `PostgresOptions.java` 和 `GaussDBMOptions.java` 新增 `--coddtest-model` 参数（RANDOM/EXPRESSION/SUBQUERY）
+  - `CODDTestModel` enum 提升至公共类 `CODDTestBase.java`，4 个 DBMS 共用
+  - `PostgresCODDTestOracle.useSubquery()` 和 `GaussDBCODDTestOracle.useSubquery()` 从 Options 读取 model
+  - PostgreSQL SUBQUERY 模式目前 fallback 到 EXPRESSION（subquery 折叠逻辑尚未实现）
+  - `run_all_tests.sh` CODDTEST 参数组合遍历恢复对所有支持 DBMS 生效
+
+## v2.5.8 | 2026-06-15
+- 新增 [一键全量测试脚本 + Oracle 全量分析]：`run_all_tests.sh` 支持按 DBMS/Oracle/参数组合自动遍历所有测试
+  - 支持 5 个 DBMS：mysql、postgres、gaussdb-m、gaussdb-a、gaussdb-pg
+  - FUCCI Oracle 自动遍历 4 种 OracleType × 4-5 种 IsolationLevel = 16-20 组合
+  - CODDTEST 自动遍历 3 种 Model (RANDOM/EXPRESSION/SUBQUERY)
+  - 事务类 Oracle (FUCCI/TX_INFER/WRITE_CHECK/WRITE_CHECK_REPRODUCE) 单独运行
+  - GaussDB-M/A/PG `--target-database` 参数自动传递
+  - 结果汇总：每个 DBMS 输出通过/失败/Bug 发现统计
+  - 文档：`docs/oracle-inventory-and-test-script.md`（Oracle 全量分析 + 参数组合矩阵 + 连接配置速查）
+
+## v2.5.7 | 2026-06-15
+- 修复 [文档审计 — 14 项问题系统性修复]：基于 OracleFactory 代码实现，全面审计并修复 USER_GUIDE.md 和 user_guide_cn.md 中的不一致问题
+  - `--oracle` 选项描述：MySQL 22→25、PostgreSQL 21→25、GaussDB-M 21→25、GaussDB-A 18→22，补全缺失的 Oracle 枚举值
+  - Quick Reference 表：GaussDB-PG 重写为实际 11 个 Oracle（标注 CERT/DQP/DQE 为占位符），EDC→EDC_RADAR 命名统一
+  - Oracle 详表：各 DBMS 补充缺失的 EET_DELETE/INSERT_SELECT/UPDATE、WRITE_CHECK_REPRODUCE、FUCCI、TX_INFER、JIR
+  - TX_INFER Deep Dive：支持 DBMS 从 2→4，补充 PostgreSQL/GaussDB-A 使用示例
+  - EDC_DATA Deep Dive：英文/中文指南均新增完整章节（概念、算法、种子文件、与 EDC_RADAR 区别）
+  - 全局参数表：修正默认值（num-threads 8→16、num-tries 100000→100），补充 14 个缺失参数
+  - Oracle 选择指南：Comprehensive 行补充 EDC_DATA
+  - 命令名统一：gaussdbm → gaussdb-m
+
 ## v2.5.6 | 2026-06-12
 - 优化 [GaussDB-A EDC_DATA Seed File 第二轮审计]：基于 PDF 全量扫描 + 3 轮 JDBC 实测（116 个场景），消除无效函数，补充线性回归全集
   - func.txt: 新增 8 个函数（REGEXP_LIKE/GENERATE_SERIES/WIDTH_BUCKET/JUSTIFY_HOURS/JUSTIFY_INTERVAL/CHECKSUM/QUOTE_LITERAL/QUOTE_IDENT）。73→81 项

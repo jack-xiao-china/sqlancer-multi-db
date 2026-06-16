@@ -60,7 +60,7 @@ java -cp "target/sqlancer-2.5.6.jar;target/lib/*" sqlancer.Main mysql --oracle N
 | **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, EDC_DATA, WRITE_CHECK, WRITE_CHECK_REPRODUCE, TX_INFER, FUCCI, JIR, FUZZER |
-| **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, FUZZER |
+| **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT*, DQP*, DQE*, FUZZER |
 | **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
 | TiDB | WHERE, HAVING, QUERY_PARTITIONING, CERT, DQP |
@@ -117,9 +117,12 @@ java -jar target/sqlancer-2.5.6.jar \
 | EDC_RADAR | Equivalent Database Construction (constraint-based testing) | Moderate |
 | SONAR | Optimized vs unoptimized query comparison | Moderate |
 | WRITE_CHECK | Transaction isolation level correctness | ~10 schedules/s |
-| FUZZER | Random query generation |
+| WRITE_CHECK_REPRODUCE | Transaction isolation Bug reproduction | Moderate |
+| FUCCI | MVCC-based testing (DT/MT/CS) | Moderate |
+| TX_INFER | MVCC version inference | Moderate |
+| JIR | Join Implication Reasoning (5 rules) | Moderate |
+| FUZZER | Random query generation | ~3000 queries/s |
 | EDC_DATA | Data operation equivalence (functions, aggregates, predicates) | ~3000 queries/s |
-| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) | Moderate |
 
 ## MySQL Data Types
 
@@ -190,10 +193,17 @@ java -jar target/sqlancer-2.5.6.jar \
 | DQP | Differential Query Plans | Moderate |
 | DQE | SELECT/UPDATE/DELETE equivalence | Moderate |
 | EET | Equivalent Expression Transformation | Moderate |
+| EET_UPDATE | Equivalent Expression UPDATE variant | Moderate |
+| EET_DELETE | Equivalent Expression DELETE variant | Moderate |
+| EET_INSERT_SELECT | Equivalent Expression INSERT...SELECT variant | Moderate |
 | CODDTEST | Constant-driven optimization | Moderate |
 | EDC_RADAR | Equivalent Database Construction (constraint-based testing) | Moderate |
 | SONAR | Optimized vs unoptimized query comparison | Moderate |
 | WRITE_CHECK | Transaction isolation level correctness | ~10 schedules/s |
+| WRITE_CHECK_REPRODUCE | Transaction isolation Bug reproduction | Moderate |
+| FUCCI | MVCC-based testing (DT/MT/CS) | Moderate |
+| TX_INFER | MVCC version inference | Moderate |
+| JIR | Join Implication Reasoning (6 rules) | Moderate |
 | FUZZER | Random queries | ~3000 queries/s |
 | EDC_DATA | Data operation equivalence (functions, aggregates, predicates) | Moderate |
 
@@ -232,7 +242,7 @@ java -jar target/sqlancer-2.5.6.jar \
 |---------------|-----------------|
 | Numeric | INT, BIGINT, SMALLINT, SERIAL, BIGSERIAL, FLOAT, DOUBLE, DECIMAL |
 | String | VARCHAR, CHAR, TEXT |
-| Temporal | DATE, TIME, TIMETZ, TIMESTAMP, TIMESTAMPTZ |
+| Temporal | DATE, TIME, TIMETZ, TIMESTAMP, TIMESTAMPTZ, INTERVAL |
 | JSON | JSON, JSONB |
 | Binary | BYTEA |
 | UUID | UUID |
@@ -339,7 +349,11 @@ This follows Oracle's schema-based isolation pattern.
 | DQP | Differential Query Plans |
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
+| EET_UPDATE | Equivalent Expression UPDATE variant |
+| EET_DELETE | Equivalent Expression DELETE variant |
+| EET_INSERT_SELECT | Equivalent Expression INSERT...SELECT variant |
 | WRITE_CHECK | Transaction isolation level correctness |
+| WRITE_CHECK_REPRODUCE | Transaction isolation Bug reproduction |
 | FUCCI | MVCC-based testing (DT/MT/CS) |
 | TX_INFER | MVCC version inference |
 | JIR | Join Implication Reasoning (6 rules) |
@@ -419,7 +433,7 @@ Same as GaussDB-A: **Schema isolation** within specified database.
 
 ## GaussDB-PG Oracles
 
-Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
+GaussDB-PG has a smaller oracle set (11 oracles). CERT, DQP, and DQE are currently placeholders that fall back to TLP_WHERE.
 
 | Oracle | Description |
 |--------|-------------|
@@ -429,14 +443,12 @@ Same oracle set as GaussDB-A, with PostgreSQL-compatible syntax.
 | DISTINCT | TLP DISTINCT partitioning |
 | GROUP_BY | TLP GROUP BY partitioning |
 | NOREC | NoREC optimization detection |
-| QUERY_PARTITIONING | Combined oracle (default) |
+| QUERY_PARTITIONING | Combined TLP_WHERE+HAVING+AGGREGATE (default) |
 | PQS | Pivoted Query Synthesis |
-| CERT | Cardinality estimation testing |
-| DQP | Differential Query Plans |
-| DQE | SELECT/UPDATE/DELETE equivalence |
-| EET | Equivalent Expression Transformation |
+| CERT | Cardinality estimation (⚠ placeholder → TLP_WHERE) |
+| DQP | Differential Query Plans (⚠ placeholder → TLP_WHERE) |
+| DQE | SELECT/UPDATE/DELETE equivalence (⚠ placeholder → TLP_WHERE) |
 | FUZZER | Random query generation |
-| EDC_DATA | Data operation equivalence (functions, aggregates, predicates) |
 
 ## GaussDB-PG Data Types
 
@@ -549,10 +561,14 @@ This approach is more reliable than auto-creating databases, which may fail due 
 | DQP | Differential Query Plans |
 | DQE | SELECT/UPDATE/DELETE equivalence |
 | EET | Equivalent Expression Transformation |
+| EET_UPDATE | Equivalent Expression UPDATE variant |
+| EET_DELETE | Equivalent Expression DELETE variant |
+| EET_INSERT_SELECT | Equivalent Expression INSERT...SELECT variant |
 | CODDTEST | Constant-driven optimization testing |
 | EDC_RADAR | Equivalent Database Construction (constraint-based testing) |
 | SONAR | Optimized vs unoptimized query comparison |
 | WRITE_CHECK | Transaction isolation level correctness |
+| WRITE_CHECK_REPRODUCE | Transaction isolation Bug reproduction |
 | FUCCI | MVCC-based testing (DT/MT/CS) |
 | TX_INFER | MVCC version inference |
 | JIR | Join Implication Reasoning (6 rules) |
@@ -595,14 +611,28 @@ java -jar target/sqlancer-2.5.6.jar \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `--num-threads N` | Number of concurrent test threads | 1 |
-| `--num-tries N` | Number of test iterations | 1 |
-| `--timeout-seconds N` | Maximum runtime per iteration | 120 |
-| `--seed N` | Random seed for reproduction | Time-based |
-| `--log-dir <dir>` | Log directory base | logs/<dbms>/ |
+| `--num-threads N` | Number of concurrent test threads | 16 |
+| `--num-tries N` | Stop after finding N errors | 100 |
+| `--num-queries N` | Queries per database before creating new one | 100000 |
+| `--timeout-seconds N` | Maximum runtime per thread (-1 = no timeout) | -1 |
+| `--random-seed N` | Random seed for reproduction (-1 = time-based) | -1 |
+| `--max-expression-depth N` | Maximum depth of generated expressions | 3 |
+| `--max-num-inserts N` | Maximum INSERT statements per database | 30 |
+| `--max-generated-databases N` | Maximum databases per thread (-1 = unlimited) | -1 |
 | `--log-each-select` | Log each SQL statement | true |
+| `--log-execution-time` | Log execution time per statement | true |
+| `--log-dir <dir>` | Log directory base | logs/\<dbms\>/\<oracle\>_timestamp/ |
+| `--print-failed` | Print failed statements | true |
 | `--use-reducer` | Enable delta-debugging reduction | false |
+| `--reduce-ast` | Enable AST-based reduction (experimental) | false |
 | `--qpg-enable` | Enable Query Plan Guidance | false |
+| `--username` | DBMS login username | "sqlancer" |
+| `--password` | DBMS login password | "sqlancer" |
+| `--host` | DBMS host address | null |
+| `--port` | DBMS port | -1 |
+| `--connection-url` | Optional JDBC connection URL | null |
+| `--jdbc-driver-class` | Optional JDBC driver class name | null |
+| `--validate-result-size-only` | Only validate result set size, skip content | false |
 
 ---
 
@@ -763,7 +793,7 @@ java -Xmx4g -jar sqlancer.jar ...
 | Semantic correctness | CODDTEST |
 | Optimizer bugs | EDC_RADAR, SONAR |
 | Crash detection | FUZZER |
-| Comprehensive | QUERY_PARTITIONING + EET + DQE + DQP + EDC_RADAR |
+| Comprehensive | QUERY_PARTITIONING + EET + DQE + DQP + EDC_RADAR + EDC_DATA |
 
 ---
 
@@ -810,6 +840,40 @@ java -jar sqlancer.jar mysql --oracle EDC_RADAR --num-tries 100
 java -jar sqlancer.jar postgres --oracle EDC_RADAR --num-tries 100
 java -jar sqlancer.jar gaussdb-m --oracle EDC_RADAR --num-tries 100
 ```
+
+### EDC_DATA (Data Operation Equivalence)
+
+**Concept**: EDC_DATA tests data operation implementation bugs by comparing function/aggregate/predicate expressions with precomputed values. Based on the SIGMOD 2026 EDC paper methodology.
+
+**Algorithm**:
+- Create a test table with multiple typed columns (driven by `type.txt` seed file)
+- Insert seed data rows
+- Generate test expressions: `FUNC(c0, c1, ...)` using all test columns (driven by `func.txt`, `agg.txt`, `pred.txt`)
+- Compute the expected result by pre-evaluating the expression on seed data
+- Execute the expression as a SELECT query
+- Compare actual result with expected — differences indicate data operation bugs
+
+**Seed Files** (per-DBMS, in `src/main/resources/edc-data-seeds/{dbms}/`):
+| File | Content |
+|------|---------|
+| `func.txt` | Scalar functions (ABS, CONCAT, SUBSTR, ...) |
+| `agg.txt` | Aggregate functions (AVG, SUM, COUNT, ...) |
+| `pred.txt` | Predicates (=, <, >, LIKE, BETWEEN, ...) |
+| `type.txt` | Column data types (INT, VARCHAR, DATE, ...) |
+
+**Key Difference from EDC_RADAR**: EDC_RADAR tests constraint-related optimizer bugs; EDC_DATA tests data operation (function/aggregate/predicate) implementation bugs.
+
+**Supported DBMS**: MySQL, PostgreSQL, GaussDB-M, GaussDB-A
+
+**Usage**:
+```bash
+java -jar sqlancer.jar mysql --oracle EDC_DATA --num-tries 200
+java -jar sqlancer.jar postgres --oracle EDC_DATA --num-tries 200
+java -jar sqlancer.jar gaussdb-m --target-database testm --oracle EDC_DATA --num-tries 200
+java -jar sqlancer.jar gaussdb-a --target-database testa --oracle EDC_DATA --num-tries 200
+```
+
+**Best For**: Function implementation bugs, aggregate computation errors, predicate evaluation bugs, type conversion errors.
 
 ### SONAR Oracle
 
@@ -1019,7 +1083,7 @@ java -jar sqlancer.jar gaussdba --oracle EET_INSERT_SELECT --num-queries 50 --ta
 ```bash
 java -jar sqlancer.jar mysql --qpg-enable --qpg-log-query-plan --num-queries 1000
 java -jar sqlancer.jar postgres --qpg-enable --qpg-selection-probability 0.8 --num-queries 500
-java -jar sqlancer.jar gaussdbm --qpg-enable --qpg-max-interval 500 --num-queries 1000
+java -jar sqlancer.jar gaussdb-m --qpg-enable --qpg-max-interval 500 --num-queries 1000
 java -jar sqlancer.jar gaussdba --qpg-enable --target-database gaussdb_a_test --num-queries 500
 ```
 
@@ -1036,12 +1100,14 @@ java -jar sqlancer.jar gaussdba --qpg-enable --target-database gaussdb_a_test --
 - Compare actual DBMS results with inferred expectations
 - Differences indicate isolation level or MVCC implementation bugs
 
-**Supported DBMS**: MySQL, GaussDB-M
+**Supported DBMS**: MySQL, PostgreSQL, GaussDB-M, GaussDB-A
 
 **Usage**:
 ```bash
 java -jar sqlancer.jar mysql --oracle TX_INFER --num-queries 100
-java -jar sqlancer.jar gaussdbm --oracle TX_INFER --num-queries 100
+java -jar sqlancer.jar postgres --oracle TX_INFER --num-queries 100
+java -jar sqlancer.jar gaussdb-m --target-database testm --oracle TX_INFER --num-queries 100
+java -jar sqlancer.jar gaussdb-a --target-database testa --oracle TX_INFER --num-queries 100
 ```
 
 **Best For**: MVCC bugs, isolation level violations, concurrent transaction anomalies.
@@ -1141,7 +1207,7 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
 | **Concurrency bug detection** | WRITE_CHECK, FUCCI | CERT |
 | **MVCC version tracking** | TX_INFER | WRITE_CHECK |
 | **Optimizer coverage** | QPG | CERT, EET |
-| **Comprehensive testing** | QUERY_PARTITIONING + JIR + EDC_RADAR + EET + DQE + WRITE_CHECK | All others |
+| **Comprehensive testing** | QUERY_PARTITIONING + JIR + EDC_RADAR + EDC_DATA + EET + DQE + WRITE_CHECK | All others |
 
 ---
 

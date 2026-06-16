@@ -9,6 +9,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 
 import sqlancer.DBMSSpecificOptions;
+import sqlancer.common.oracle.CODDTestBase.CODDTestModel;
 import sqlancer.fucci.FucciOptions.FucciOracleType;
 
 @Parameters(separators = "=", commandDescription = "MySQL (default port: " + MySQLOptions.DEFAULT_PORT
@@ -18,20 +19,12 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
     @Parameter(names = { "--help", "-h" }, description = "Lists all supported options for the MySQL command", help = true, hidden = true)
     public boolean help;
 
-    public enum CODDTestModel {
-        RANDOM, EXPRESSION, SUBQUERY;
-
-        public boolean isRandom() { return this == RANDOM; }
-        public boolean isExpression() { return this == EXPRESSION; }
-        public boolean isSubquery() { return this == SUBQUERY; }
-    }
-
     @Parameter(names = { "--coddtest-model" }, description = "Apply CODDTest on EXPRESSION, SUBQUERY, or RANDOM", hidden = true)
     public CODDTestModel coddTestModel = CODDTestModel.RANDOM;
     public static final String DEFAULT_HOST = "localhost";
     public static final int DEFAULT_PORT = 3306;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, EET_UPDATE, EET_DELETE, FUCCI, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC_DATA, EDC_RADAR, EET, EET_DELETE, EET_INSERT_SELECT, EET_UPDATE, FUCCI, FUZZER, GROUP_BY, HAVING, JIR, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
     public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.QUERY_PARTITIONING);
 
     @Parameter(names = "--engines", description = "Comma-separated storage engine names used in CREATE TABLE ENGINE=... (e.g. InnoDB,MyISAM,MyCustomEngine)")

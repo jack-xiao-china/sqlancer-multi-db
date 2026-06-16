@@ -13,6 +13,7 @@ import java.util.Map;
 
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
+import sqlancer.common.oracle.CODDTestBase.CODDTestModel;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLGlobalState;
@@ -440,7 +441,16 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
     }
 
     public boolean useSubquery() {
-        return Randomly.getBoolean();
+        CODDTestModel model = state.getDbmsSpecificOptions().coddTestModel;
+        if (model.isRandom()) {
+            return Randomly.getBoolean();
+        } else if (model.isExpression()) {
+            return false;
+        } else if (model.isSubquery()) {
+            return true;
+        } else {
+            return Randomly.getBoolean();
+        }
     }
 
     public boolean useCorrelatedSubquery() {

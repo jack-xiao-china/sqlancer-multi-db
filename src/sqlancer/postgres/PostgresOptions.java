@@ -8,6 +8,7 @@ import com.beust.jcommander.Parameter;
 import com.beust.jcommander.Parameters;
 
 import sqlancer.DBMSSpecificOptions;
+import sqlancer.common.oracle.CODDTestBase.CODDTestModel;
 import sqlancer.fucci.FucciOptions.FucciOracleType;
 
 @Parameters(separators = "=", commandDescription = "PostgreSQL (default port: " + PostgresOptions.DEFAULT_PORT
@@ -20,6 +21,9 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = { "--help", "-h" }, description = "Lists all supported options for the PostgreSQL command", help = true, hidden = true)
     public boolean help;
 
+    @Parameter(names = { "--coddtest-model" }, description = "Apply CODDTest on EXPRESSION, SUBQUERY, or RANDOM", hidden = true)
+    public CODDTestModel coddTestModel = CODDTestModel.RANDOM;
+
     public enum CoveragePolicy {
         BALANCED, CONSERVATIVE, AGGRESSIVE
     }
@@ -27,7 +31,7 @@ public class PostgresOptions implements DBMSSpecificOptions<PostgresOracleFactor
     @Parameter(names = "--bulk-insert", description = "Specifies whether INSERT statements should be issued in bulk", arity = 1)
     public boolean allowBulkInsert;
 
-    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC, EET, EET_UPDATE, EET_DELETE, FUCCI, FUZZER, GROUP_BY, HAVING, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
+    @Parameter(names = "--oracle", description = "Specifies which test oracle should be used, Options: [AGGREGATE, CERT, CODDTEST, DISTINCT, DQE, DQP, EDC_DATA, EDC_RADAR, EET, EET_DELETE, EET_INSERT_SELECT, EET_UPDATE, FUCCI, FUZZER, GROUP_BY, HAVING, JIR, NOREC, PQS, QUERY_PARTITIONING, SONAR, TLP_WHERE, TX_INFER, WRITE_CHECK, WRITE_CHECK_REPRODUCE]")
     public List<PostgresOracleFactory> oracle = Arrays.asList(PostgresOracleFactory.QUERY_PARTITIONING);
 
     // Fucci Oracle parameters

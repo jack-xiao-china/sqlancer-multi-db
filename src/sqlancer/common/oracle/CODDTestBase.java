@@ -7,6 +7,23 @@ import sqlancer.SQLGlobalState;
 import sqlancer.common.query.ExpectedErrors;
 
 public abstract class CODDTestBase<S extends SQLGlobalState<?, ?>> implements TestOracle<S> {
+
+    public enum CODDTestModel {
+        RANDOM, EXPRESSION, SUBQUERY;
+
+        public boolean isRandom() {
+            return this == RANDOM;
+        }
+
+        public boolean isExpression() {
+            return this == EXPRESSION;
+        }
+
+        public boolean isSubquery() {
+            return this == SUBQUERY;
+        }
+    }
+
     protected final S state;
     protected final ExpectedErrors errors = new ExpectedErrors();
     protected final StateLogger logger;
