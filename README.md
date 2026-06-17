@@ -1,8 +1,8 @@
 # SQLancer — Database Logic Bug Detection
 
-> Extended version of [SQLancer](https://github.com/sqlancer/sqlancer) with 25+ test oracles for MySQL, PostgreSQL, GaussDB-A, GaussDB-M, and more.
+> Extended version of [SQLancer](https://github.com/sqlancer/sqlancer) with 25+ test oracles for MySQL, PostgreSQL, GaussDB-A, GaussDB-M.
 
-**Version**: v2.4.5 (2026-06-09) · [Release Notes](docs/release_notes.md) · [Full User Guide](docs/USER_GUIDE.md)
+**Version**: v2.7.0 (2026-06-16) · [Release Notes](docs/release_notes.md) · [Full User Guide](docs/USER_GUIDE.md) · [中文指南](docs/user_guide_cn.md)
 
 ---
 
@@ -14,7 +14,7 @@
 git clone https://github.com/jack-xiao-china/sqlancer-multi-db.git
 cd sqlancer-multi-db
 mvn clean package -DskipTests
-# Output: target/sqlancer-2.4.5.jar (~4MB, deps in target/lib/)
+# Output: target/sqlancer-2.7.0.jar (~4MB, deps in target/lib/)
 ```
 
 ### Run
@@ -23,24 +23,29 @@ CLI format: **global options before DBMS command, DBMS options after it**.
 
 ```bash
 # MySQL
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.7.0.jar \
     --host localhost --port 3306 --username root --password your_password \
     mysql --oracle QUERY_PARTITIONING
 
 # PostgreSQL
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.7.0.jar \
     --host localhost --port 5432 --username postgres --password your_password \
     postgres --oracle TLP_WHERE
 
 # GaussDB-A (requires --target-database)
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.7.0.jar \
     --host your_host --port 8000 --username your_user --password your_password \
     gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 
 # GaussDB-M (requires --target-database)
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.7.0.jar \
     --host your_host --port 19995 --username your_user --password your_password \
     gaussdb-m --target-database gaussdb_m_test --oracle AGGREGATE
+
+# CODDTEST with mode selection
+java -jar target/sqlancer-2.7.0.jar \
+    --host localhost --port 3306 --username root --password your_password \
+    mysql --oracle CODDTEST --coddtest-model EXPRESSION
 ```
 
 > ⚠️ GaussDB-A and GaussDB-M **require `--target-database`** pointing to a pre-created compatibility database. See [GaussDB Setup](#gaussdb-setup) below.
@@ -51,16 +56,10 @@ java -jar target/sqlancer-2.4.5.jar \
 
 | DBMS | Oracles | Key Features | Status |
 |------|---------|--------------|--------|
-| **MySQL** | 24 | JSON, BLOB, Spatial, Full-text, CTE, Window | ✅ Verified |
-| **PostgreSQL** | 24 | Temporal, JSONB, Array, UUID, MERGE, COPY | ✅ Verified |
-| **GaussDB-A** | 21 | CLOB, BLOB, Oracle-compatible SQL | ✅ Verified |
-| **GaussDB-M** | 24 | MySQL-compatible SQL, same Oracle set as MySQL | ✅ Verified |
-| **GaussDB-PG** | 21 | PostgreSQL-compatible SQL | ✅ Verified |
-| SQLite3 | 10 | Baseline coverage | ✅ |
-| TiDB | 5 | Limited set | ✅ |
-| CockroachDB | 8 | Baseline coverage | ✅ |
-| DuckDB | 7 | Baseline coverage | ✅ |
-| MariaDB | 2 | NOREC, DQP | ✅ |
+| **MySQL** | 25 | JSON, BLOB, Spatial, Full-text, CTE, Window | ✅ Verified |
+| **PostgreSQL** | 25 | Temporal, JSONB, Array, UUID, MERGE, COPY | ✅ Verified |
+| **GaussDB-A** | 23 | Oracle-compatible SQL, CLOB/BLOB, CODDTEST | ✅ Verified |
+| **GaussDB-M** | 25 | MySQL-compatible SQL, same Oracle set as MySQL | ✅ Verified |
 
 ---
 
@@ -71,48 +70,60 @@ java -jar target/sqlancer-2.4.5.jar \
 | Category | Oracles | Description |
 |----------|---------|-------------|
 | **Standard** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, CERT, FUZZER | From original SQLancer |
-| **TLP Extensions** | WHERE (PostgreSQL alias for TLP_WHERE) | Alias |
-| **Expression Transform** | EET, CODDTEST | Semantic equivalence & constant folding |
+| **Expression Transform** | EET, CODDTEST | Expression equivalence tree & constant folding |
 | **Mutation Equivalence** | DQE, DQP | DELETE/UPDATE equivalence & determinism |
 | **Database Construction** | EDC_RADAR | Equivalent database construction (constraint optimization) |
 | **Data Operation** | EDC_DATA | Equivalent data construction (data operation testing) |
 | **Performance** | SONAR (MySQL/PG/GaussDB-M) | Optimized vs unoptimized comparison |
 | **Transaction/MVCC** | WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER | Isolation & MVCC testing |
 | **JOIN Optimizer** | **JIR** (SIGMOD 2026) | Join Implication Reasoning — 6 rules |
-| **Composite** | QUERY_PARTITIONING | Combined (TLP_WHERE + HAVING + AGGREGATE + ...) |
+| **Composite** | QUERY_PARTITIONING | Combined (TLP_WHERE + HAVING + AGGREGATE) |
+
+### CODDTEST Oracle
+
+CODDTEST (Constant Optimization Detection via Differential Testing) detects **query optimization bugs** by comparing folded vs unfolded query results. Supports 3 modes via `--coddtest-model`:
+
+| Mode | Description |
+|------|-------------|
+| `EXPRESSION` | Always use expression folding (predicate → constant) |
+| `SUBQUERY` | Always use subquery folding |
+| `RANDOM` | Randomly choose between expression and subquery |
+
+Available on: **MySQL, PostgreSQL, GaussDB-M, GaussDB-A**
 
 ### Cross-DBMS Oracle Matrix
 
-| Oracle | PostgreSQL | MySQL | GaussDB-M | GaussDB-A | GaussDB-PG |
-|--------|:----------:|:-----:|:---------:|:---------:|:----------:|
-| NOREC | ✅ | ✅ | ✅ | ✅ | ✅ |
-| PQS | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TLP_WHERE / WHERE | ✅ | ✅ | ✅ | ✅ | ✅ |
-| HAVING | ✅ | ✅ | ✅ | ✅ | ✅ |
-| AGGREGATE | ✅ | ✅ | ✅ | ✅ | ✅ |
-| DISTINCT | ✅ | ✅ | ✅ | ✅ | ✅ |
-| GROUP_BY | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CERT | ✅ | ✅ | ✅ | ✅ | ✅ |
-| FUZZER | ✅ | ✅ | ✅ | ✅ | ✅ |
-| DQE | ✅ | ✅ | ✅ | ✅ | ✅ |
-| DQP | ✅ | ✅ | ✅ | ✅ | ✅ |
-| EET | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CODDTEST | ✅ | ✅ | ✅ | — | — |
-| EDC_RADAR | ✅ | ✅ | ✅ | — | — |
-| EDC_DATA | ✅ | ✅ | ✅ | ✅ | — |
-| SONAR | ✅ | ✅ | ✅ | — | — |
-| WRITE_CHECK | ✅ | ✅ | ✅ | ✅ | ✅ |
-| WRITE_CHECK_REPRODUCE | ✅ | ✅ | ✅ | ✅ | ✅ |
-| FUCCI | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TX_INFER | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **JIR** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| QUERY_PARTITIONING | ✅ | ✅ | ✅ | ✅ | ✅ |
-
-> Full descriptions and DBMS-specific details → [USER_GUIDE.md](docs/USER_GUIDE.md)
+| Oracle | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
+|--------|:----------:|:-----:|:---------:|:---------:|
+| NOREC | ✅ | ✅ | ✅ | ✅ |
+| PQS | ✅ | ✅ | ✅ | ✅ |
+| TLP_WHERE | ✅ | ✅ | ✅ | ✅ |
+| HAVING | ✅ | ✅ | ✅ | ✅ |
+| AGGREGATE | ✅ | ✅ | ✅ | ✅ |
+| DISTINCT | ✅ | ✅ | ✅ | ✅ |
+| GROUP_BY | ✅ | ✅ | ✅ | ✅ |
+| CERT | ✅ | ✅ | ✅ | ✅ |
+| FUZZER | ✅ | ✅ | ✅ | ✅ |
+| DQE | ✅ | ✅ | ✅ | ✅ |
+| DQP | ✅ | ✅ | ✅ | ✅ |
+| EET | ✅ | ✅ | ✅ | ✅ |
+| EET_INSERT_SELECT | ✅ | ✅ | ✅ | ✅ |
+| EET_UPDATE | ✅ | ✅ | ✅ | ✅ |
+| EET_DELETE | ✅ | ✅ | ✅ | ✅ |
+| **CODDTEST** | ✅ | ✅ | ✅ | ✅ |
+| EDC_RADAR | ✅ | ✅ | ✅ | — |
+| EDC_DATA | ✅ | ✅ | ✅ | ✅ |
+| SONAR | ✅ | ✅ | ✅ | — |
+| WRITE_CHECK | ✅ | ✅ | ✅ | ✅ |
+| WRITE_CHECK_REPRODUCE | ✅ | ✅ | ✅ | ✅ |
+| FUCCI | ✅ | ✅ | ✅ | ✅ |
+| TX_INFER | ✅ | ✅ | ✅ | ✅ |
+| **JIR** | ✅ | ✅ | ✅ | ✅ |
+| QUERY_PARTITIONING | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
-## JIR Oracle (New — SIGMOD 2026)
+## JIR Oracle (SIGMOD 2026)
 
 Join Implication Reasoning detects **JOIN optimizer bugs** by comparing query results across different JOIN types using 6 semantic implication rules:
 
@@ -126,7 +137,7 @@ Join Implication Reasoning detects **JOIN optimizer bugs** by comparing query re
 | **6. NATURAL_JOIN_EXPLICATION** | `NATURAL JOIN` ≡ `INNER JOIN ON (matching columns)` | Explicit equijoin condition |
 
 ```bash
-java -jar target/sqlancer-2.4.5.jar --host localhost --port 3306 \
+java -jar target/sqlancer-2.7.0.jar --host localhost --port 3306 \
     --username root --password your_password \
     mysql --oracle JIR
 ```
@@ -143,32 +154,29 @@ GaussDB-A and GaussDB-M require **pre-created compatibility databases**. SQLance
 
 ```sql
 -- A-compatible (Oracle style)
-CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
+CREATE DATABASE testa WITH dbcompatibility 'A';
 
 -- M-compatible (MySQL style)
-CREATE DATABASE gaussdb_m_test WITH dbcompatibility 'B';
-
--- PG-compatible (PostgreSQL style)
-CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
+CREATE DATABASE testm WITH DBCOMPATIBILITY 'M';
 ```
 
 ### Connect
 
 ```bash
 # GaussDB-A
-java -jar target/sqlancer-2.4.5.jar \
+java -jar target/sqlancer-2.7.0.jar \
     --host your_host --port 8000 --username your_user --password your_password \
-    gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
+    gaussdb-a --target-database testa --oracle QUERY_PARTITIONING
 
-# GaussDB-M (M-compatibility mode)
-java -jar target/sqlancer-2.4.5.jar \
+# GaussDB-M
+java -jar target/sqlancer-2.7.0.jar \
     --host your_host --port 19995 --username your_user --password your_password \
-    gaussdb-m --target-database gaussdb_m_test --oracle QUERY_PARTITIONING
+    gaussdb-m --target-database testm --oracle QUERY_PARTITIONING
 
-# GaussDB-PG (PG-compatibility mode, no --target-database needed)
-java -jar target/sqlancer-2.4.5.jar \
-    --host your_host --port 5432 --username your_user --password your_password \
-    gaussdb-pg --oracle QUERY_PARTITIONING
+# GaussDB-A with CODDTEST
+java -jar target/sqlancer-2.7.0.jar \
+    --host your_host --port 8000 --username your_user --password your_password \
+    gaussdb-a --target-database testa --oracle CODDTEST --coddtest-model RANDOM
 ```
 
 ---
@@ -177,11 +185,12 @@ java -jar target/sqlancer-2.4.5.jar \
 
 | Feature | Description |
 |---------|-------------|
-| **25+ Test Oracles** | 14 standard + 11 new (JIR, EDC_RADAR, EDC_DATA, SONAR, DQE, DQP, EET, CODDTEST, WRITE_CHECK, FUCCI, TX_INFER, WRITE_CHECK_REPRODUCE) |
-| **GaussDB Multi-Mode** | A/PG/M compatibility modes with schema isolation |
+| **25+ Test Oracles** | 14 standard + 11 new (JIR, EDC_RADAR, EDC_DATA, SONAR, DQE, DQP, EET, CODDTEST, WRITE_CHECK, FUCCI, TX_INFER) |
+| **GaussDB Multi-Mode** | A/M compatibility modes with schema isolation |
+| **CODDTEST 3 Modes** | EXPRESSION / SUBQUERY / RANDOM via `--coddtest-model` |
 | **Extended Data Types** | PG: Temporal, JSONB, Array, UUID · MySQL: JSON, Spatial, Full-text, CTE |
-| **SQLSTATE Error Handling** | Works on non-English (Chinese, German, Japanese) servers — no English-only error matching |
-| **Coverage Policy** | `--coverage-policy` (CONSERVATIVE/BALANCED/AGGRESSIVE) for PostgreSQL type/expression depth |
+| **SQLSTATE Error Handling** | Works on non-English (Chinese, German, Japanese) servers |
+| **Coverage Policy** | `--coverage-policy` (CONSERVATIVE/BALANCED/AGGRESSIVE) for PostgreSQL |
 | **Cross-Platform** | Windows path handling, OS-aware tablespace defaults |
 | **Lightweight Packaging** | ~4MB jar, deps in `target/lib/`, manifest Class-Path loading |
 
@@ -193,7 +202,7 @@ java -jar target/sqlancer-2.4.5.jar \
 |--------|-------------|---------|
 | `--oracle <name>` | Test oracle(s), comma-separated | QUERY_PARTITIONING |
 | `--num-queries N` | Queries per database | varies by oracle |
-| `--num-tries N` | Test iterations (higher = more bug findings) | 1 |
+| `--num-tries N` | Test iterations | 1 |
 | `--timeout-seconds N` | Max runtime per try | 120 |
 | `--seed N` | Random seed for reproduction | timestamp |
 | `--use-reducer` | Minimize bug-triggering queries | false |
@@ -205,10 +214,8 @@ java -jar target/sqlancer-2.4.5.jar \
 |------|-------------|
 | **PostgreSQL** | `--coverage-policy`, `--pg-table-columns`, `--pg-index-model`, `--extensions` |
 | **MySQL** | `--engines`, `--test-json`, `--test-spatial`, `--test-unsigned`, `--test-window-functions` |
-| **GaussDB-A** | `--target-database`, `--enable-clob-blob` |
-| **GaussDB-M** | `--target-database` |
-
-> Full option list → [USER_GUIDE.md](docs/USER_GUIDE.md)
+| **GaussDB-A** | `--target-database`, `--enable-clob-blob`, `--coddtest-model` |
+| **GaussDB-M** | `--target-database`, `--coddtest-model` |
 
 ---
 
@@ -217,13 +224,12 @@ java -jar target/sqlancer-2.4.5.jar \
 When a bug is found, SQLancer logs the seed and query:
 
 ```bash
-# Reproduce with the seed
-java -jar target/sqlancer-2.4.5.jar --seed <seed_value> \
+java -jar target/sqlancer-2.7.0.jar --seed <seed_value> \
     --host localhost --port 3306 --username root --password your_password \
     mysql --oracle <oracle_name>
 ```
 
-Logs are saved to `logs/<dbms>/<test_name>/`.
+Logs are saved to `logs/<dbms>/<oracle>_YYYY_MMDD_HHMM/`.
 
 ---
 
@@ -235,7 +241,6 @@ Logs are saved to `logs/<dbms>/<test_name>/`.
 | [user_guide_cn.md](docs/user_guide_cn.md) | 中文用户指南 |
 | [README_NEW_FEATURES.md](docs/README_NEW_FEATURES.md) | New features vs official SQLancer |
 | [PAPERS.md](docs/PAPERS.md) | Academic papers (PQS, NoREC, TLP, QPG, CERT, DQP, JIR) |
-| [Oracle Statistics](docs/sqlancer_oracle_supported_statistics_20260415.md) | Cross-DBMS oracle support matrix |
 | [Release Notes](docs/release_notes.md) | Version history |
 
 ---
@@ -245,14 +250,11 @@ Logs are saved to `logs/<dbms>/<test_name>/`.
 ```bash
 # Default version (from pom.xml)
 mvn package -DskipTests
-# → sqlancer-2.4.5.jar
+# → sqlancer-2.7.0.jar
 
 # Custom version
-mvn package -Drevision=2.5.0 -DskipTests
-# → sqlancer-2.5.0.jar
-
-# Git-count-based version
-mvn package -Drevision=2.4.$(git rev-list --count HEAD) -DskipTests
+mvn package -Drevision=2.8.0 -DskipTests
+# → sqlancer-2.8.0.jar
 ```
 
 ---

@@ -30,9 +30,13 @@ Four new test oracles have been added to provide more comprehensive database tes
 
 #### CODDTEST
 - **Purpose**: Tests expression folding correctness based on Codd's relational algebra principles
-- **Mechanism**: Evaluates a boolean predicate, folds it to a constant, and compares COUNT(*) results
-- **Usage**: `--oracle CODDTEST`
-- **Characteristics**: Focuses on predicate evaluation consistency
+- **Mechanism**: Evaluates a boolean predicate, folds it to a constant, and compares COUNT(*) results. Supports 3 modes:
+  - `EXPRESSION`: Always use expression folding (predicate → constant)
+  - `SUBQUERY`: Always use subquery folding
+  - `RANDOM`: Randomly choose between expression and subquery
+- **Usage**: `--oracle CODDTEST --coddtest-model EXPRESSION`
+- **Supported DBMS**: MySQL, PostgreSQL, GaussDB-M, GaussDB-A
+- **Characteristics**: Focuses on predicate evaluation consistency; detects constant folding and subquery optimization bugs
 
 ### 2. PostgreSQL Extended Type Coverage
 
@@ -166,7 +170,7 @@ java -jar sqlancer.jar \
 java -jar sqlancer.jar \
     --host localhost --port 5432 \
     --username postgres --password password \
-    postgres --oracle DQE,DQP,EET,CODDTEST
+    postgres --oracle DQE,DQP,EET,CODDTEST --coddtest-model RANDOM
 ```
 
 ### PostgreSQL Full Coverage Testing
@@ -196,7 +200,7 @@ java -jar sqlancer.jar \
     --host localhost --port 3306 \
     --username root --password password \
     mysql \
-    --oracle DQE,DQP,EET,CODDTEST \
+    --oracle DQE,DQP,EET,CODDTEST --coddtest-model RANDOM \
     --test-json true \
     --test-spatial true \
     --engines InnoDB,MyISAM
@@ -204,7 +208,7 @@ java -jar sqlancer.jar \
 
 ## Available Oracles
 
-All 25+ oracles are available for **both PostgreSQL and MySQL**, plus GaussDB variants:
+All 25+ oracles are available for **PostgreSQL, MySQL, and GaussDB-M**, with 23 oracles for **GaussDB-A**:
 
 | Oracle | Description | Requires Rows |
 |--------|-------------|---------------|
@@ -221,7 +225,7 @@ All 25+ oracles are available for **both PostgreSQL and MySQL**, plus GaussDB va
 | **DQE** | Delete/Update Equivalence (NEW) | No |
 | **DQP** | Deterministic Query Partitioning (NEW) | No |
 | **EET** | Equivalent Expression Transformation (NEW) | No |
-| **CODDTEST** | Expression folding test (NEW) | No |
+| **CODDTEST** | Expression folding test (3 modes: EXPRESSION/SUBQUERY/RANDOM) (NEW) | No |
 | **EDC** | Equivalent Database Construction (NEW) | No |
 | **SONAR** | Optimized vs unoptimized comparison (NEW) | No |
 | **WRITE_CHECK** | Transaction isolation testing (NEW) | No |

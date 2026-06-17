@@ -1,7 +1,7 @@
 # SQLancer Test Oracle Support Statistics
 
-**Date**: 2026/06/09
-**Version**: v2.4.5 (based on official SQLancer with additional oracles)
+**Date**: 2026/06/16
+**Version**: v2.7.0 (based on official SQLancer with additional oracles)
 
 ## Summary
 
@@ -26,7 +26,7 @@ This document provides a comprehensive statistics of test oracle support across 
 | **DQE** | ✓ | ✓ | ✓ | ✓ | New | DELETE/UPDATE equivalence |
 | **DQP** | ✓ | ✓ | ✓ | ✓ | New | Deterministic query test |
 | **EET** | ✓ | ✓ | ✓ | ✓ | New | Expression transformation |
-| **CODDTEST** | ✓ | ✓ | ✓ | - | New | Expression folding (Codd's rules) |
+| **CODDTEST** | ✓ | ✓ | ✓ | ✓ | New | Expression folding (3 modes: EXPRESSION/SUBQUERY/RANDOM) |
 | **QUERY_PARTITIONING** | ✓ | ✓ | ✓ | ✓ | Composite | Combined oracle |
 | **EDC** | ✓ | ✓ | ✓ | ✓ | New | Equivalent Database Construction |
 | **SONAR** | ✓ | ✓ | ✓ | - | New | Optimized vs unoptimized comparison |
@@ -44,17 +44,17 @@ This document provides a comprehensive statistics of test oracle support across 
 
 | Database | Total Oracles | Unique Oracles | Composite Oracles |
 |----------|---------------|----------------|-------------------|
-| PostgreSQL | 24 | 23 | 1 (QUERY_PARTITIONING) |
-| MySQL | 24 | 23 | 1 (QUERY_PARTITIONING) |
-| GaussDB-M | 24 | 23 | 1 (QUERY_PARTITIONING) |
-| GaussDB-A | 21 | 20 | 1 (QUERY_PARTITIONING) |
+| PostgreSQL | 25 | 24 | 1 (QUERY_PARTITIONING) |
+| MySQL | 25 | 24 | 1 (QUERY_PARTITIONING) |
+| GaussDB-M | 25 | 24 | 1 (QUERY_PARTITIONING) |
+| GaussDB-A | 23 | 22 | 1 (QUERY_PARTITIONING) |
 
 ### Category Distribution
 
 | Category | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
 |----------|------------|-------|-----------|-----------|
 | Standard Oracles | 10 | 10 | 10 | 10 |
-| New Oracles | 14 | 14 | 14 | 11 |
+| New Oracles | 15 | 15 | 15 | 13 |
 | Composite Oracles | 1 | 1 | 1 | 1 |
 | Alias Oracles | 1 (WHERE) | 0 | 0 | 0 |
 
@@ -64,7 +64,7 @@ This document provides a comprehensive statistics of test oracle support across 
 |--------|------------|-------|-----------|-----------|
 | PQS | ✓ | ✓ | ✓ | ✓ |
 | CERT | ✓ | ✓ | ✓ | ✓ |
-| CODDTEST | - | ✓ | ✓ | - |
+| CODDTEST | ✓ | ✓ | ✓ | ✓ |
 
 **Note**: JIR Oracle does NOT require all tables to contain rows (LEFT JOIN produces valid results with empty tables).
 
@@ -93,7 +93,7 @@ This document provides a comprehensive statistics of test oracle support across 
 | DQE | DELETE/UPDATE Query Equivalence | Compares rows affected by DELETE/UPDATE with SELECT using same WHERE clause |
 | DQP | Deterministic Query Partitioning | Executes same query twice, verifies results match |
 | EET | Equivalent Expression Transformation | Applies transformation rules, verifies semantic equivalence |
-| CODDTEST | Expression Folding Test | Evaluates predicate, folds to constant, compares COUNT(*) results |
+| CODDTEST | Expression Folding Test (3 modes: EXPRESSION/SUBQUERY/RANDOM) | Evaluates predicate, folds to constant or subquery, compares COUNT(*) results |
 
 ### Composite Oracles
 
@@ -127,7 +127,7 @@ This document provides a comprehensive statistics of test oracle support across 
 
 ## Cross-Database Oracle Compatibility
 
-### Fully Compatible Oracles (All 3 databases)
+### Fully Compatible Oracles (All 4 target databases)
 
 | Oracle | Implementation Status |
 |--------|----------------------|
@@ -143,7 +143,7 @@ This document provides a comprehensive statistics of test oracle support across 
 | DQE | Database-specific implementation |
 | DQP | Database-specific implementation |
 | EET | Database-specific implementation |
-| CODDTEST | Database-specific implementation |
+| CODDTEST | Database-specific implementation (3 modes) |
 
 ### Generic Oracle Framework Usage
 
@@ -156,18 +156,18 @@ This document provides a comprehensive statistics of test oracle support across 
 
 ### Database-Specific Implementations
 
-| Oracle | PostgreSQL | MySQL | GaussDB-M |
-|--------|------------|-------|-----------|
-| PQS | PostgresPivotedQuerySynthesisOracle | MySQLPivotedQuerySynthesisOracle | GaussDBMPivotedQuerySynthesisOracle |
-| HAVING | PostgresTLPHavingOracle | MySQLTLPHavingOracle | GaussDBMTLPHavingOracle |
-| AGGREGATE | PostgresTLPAggregateOracle | MySQLTLPAggregateOracle | GaussDBMTLPAggregateOracle |
-| DISTINCT | PostgresTLPDistinctOracle | MySQLTLPDistinctOracle | GaussDBMTLPDistinctOracle |
-| GROUP_BY | PostgresTLPGroupByOracle | MySQLTLPGroupByOracle | GaussDBMTLPGroupByOracle |
-| FUZZER | PostgresFuzzer | MySQLFuzzer | GaussDBMFuzzer |
-| DQE | PostgresDQEOracle | MySQLDQEOracle | GaussDBMDQEOracle |
-| DQP | PostgresDQPOracle | MySQLDQPOracle | GaussDBMDQPOracle |
-| EET | PostgresEETOracle | MySQLEETOracle | GaussDBMEETOracle |
-| CODDTEST | PostgresCODDTestOracle | MySQLCODDTestOracle | GaussDBCODDTestOracle |
+| Oracle | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
+|--------|------------|-------|-----------|-----------|
+| PQS | PostgresPivotedQuerySynthesisOracle | MySQLPivotedQuerySynthesisOracle | GaussDBMPivotedQuerySynthesisOracle | GaussDBAPivotedQuerySynthesisOracle |
+| HAVING | PostgresTLPHavingOracle | MySQLTLPHavingOracle | GaussDBMTLPHavingOracle | GaussDBATLPHavingOracle |
+| AGGREGATE | PostgresTLPAggregateOracle | MySQLTLPAggregateOracle | GaussDBMTLPAggregateOracle | GaussDBATLPAggregateOracle |
+| DISTINCT | PostgresTLPDistinctOracle | MySQLTLPDistinctOracle | GaussDBMTLPDistinctOracle | GaussDBATLPDistinctOracle |
+| GROUP_BY | PostgresTLPGroupByOracle | MySQLTLPGroupByOracle | GaussDBMTLPGroupByOracle | GaussDBATLPGroupByOracle |
+| FUZZER | PostgresFuzzer | MySQLFuzzer | GaussDBMFuzzer | GaussDBAFuzzer |
+| DQE | PostgresDQEOracle | MySQLDQEOracle | GaussDBMDQEOracle | GaussDBADQEOracle |
+| DQP | PostgresDQPOracle | MySQLDQPOracle | GaussDBMDQPOracle | GaussDBADQPOracle |
+| EET | PostgresEETOracle | MySQLEETOracle | GaussDBMEETOracle | GaussDBAEETOracle |
+| CODDTEST | PostgresCODDTestOracle | MySQLCODDTestOracle | GaussDBCODDTestOracle | GaussDBACODDTestOracle |
 
 ---
 
@@ -201,11 +201,13 @@ java -jar sqlancer.jar gaussdbm --oracle NOREC,TLP_WHERE,DQE,DQP,EET,CODDTEST
 ## Historical Notes
 
 1. **DQE, DQP, EET, CODDTEST** are new oracles added in the extended version
-2. All four new oracles are supported across PostgreSQL, MySQL, and GaussDB-M
-3. **QUERY_PARTITIONING** composition differs between databases:
+2. All four new oracles are now supported across PostgreSQL, MySQL, GaussDB-M, and GaussDB-A
+3. **CODDTEST** was extended to GaussDB-A in v2.7.0 (3-mode implementation: EXPRESSION/SUBQUERY/RANDOM)
+4. **QUERY_PARTITIONING** composition differs between databases:
    - PostgreSQL: Originally designed with 3 components
    - MySQL/GaussDB-M: Extended to 6 components for broader coverage
 4. GaussDB-M OracleFactory follows MySQL's structure for CLI consistency
+5. GaussDB-A OracleFactory uses Oracle-style SQL dialect with schema isolation
 
 ---
 
@@ -224,12 +226,13 @@ java -jar sqlancer.jar gaussdbm --oracle NOREC,TLP_WHERE,DQE,DQP,EET,CODDTEST
 | PostgreSQL | `src/sqlancer/postgres/PostgresOracleFactory.java` |
 | MySQL | `src/sqlancer/mysql/MySQLOracleFactory.java` |
 | GaussDB-M | `src/sqlancer/gaussdbm/GaussDBMOracleFactory.java` |
+| GaussDB-A | `src/sqlancer/gaussdba/GaussDBAOracleFactory.java` |
 
 ### New Oracle Implementation Files
 
-| Oracle | PostgreSQL | MySQL | GaussDB-M |
-|--------|------------|-------|-----------|
-| DQE | `src/sqlancer/postgres/oracle/ext/PostgresDQEOracle.java` | `src/sqlancer/mysql/oracle/MySQLDQEOracle.java` | `src/sqlancer/gaussdbm/oracle/GaussDBMDQEOracle.java` |
-| DQP | `src/sqlancer/postgres/oracle/ext/PostgresDQPOracle.java` | `src/sqlancer/mysql/oracle/MySQLDQPOracle.java` | `src/sqlancer/gaussdbm/oracle/GaussDBMDQPOracle.java` |
-| EET | `src/sqlancer/postgres/oracle/ext/eet/PostgresEETOracle.java` | `src/sqlancer/mysql/oracle/eet/MySQLEETOracle.java` | `src/sqlancer/gaussdbm/oracle/eet/GaussDBMEETOracle.java` |
-| CODDTEST | `src/sqlancer/postgres/oracle/ext/PostgresCODDTestOracle.java` | `src/sqlancer/mysql/oracle/MySQLCODDTestOracle.java` | `src/sqlancer/gaussdbm/oracle/GaussDBCODDTestOracle.java` |
+| Oracle | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
+|--------|------------|-------|-----------|-----------|
+| DQE | `src/sqlancer/postgres/oracle/ext/PostgresDQEOracle.java` | `src/sqlancer/mysql/oracle/MySQLDQEOracle.java` | `src/sqlancer/gaussdbm/oracle/GaussDBMDQEOracle.java` | `src/sqlancer/gaussdba/oracle/GaussDBADQEOracle.java` |
+| DQP | `src/sqlancer/postgres/oracle/ext/PostgresDQPOracle.java` | `src/sqlancer/mysql/oracle/MySQLDQPOracle.java` | `src/sqlancer/gaussdbm/oracle/GaussDBMDQPOracle.java` | `src/sqlancer/gaussdba/oracle/GaussDBADQPOracle.java` |
+| EET | `src/sqlancer/postgres/oracle/ext/eet/PostgresEETOracle.java` | `src/sqlancer/mysql/oracle/eet/MySQLEETOracle.java` | `src/sqlancer/gaussdbm/oracle/eet/GaussDBMEETOracle.java` | `src/sqlancer/gaussdba/oracle/eet/GaussDBAEETOracle.java` |
+| CODDTEST | `src/sqlancer/postgres/oracle/ext/PostgresCODDTestOracle.java` | `src/sqlancer/mysql/oracle/MySQLCODDTestOracle.java` | `src/sqlancer/gaussdbm/oracle/GaussDBCODDTestOracle.java` | `src/sqlancer/gaussdba/oracle/GaussDBACODDTestOracle.java` |
