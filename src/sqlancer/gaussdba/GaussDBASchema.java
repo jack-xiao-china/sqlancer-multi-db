@@ -171,7 +171,7 @@ public class GaussDBASchema extends AbstractSchema<GaussDBAGlobalState, GaussDBA
                     String schemaNameLower = databaseName.toLowerCase();
                     try (ResultSet rs = s.executeQuery(
                             "SELECT table_name, table_schema, table_type FROM information_schema.tables "
-                                    + "WHERE LOWER(table_schema)='" + schemaNameLower + "' OR table_schema='public' OR table_schema LIKE 'pg_temp_%' "
+                                    + "WHERE LOWER(table_schema)='" + schemaNameLower + "' "
                                     + "ORDER BY table_name;")) {
                         while (rs.next()) {
                             String tableName = rs.getString("table_name");

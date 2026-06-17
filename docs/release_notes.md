@@ -1,5 +1,28 @@
 # SQLancer Release Notes
 
+## v2.7.2 | 2026-06-17
+- 修复 [QPS 显示精度]：`Main.java` 查询吞吐量从 `%d`（整数截断）改为 `%.1f`（一位小数）
+  - 修复前：4 queries/5s = 0.8/s → `(int)0.8` = **0 queries/s**（误导）
+  - 修复后：4 queries/5s = 0.8/s → **0.8 queries/s**（准确）
+
+## v2.7.1 | 2026-06-17
+- 新增 [GaussDB-A SONAR Oracle]：注册已有的 `GaussDBASonarOracle` 到 `GaussDBAOracleFactory`
+  - 对比优化 vs 未优化查询执行结果，检测优化器 bug
+- 新增 [GaussDB-A EDC_RADAR Oracle]：Equivalent Database Construction - RADAR
+  - 新建 `GaussDBAEDCRadar.java`：在 GaussDB-A 内创建无约束 raw schema（schema 隔离，非数据库隔离）
+  - 新建 `GaussDBAEDCRadarOracle.java`：对比原始 schema 与 raw schema 的查询结果
+  - 使用 `information_schema.columns` 获取列元数据，`pg_catalog.pg_constraint` 获取约束元数据
+  - 适配 GaussDB-A Oracle 兼容模式：双引号 `""`、NUMBER/VARCHAR2/DATE 类型映射
+- 修复 [GaussDB-A Schema 查询]：`GaussDBASchema.fromConnection()` 移除 `public` schema 表查询，避免外部表干扰测试 schema
+  - 原查询包含 `OR table_schema='public'` 导致 `testa` 数据库的 `public` 表被计入，使 `requiresAllTablesToContainRows=true` 的 Oracle（SONAR/PQS 等）因空表抛出 `IgnoreMeException` 而无法执行查询
+- 修复 [GaussDB-A UPDATE/DELETE 生成器]：使用 `getRandomTableOrBailout()` 替代 `getRandomTable()` + null 检查
+  - `getRandomTable(predicate)` 在过滤后列表为空时抛出 `IllegalArgumentException`（而非返回 null）
+  - 导致 `generateDatabase()` 阶段 UPDATE/DELETE 生成器崩溃
+- 修复 [GaussDB-A ToStringVisitor]：添加 `GaussDBAPostfixText` 和 `GaussDBAManuelPredicate` 的 visitor 方法
+  - SONAR Oracle 使用这两个 AST 节点生成查询，缺少 visitor 导致 `AssertionError`
+- **GaussDB-A Oracle 数量达到 25 个，与 PostgreSQL 完全对齐**
+- 集成测试验证：SONAR 120 queries ✅、EDC_RADAR 54 queries ✅
+
 ## v2.7.0 | 2026-06-16
 - 新增 [GaussDB-A CODDTEST Oracle]：完整 3 模式实现（EXPRESSION/SUBQUERY/CORRELATED_SUBQUERY）
   - 新增 `GaussDBAOracleAlias` 和 `GaussDBAOracleExpressionBag` AST 类

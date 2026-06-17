@@ -29,7 +29,8 @@ This document provides a comprehensive statistics of test oracle support across 
 | **CODDTEST** | ✓ | ✓ | ✓ | ✓ | New | Expression folding (3 modes: EXPRESSION/SUBQUERY/RANDOM) |
 | **QUERY_PARTITIONING** | ✓ | ✓ | ✓ | ✓ | Composite | Combined oracle |
 | **EDC** | ✓ | ✓ | ✓ | ✓ | New | Equivalent Database Construction |
-| **SONAR** | ✓ | ✓ | ✓ | - | New | Optimized vs unoptimized comparison |
+| **SONAR** | ✓ | ✓ | ✓ | ✓ | New | Optimized vs unoptimized comparison |
+| **EDC_RADAR** | ✓ | ✓ | ✓ | ✓ | New | Schema constraint impact detection |
 | **WRITE_CHECK** | ✓ | ✓ | ✓ | ✓ | New | Transaction isolation testing |
 | **WRITE_CHECK_REPRODUCE** | ✓ | ✓ | ✓ | ✓ | New | Bug reproduction mode |
 | **FUCCI** | ✓ | ✓ | ✓ | ✓ | New | MVCC-based testing (DT/MT/CS) |
@@ -47,14 +48,14 @@ This document provides a comprehensive statistics of test oracle support across 
 | PostgreSQL | 25 | 24 | 1 (QUERY_PARTITIONING) |
 | MySQL | 25 | 24 | 1 (QUERY_PARTITIONING) |
 | GaussDB-M | 25 | 24 | 1 (QUERY_PARTITIONING) |
-| GaussDB-A | 23 | 22 | 1 (QUERY_PARTITIONING) |
+| GaussDB-A | 25 | 24 | 1 (QUERY_PARTITIONING) |
 
 ### Category Distribution
 
 | Category | PostgreSQL | MySQL | GaussDB-M | GaussDB-A |
 |----------|------------|-------|-----------|-----------|
 | Standard Oracles | 10 | 10 | 10 | 10 |
-| New Oracles | 15 | 15 | 15 | 13 |
+| New Oracles | 15 | 15 | 15 | 15 |
 | Composite Oracles | 1 | 1 | 1 | 1 |
 | Alias Oracles | 1 (WHERE) | 0 | 0 | 0 |
 

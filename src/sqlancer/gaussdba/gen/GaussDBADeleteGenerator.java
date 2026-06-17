@@ -15,10 +15,7 @@ public final class GaussDBADeleteGenerator {
     }
 
     public static SQLQueryAdapter create(GaussDBAGlobalState globalState) {
-        GaussDBATable table = globalState.getSchema().getRandomTable(t -> !t.isView());
-        if (table == null) {
-            throw new sqlancer.IgnoreMeException();
-        }
+        GaussDBATable table = globalState.getSchema().getRandomTableOrBailout(t -> !t.isView());
 
         ExpectedErrors errors = new ExpectedErrors();
         errors.add("violates foreign key constraint");

@@ -911,8 +911,8 @@ public final class Main {
                 DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
                 Date date = new Date();
                 System.out.println(String.format(
-                        "[%s] Executed %d queries (%d queries/s; %.2f/s dbs, successful statements: %2d%%). Threads shut down: %d.",
-                        dateFormat.format(date), currentNrQueries, (int) throughput, throughputDbs,
+                        "[%s] Executed %d queries (%.1f queries/s; %.2f/s dbs, successful statements: %2d%%). Threads shut down: %d.",
+                        dateFormat.format(date), currentNrQueries, throughput, throughputDbs,
                         successfulStatementsRatio, threadsShutdown.get()));
                 timeMillis = System.currentTimeMillis();
                 lastNrQueries = currentNrQueries;

@@ -266,6 +266,37 @@ public enum GaussDBAOracleFactory implements OracleFactory<GaussDBAGlobalState> 
         }
     },
     /**
+     * EDC_RADAR (Equivalent Database Construction - RADAR) Oracle.
+     * Detects optimizer bugs by comparing query results between original schema (with constraints)
+     * and raw schema (without constraints).
+     */
+    EDC_RADAR {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new sqlancer.gaussdba.oracle.GaussDBAEDCRadarOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
+     * SONAR (Select Optimization N-gram Analysis Runtime) Oracle.
+     * Detects optimizer bugs by comparing optimized vs unoptimized query execution.
+     */
+    SONAR {
+        @Override
+        public TestOracle<GaussDBAGlobalState> create(GaussDBAGlobalState globalState) throws Exception {
+            return new sqlancer.gaussdba.oracle.GaussDBASonarOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
+        }
+    },
+    /**
      * CODDTEST Oracle for GaussDB-A.
      * Tests query optimization correctness by comparing folded/unfolded query results.
      * Supports EXPRESSION, SUBQUERY, and CORRELATED_SUBQUERY modes.

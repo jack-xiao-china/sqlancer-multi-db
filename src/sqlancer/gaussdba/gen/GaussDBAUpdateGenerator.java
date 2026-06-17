@@ -41,10 +41,7 @@ public final class GaussDBAUpdateGenerator extends AbstractUpdateGenerator<Gauss
     }
 
     private SQLQueryAdapter generate() {
-        randomTable = globalState.getSchema().getRandomTable(t -> !t.isView());
-        if (randomTable == null) {
-            throw new sqlancer.IgnoreMeException();
-        }
+        randomTable = globalState.getSchema().getRandomTableOrBailout(t -> !t.isView());
         List<GaussDBAColumn> columns = randomTable.getRandomNonEmptyColumnSubset();
         sb.append("UPDATE ");
         sb.append(randomTable.getName());

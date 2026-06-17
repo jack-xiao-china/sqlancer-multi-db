@@ -22,6 +22,8 @@ import sqlancer.gaussdba.ast.GaussDBALikeOperation;
 import sqlancer.gaussdba.ast.GaussDBAMinusSelect;
 import sqlancer.gaussdba.ast.GaussDBAOracleAlias;
 import sqlancer.gaussdba.ast.GaussDBAOracleExpressionBag;
+import sqlancer.gaussdba.ast.GaussDBAPostfixText;
+import sqlancer.gaussdba.ast.GaussDBAManuelPredicate;
 import sqlancer.gaussdba.ast.GaussDBAPrintedExpression;
 import sqlancer.gaussdba.ast.GaussDBASelect;
 import sqlancer.gaussdba.ast.GaussDBAText;
@@ -91,6 +93,10 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
             visit((GaussDBAOracleAlias) expr);
         } else if (expr instanceof GaussDBAOracleExpressionBag) {
             visit((GaussDBAOracleExpressionBag) expr);
+        } else if (expr instanceof GaussDBAPostfixText) {
+            visit((GaussDBAPostfixText) expr);
+        } else if (expr instanceof GaussDBAManuelPredicate) {
+            visit((GaussDBAManuelPredicate) expr);
         } else if (expr instanceof GaussDBAText) {
             visit((GaussDBAText) expr);
         } else {
@@ -405,6 +411,15 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
 
     public void visit(GaussDBAOracleExpressionBag bag) {
         visit(bag.getInnerExpr());
+    }
+
+    public void visit(GaussDBAPostfixText postfix) {
+        visit(postfix.getExpr());
+        sb.append(postfix.getText());
+    }
+
+    public void visit(GaussDBAManuelPredicate manual) {
+        sb.append(manual.getString());
     }
 
     public static String asString(GaussDBAExpression expr) {
