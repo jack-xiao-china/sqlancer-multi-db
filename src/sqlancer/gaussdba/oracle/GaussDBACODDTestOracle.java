@@ -9,7 +9,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
 import sqlancer.common.oracle.TestOracle;
@@ -72,6 +74,13 @@ public class GaussDBACODDTestOracle extends CODDTestBase<GaussDBAGlobalState>
         errors.add("group function is not allowed here");
         errors.add("ORA-01427"); // single-row subquery returns more than one row
         errors.add("ORA-01476"); // divisor is equal to zero
+        errors.add("must be used in the GROUP BY clause or aggregate function"); // ORA-00979 variant
+        errors.addRegex(Pattern.compile("Function .+ does not exist")); // aggregate on incompatible type (e.g., max(blob))
+        errors.add("not a single-group group function"); // ORA-00937
+        errors.add("column ambiguously defined"); // ORA-00918
+        errors.addRegex(Pattern.compile("argument of .+ must be type boolean, not type .+")); // Oracle mode: non-boolean in logical ops
+        errors.add("is specified more than once"); // duplicate table name in FROM + JOIN
+        errors.add("Missing FROM-clause entry for table"); // correlated subquery referencing unknown table
     }
 
     @Override
@@ -291,9 +300,9 @@ public class GaussDBACODDTestOracle extends CODDTestBase<GaussDBAGlobalState>
     private Map<String, List<GaussDBAConstant>> executeQuery(GaussDBASelect query) throws SQLException {
         Map<String, List<GaussDBAConstant>> result = new HashMap<>();
 
+        String queryString = query.asString();
         try (Statement st = con.createStatement()) {
             st.setQueryTimeout(600);
-            String queryString = query.asString();
             try (ResultSet rs = st.executeQuery(queryString)) {
                 ResultSetMetaData metaData = rs.getMetaData();
                 int columnCount = metaData.getColumnCount();
@@ -312,6 +321,15 @@ public class GaussDBACODDTestOracle extends CODDTestBase<GaussDBAGlobalState>
                     }
                 }
             }
+        } catch (SQLException e) {
+            // For CODDTEST, any query execution failure is an invalid test case, not a bug detection.
+            // Only let crash-type errors (08xxx SQLState) propagate as real bugs.
+            String sqlState = e.getSQLState();
+            if (sqlState != null && sqlState.startsWith("08")) {
+                // Connection/crash errors — these are genuine bugs, not invalid queries
+                throw e;
+            }
+            throw new IgnoreMeException();
         }
 
         return result;

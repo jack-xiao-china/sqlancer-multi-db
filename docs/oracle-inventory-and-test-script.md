@@ -7,7 +7,7 @@
 | **MySQL** | `mysql` | 25 | 20 + 1(QP) | 4 | `--coddtest-model`, `--engines`, FUCCI 3 参数, 50+ hidden `--test-*` |
 | **PostgreSQL** | `postgres` | 25 | 20 + 1(QP) | 4 | `--pg-table-columns`, `--pg-tables`, `--coverage-policy`, FUCCI 3 参数, 20+ hidden |
 | **GaussDB-M** | `gaussdb-m` | 25 | 20 + 1(QP) | 4 | `--target-database` (**必填**), FUCCI 3 参数 |
-| **GaussDB-A** | `gaussdb-a` | 22 | 17 + 1(QP) | 4 | `--target-database` (**必填**), `--enable-clob-blob`, FUCCI 3 参数 |
+| **GaussDB-A** | `gaussdb-a` | 25 | 20 + 1(QP) | 4 | `--target-database` (**必填**), `--enable-clob-blob`, `--coddtest-model`, FUCCI 3 参数 |
 | **GaussDB-PG** | `gaussdb-pg` | 12 | 11 + 1(QP) | 0 | `--target-database` (可选, 默认 postgres), `--enable-time-types` |
 
 ### 详细 Oracle 列表
@@ -60,19 +60,17 @@
 | FUCCI 隔离级别 | READ_COMMITTED/REPEATABLE_READ/SERIALIZABLE/RANDOM |
 | 默认端口 | 19995 |
 
-#### GaussDB-A (22) — 缺少 CODDTEST/EDC_RADAR/SONAR
-
-| 缺失 Oracle | 原因 |
-|-------------|------|
-| CODDTEST | 未实现 |
-| EDC_RADAR | Oracle 兼容模式约束语义不同 |
-| SONAR | 未实现 |
+#### GaussDB-A (25) — 与 MySQL/PostgreSQL/GaussDB-M 完全对齐
 
 | 特殊 | 说明 |
 |------|------|
-| `--target-database` | 必填 (DBCOMPATIBILITY 'A') |
+| **必填参数** | `--target-database` (DBCOMPATIBILITY 'A') |
 | `--enable-clob-blob` | 启用 CLOB/BLOB 类型 |
+| `--coddtest-model` | RANDOM/EXPRESSION/SUBQUERY |
 | JIR 规则 | 6 条 (含 FULL OUTER JOIN + NATURAL JOIN) |
+| FUCCI 隔离级别 | READ_COMMITTED/REPEATABLE_READ/SERIALIZABLE/RANDOM |
+| 默认端口 | 19995 |
+| Oracle 兼容特性 | NUMBER/VARCHAR2/DATE/TIMESTAMP 类型、空字符串=NULL、ORA 错误码 |
 
 #### GaussDB-PG (12) — 最小集合
 

@@ -3,7 +3,7 @@ package sqlancer;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -175,8 +175,8 @@ public final class ComparatorHelper {
         if (!validateResultSizeOnly) {
             List<String> sortedFirst = new ArrayList<>(canonicalizedFirst);
             List<String> sortedSecond = new ArrayList<>(canonicalizedSecond);
-            Collections.sort(sortedFirst);
-            Collections.sort(sortedSecond);
+            sortedFirst.sort(Comparator.nullsFirst(Comparator.naturalOrder()));
+            sortedSecond.sort(Comparator.nullsFirst(Comparator.naturalOrder()));
 
             if (!sortedFirst.equals(sortedSecond)) {
                 // Find differences for diagnostic output

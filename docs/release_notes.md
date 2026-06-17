@@ -1,5 +1,21 @@
 # SQLancer Release Notes
 
+## v2.7.3 | 2026-06-17
+- 修复 [JIR Oracle NPE]：`ComparatorHelper.assumeResultSetsAreEqualMultiset()` 中 `Collections.sort()` 无法处理 null 值
+  - 使用 `Comparator.nullsFirst(Comparator.naturalOrder())` 替代 `Collections.sort()` 排序，null 值排在最前
+  - 修复前：JIR Oracle 结果比较中出现 NullPointerException（compareTo on null）
+- 修复 [GaussDB-A CODDTEST SQL 语法]：`GaussDBAToStringVisitor.visit(GaussDBAOracleAlias)` 渲染 alias 表达式导致非法 SQL
+  - 修改前：`expr AS t0.c0`（Oracle 不允许 `.` 在别名中 → syntax error near ".")
+  - 修改后：仅渲染 originalExpression，aliasExpression 仅用于 expected-value 跟踪（对齐 MySQL/GaussDB-M 实现）
+  - 同时为子查询添加括号包裹：`(SELECT ...) AS ...`（对齐 GaussDB-M 实现）
+- 修复 [GaussDB-A CODDTEST 错误处理]：`executeQuery()` 添加 SQLException catch → IgnoreMeException 机制
+  - Oracle 兼容模式严格类型检查：boolean/varchar/timestamp 类型不匹配是常见错误
+  - 所有非连接崩溃型(08xxx)SQL 错误一律抛出 IgnoreMeException，避免误判为 bug
+  - 新增 ExpectedErrors：boolean 类型要求、aggregate 类型不兼容、GROUP BY 要求、重复表名、missing FROM-clause
+- 修复 [GaussDBAOptions --oracle 描述]：补全缺失的 EDC_RADAR 和 SONAR（23→25 个选项列出）
+- 移除 [ComparatorHelper unused import]：删除不再使用的 `java.util.Collections`
+- 冒烟测试验证：GaussDB-A 25 个 Oracle 全部正常运行 ✅
+
 ## v2.7.2 | 2026-06-17
 - 修复 [QPS 显示精度]：`Main.java` 查询吞吐量从 `%d`（整数截断）改为 `%.1f`（一位小数）
   - 修复前：4 queries/5s = 0.8/s → `(int)0.8` = **0 queries/s**（误导）

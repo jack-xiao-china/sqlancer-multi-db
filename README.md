@@ -2,7 +2,7 @@
 
 > Extended version of [SQLancer](https://github.com/sqlancer/sqlancer) with 25+ test oracles for MySQL, PostgreSQL, GaussDB-A, GaussDB-M.
 
-**Version**: v2.7.0 (2026-06-16) · [Release Notes](docs/release_notes.md) · [Full User Guide](docs/USER_GUIDE.md) · [中文指南](docs/user_guide_cn.md)
+**Version**: v2.7.2 (2026-06-17) · [Release Notes](docs/release_notes.md) · [Full User Guide](docs/USER_GUIDE.md) · [中文指南](docs/user_guide_cn.md)
 
 ---
 
@@ -14,7 +14,7 @@
 git clone https://github.com/jack-xiao-china/sqlancer-multi-db.git
 cd sqlancer-multi-db
 mvn clean package -DskipTests
-# Output: target/sqlancer-2.7.0.jar (~4MB, deps in target/lib/)
+# Output: target/sqlancer-2.7.2.jar (~4MB, deps in target/lib/)
 ```
 
 ### Run
@@ -23,27 +23,27 @@ CLI format: **global options before DBMS command, DBMS options after it**.
 
 ```bash
 # MySQL
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost --port 3306 --username root --password your_password \
     mysql --oracle QUERY_PARTITIONING
 
 # PostgreSQL
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost --port 5432 --username postgres --password your_password \
     postgres --oracle TLP_WHERE
 
 # GaussDB-A (requires --target-database)
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host your_host --port 8000 --username your_user --password your_password \
     gaussdb-a --target-database gaussdb_a_test --oracle QUERY_PARTITIONING
 
 # GaussDB-M (requires --target-database)
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host your_host --port 19995 --username your_user --password your_password \
     gaussdb-m --target-database gaussdb_m_test --oracle AGGREGATE
 
 # CODDTEST with mode selection
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost --port 3306 --username root --password your_password \
     mysql --oracle CODDTEST --coddtest-model EXPRESSION
 ```
@@ -58,7 +58,7 @@ java -jar target/sqlancer-2.7.0.jar \
 |------|---------|--------------|--------|
 | **MySQL** | 25 | JSON, BLOB, Spatial, Full-text, CTE, Window | ✅ Verified |
 | **PostgreSQL** | 25 | Temporal, JSONB, Array, UUID, MERGE, COPY | ✅ Verified |
-| **GaussDB-A** | 23 | Oracle-compatible SQL, CLOB/BLOB, CODDTEST | ✅ Verified |
+| **GaussDB-A** | 25 | Oracle-compatible SQL, CLOB/BLOB, CODDTEST, SONAR, EDC_RADAR | ✅ Verified |
 | **GaussDB-M** | 25 | MySQL-compatible SQL, same Oracle set as MySQL | ✅ Verified |
 
 ---
@@ -74,7 +74,7 @@ java -jar target/sqlancer-2.7.0.jar \
 | **Mutation Equivalence** | DQE, DQP | DELETE/UPDATE equivalence & determinism |
 | **Database Construction** | EDC_RADAR | Equivalent database construction (constraint optimization) |
 | **Data Operation** | EDC_DATA | Equivalent data construction (data operation testing) |
-| **Performance** | SONAR (MySQL/PG/GaussDB-M) | Optimized vs unoptimized comparison |
+| **Performance** | SONAR | Optimized vs unoptimized comparison |
 | **Transaction/MVCC** | WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER | Isolation & MVCC testing |
 | **JOIN Optimizer** | **JIR** (SIGMOD 2026) | Join Implication Reasoning — 6 rules |
 | **Composite** | QUERY_PARTITIONING | Combined (TLP_WHERE + HAVING + AGGREGATE) |
@@ -111,9 +111,9 @@ Available on: **MySQL, PostgreSQL, GaussDB-M, GaussDB-A**
 | EET_UPDATE | ✅ | ✅ | ✅ | ✅ |
 | EET_DELETE | ✅ | ✅ | ✅ | ✅ |
 | **CODDTEST** | ✅ | ✅ | ✅ | ✅ |
-| EDC_RADAR | ✅ | ✅ | ✅ | — |
+| EDC_RADAR | ✅ | ✅ | ✅ | ✅ |
 | EDC_DATA | ✅ | ✅ | ✅ | ✅ |
-| SONAR | ✅ | ✅ | ✅ | — |
+| SONAR | ✅ | ✅ | ✅ | ✅ |
 | WRITE_CHECK | ✅ | ✅ | ✅ | ✅ |
 | WRITE_CHECK_REPRODUCE | ✅ | ✅ | ✅ | ✅ |
 | FUCCI | ✅ | ✅ | ✅ | ✅ |
@@ -137,7 +137,7 @@ Join Implication Reasoning detects **JOIN optimizer bugs** by comparing query re
 | **6. NATURAL_JOIN_EXPLICATION** | `NATURAL JOIN` ≡ `INNER JOIN ON (matching columns)` | Explicit equijoin condition |
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar --host localhost --port 3306 \
+java -jar target/sqlancer-2.7.2.jar --host localhost --port 3306 \
     --username root --password your_password \
     mysql --oracle JIR
 ```
@@ -164,17 +164,17 @@ CREATE DATABASE testm WITH DBCOMPATIBILITY 'M';
 
 ```bash
 # GaussDB-A
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host your_host --port 8000 --username your_user --password your_password \
     gaussdb-a --target-database testa --oracle QUERY_PARTITIONING
 
 # GaussDB-M
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host your_host --port 19995 --username your_user --password your_password \
     gaussdb-m --target-database testm --oracle QUERY_PARTITIONING
 
 # GaussDB-A with CODDTEST
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host your_host --port 8000 --username your_user --password your_password \
     gaussdb-a --target-database testa --oracle CODDTEST --coddtest-model RANDOM
 ```
@@ -224,7 +224,7 @@ java -jar target/sqlancer-2.7.0.jar \
 When a bug is found, SQLancer logs the seed and query:
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar --seed <seed_value> \
+java -jar target/sqlancer-2.7.2.jar --seed <seed_value> \
     --host localhost --port 3306 --username root --password your_password \
     mysql --oracle <oracle_name>
 ```
@@ -250,7 +250,7 @@ Logs are saved to `logs/<dbms>/<oracle>_YYYY_MMDD_HHMM/`.
 ```bash
 # Default version (from pom.xml)
 mvn package -DskipTests
-# → sqlancer-2.7.0.jar
+# → sqlancer-2.7.2.jar
 
 # Custom version
 mvn package -Drevision=2.8.0 -DskipTests

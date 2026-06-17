@@ -1,7 +1,7 @@
 # SQLancer Test Oracle Support Statistics
 
-**Date**: 2026/06/16
-**Version**: v2.7.0 (based on official SQLancer with additional oracles)
+**Date**: 2026/06/17
+**Version**: v2.7.2 (based on official SQLancer with additional oracles)
 
 ## Summary
 
@@ -48,7 +48,7 @@ This document provides a comprehensive statistics of test oracle support across 
 | PostgreSQL | 25 | 24 | 1 (QUERY_PARTITIONING) |
 | MySQL | 25 | 24 | 1 (QUERY_PARTITIONING) |
 | GaussDB-M | 25 | 24 | 1 (QUERY_PARTITIONING) |
-| GaussDB-A | 25 | 24 | 1 (QUERY_PARTITIONING) |
+| GaussDB-A | 25 | 25 | 1 (QUERY_PARTITIONING) |
 
 ### Category Distribution
 

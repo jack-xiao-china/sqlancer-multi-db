@@ -402,10 +402,20 @@ public class GaussDBAToStringVisitor extends ToStringVisitor<GaussDBAExpression>
     }
 
     public void visit(GaussDBAOracleAlias oracleAlias) {
-        visit(oracleAlias.getOriginalExpression());
-        if (oracleAlias.getAliasExpression() != null) {
-            sb.append(" AS ");
-            visit(oracleAlias.getAliasExpression());
+        // CODDTEST helper: only render the original expression for SQL generation.
+        // The aliasExpression is for expected-value tracking only (not rendered as SQL alias).
+        // Wrap subqueries in parentheses for Oracle compatibility mode.
+        if (oracleAlias.getOriginalExpression() != null) {
+            GaussDBAExpression expr = oracleAlias.getOriginalExpression();
+            if (expr instanceof GaussDBASelect) {
+                sb.append("(");
+                visit(expr);
+                sb.append(")");
+            } else {
+                visit(expr);
+            }
+        } else {
+            sb.append("NULL");
         }
     }
 

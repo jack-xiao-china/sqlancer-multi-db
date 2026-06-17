@@ -1,6 +1,6 @@
 # SQLancer User Guide
 
-**Version**: v2.7.0 (2026-06-16)
+**Version**: v2.7.2 (2026-06-17)
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-M
 
 ## Introduction
@@ -29,15 +29,15 @@ cd sqlancer-multi-db
 mvn clean package -DskipTests
 
 # Output: ~387MB single jar with all dependencies
-ls -lh target/sqlancer-2.7.0.jar
+ls -lh target/sqlancer-2.7.2.jar
 ```
 
 ### Run
 
 **Recommended** (all dependencies included in jar):
 ```bash
-java -jar target/sqlancer-2.7.0.jar mysql --oracle QUERY_PARTITIONING
-java -jar target/sqlancer-2.7.0.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
+java -jar target/sqlancer-2.7.2.jar mysql --oracle QUERY_PARTITIONING
+java -jar target/sqlancer-2.7.2.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
 ```
 
 **Alternative** (use external classpath):
@@ -59,7 +59,7 @@ java -cp "target/sqlancer-2.5.6.jar;target/lib/*" sqlancer.Main mysql --oracle N
 |------|-------------------|
 | **MySQL** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | **PostgreSQL** | NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
-| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_DATA, WRITE_CHECK, WRITE_CHECK_REPRODUCE, TX_INFER, FUCCI, JIR, FUZZER |
+| **GaussDB-A** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, TX_INFER, FUCCI, JIR, FUZZER |
 | **GaussDB-PG** | TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, NOREC, QUERY_PARTITIONING, PQS, CERT*, DQP*, DQE*, FUZZER |
 | **GaussDB-M** | TLP_WHERE, HAVING, GROUP_BY, AGGREGATE, DISTINCT, NOREC, QUERY_PARTITIONING, PQS, CERT, DQP, DQE, EET, EET_UPDATE, EET_DELETE, EET_INSERT_SELECT, CODDTEST, EDC_RADAR, EDC_DATA, SONAR, WRITE_CHECK, WRITE_CHECK_REPRODUCE, FUCCI, TX_INFER, JIR, FUZZER |
 | SQLite3 | NoREC, WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY, QUERY_PARTITIONING, PQS, CODDTEST, FUZZER |
@@ -89,7 +89,7 @@ java -cp "target/sqlancer-2.5.6.jar;target/lib/*" sqlancer.Main mysql --oracle N
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost \
     --port 3306 \
     --username root \
@@ -169,7 +169,7 @@ mysql --engines InnoDB,MyISAM,MEMORY
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost \
     --port 5432 \
     --username postgres \
@@ -212,7 +212,7 @@ java -jar target/sqlancer-2.7.0.jar \
 PQS and CERT oracles require tables to contain rows for proper testing. Use these recommended parameters:
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --username postgres \
     --password your_password \
     --num-threads 20 \
@@ -300,7 +300,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO root;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -387,7 +387,7 @@ This follows Oracle's schema-based isolation pattern.
 # CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 
 # 2. Run comprehensive test
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -420,7 +420,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -474,7 +474,7 @@ GaussDB-PG has a smaller oracle set (11 oracles). CERT, DQP, and DQE are current
 # Create PG-compatible database first
 # CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
 
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -517,7 +517,7 @@ GRANT ALL PRIVILEGES ON DATABASE testm TO your_user;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \
@@ -587,7 +587,7 @@ This approach is more reliable than auto-creating databases, which may fail due 
 ## Complete Example
 
 ```bash
-java -jar target/sqlancer-2.7.0.jar \
+java -jar target/sqlancer-2.7.2.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \
@@ -1216,6 +1216,29 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
 
 # Version History
 
+## v2.7.2 (2026-06-17)
+- **QPS Display Precision Fix**: Query throughput format changed from `%d` (integer truncation) to `%.1f` (one decimal)
+  - Before: 4 queries/5s = 0.8/s → `(int)0.8` = **0 queries/s** (misleading)
+  - After: 4 queries/5s = 0.8/s → **0.8 queries/s** (accurate)
+
+## v2.7.1 (2026-06-17)
+- **GaussDB-A SONAR Oracle**: Registered existing `GaussDBASonarOracle` to `GaussDBAOracleFactory`
+  - Compares optimized vs unoptimized query execution results to detect optimizer bugs
+- **GaussDB-A EDC_RADAR Oracle**: Equivalent Database Construction - RADAR
+  - New `GaussDBAEDCRadar.java`: Creates constraint-free raw schema within GaussDB-A (schema isolation, not database isolation)
+  - New `GaussDBAEDCRadarOracle.java`: Compares query results between original and raw schemas
+  - Uses `information_schema.columns` for column metadata, `pg_catalog.pg_constraint` for constraint metadata
+  - Adapts to GaussDB-A Oracle compatibility mode: double quotes `""`, NUMBER/VARCHAR2/DATE type mapping
+- **GaussDB-A Schema Query Fix**: `GaussDBASchema.fromConnection()` removed `public` schema table query
+  - Original query included `OR table_schema='public'` causing `testa` database's `public` tables to be counted, making `requiresAllTablesToContainRows=true` oracles (SONAR/PQS etc.) throw `IgnoreMeException` on empty tables
+- **GaussDB-A UPDATE/DELETE Generator Fix**: Changed from `getRandomTable()` + null check to `getRandomTableOrBailout()`
+  - `getRandomTable(predicate)` throws `IllegalArgumentException` when filtered list is empty (not returns null)
+  - Caused `generateDatabase()` phase UPDATE/DELETE generator crashes
+- **GaussDB-A ToStringVisitor Fix**: Added visitor methods for `GaussDBAPostfixText` and `GaussDBAManuelPredicate`
+  - SONAR Oracle uses these AST nodes to generate queries, missing visitors caused `AssertionError`
+- **GaussDB-A Oracle count reached 25, fully aligned with PostgreSQL**
+- Integration test verification: SONAR 120 queries ✅, EDC_RADAR 54 queries ✅
+
 ## v2.7.0 (2026-06-16)
 - **GaussDB-A CODDTEST Oracle**: Full 3-mode implementation (EXPRESSION/SUBQUERY/RANDOM)
   - Identical algorithm to GaussDB-M/MySQL CODDTEST
@@ -1226,7 +1249,7 @@ java -jar sqlancer.jar postgres --oracle FUCCI --fucci-oracle-type ALL --fucci-s
   - DQP NullPointerException: GaussDBAColumnReference null column defensive check in ToStringVisitor
   - EET_DELETE DateTimeException: DATE/TIMESTAMP constant generation range limited to ±365 days
   - Compilation warnings: Removed unused imports/fields across MySQL/PG/GaussDB-M CODDTEST oracles
-- **Oracle Counts**: MySQL 25, PostgreSQL 25, GaussDB-M 25, GaussDB-A 23
+- **Oracle Counts**: MySQL 25, PostgreSQL 25, GaussDB-M 25, GaussDB-A 25
 - **Cross-DBMS Matrix**: CODDTEST now supported on all 4 target databases
 
 ## v2.4.5 (2026-06-09)
