@@ -89,9 +89,13 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
                 }
                 visit(s.getFetchColumns().get(i));
                 // MySQL does not allow duplicate column names
-                sb.append(" AS ");
-                sb.append("ref");
-                sb.append(ref++);
+                // Skip alias for wildcard (*) — SELECT * AS ref0 is invalid MySQL syntax
+                MySQLExpression expr = s.getFetchColumns().get(i);
+                if (!(expr instanceof MySQLWildcard)) {
+                    sb.append(" AS ");
+                    sb.append("ref");
+                    sb.append(ref++);
+                }
             }
         }
         if (s.getFromList() != null && !s.getFromList().isEmpty()) {

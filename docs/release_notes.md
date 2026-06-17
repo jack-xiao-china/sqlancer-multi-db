@@ -1,5 +1,12 @@
 # SQLancer Release Notes
 
+## v2.7.5 | 2026-06-17
+- 修复 [JIR Oracle SELECT * 无效 SQL] (P0)：MySQLWildcard 被追加 AS ref<N> 别名，产生 `SELECT * AS ref0` 无效 MySQL 语法
+  - 修改前：`SELECT * AS ref0 FROM ...` → syntax error → IgnoreMeException → 50% JIR check 被跳过
+  - 修改后：MySQLWildcard 不追加别名 → `SELECT * FROM ...` → 有效 SQL
+  - 50% 概率 SELECT * 的 Bug 检测功能从完全失效恢复为正常工作
+  - 新增 `mysql-jir-rule-gap-analysis-v2.7.4.md` 完整分析文档
+
 ## v2.7.4 | 2026-06-17
 - 修复 [JIR Oracle Rule 3 算法偏差] (P0)：SEMI_ANTI_COMPLEMENT source 查询不应包含 JOIN
   - 修改前：source = `SELECT cols FROM L {JOIN} JOIN R ON cond`（带 JOIN）→ EXISTS/NOT EXISTS 语义不对
