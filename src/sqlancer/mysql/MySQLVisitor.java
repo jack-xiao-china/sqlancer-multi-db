@@ -34,6 +34,7 @@ import sqlancer.mysql.ast.MySQLValues;
 import sqlancer.mysql.ast.MySQLResultMap;
 import sqlancer.mysql.ast.MySQLOracleAlias;
 import sqlancer.mysql.ast.MySQLTypeof;
+import sqlancer.mysql.ast.MySQLWildcard;
 import sqlancer.mysql.ast.MySQLTableAndColumnRef;
 import sqlancer.mysql.ast.MySQLTemporalFunction;
 
@@ -109,6 +110,8 @@ public interface MySQLVisitor {
 
     void visit(MySQLTemporalFunction func);
 
+    void visit(MySQLWildcard wildcard);
+
     default void visit(MySQLExpression expr) {
         if (expr instanceof MySQLConstant) {
             visit((MySQLConstant) expr);
@@ -180,6 +183,8 @@ public interface MySQLVisitor {
             visit((MySQLTableAndColumnRef) expr);
         } else if (expr instanceof MySQLTemporalFunction) {
             visit((MySQLTemporalFunction) expr);
+        } else if (expr instanceof MySQLWildcard) {
+            visit((MySQLWildcard) expr);
         } else if (expr instanceof MySQLConstant.MySQLIntervalConstant) {
             visit((MySQLConstant) expr);
         } else {

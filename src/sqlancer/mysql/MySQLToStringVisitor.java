@@ -42,6 +42,7 @@ import sqlancer.mysql.ast.MySQLValues;
 import sqlancer.mysql.ast.MySQLResultMap;
 import sqlancer.mysql.ast.MySQLOracleAlias;
 import sqlancer.mysql.ast.MySQLTypeof;
+import sqlancer.mysql.ast.MySQLWildcard;
 import sqlancer.mysql.ast.MySQLTableAndColumnRef;
 import sqlancer.mysql.ast.MySQLTemporalFunction;
 
@@ -343,6 +344,9 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
         switch (join.getType()) {
         case NATURAL:
             sb.append("NATURAL ");
+            if (join.getOuterType() != null) {
+                sb.append(join.getOuterType().name()).append(" ");
+            }
             break;
         case INNER:
             sb.append("INNER ");
@@ -373,6 +377,11 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
     @Override
     public void visit(MySQLText text) {
         sb.append(text.getText());
+    }
+
+    @Override
+    public void visit(MySQLWildcard wildcard) {
+        sb.append("*");
     }
 
     @Override

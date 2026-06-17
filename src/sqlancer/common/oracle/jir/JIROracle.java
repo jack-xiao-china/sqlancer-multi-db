@@ -51,13 +51,12 @@ public class JIROracle<G extends SQLGlobalState<?, ?>> implements TestOracle<G> 
         @Override
         public boolean bugStillTriggers(G globalState) {
             try {
-                List<String> sourceResult = ComparatorHelper.getResultSetFirstColumnAsString(
-                        sourceQuery, errors, globalState);
-                List<String> targetResult = ComparatorHelper.getResultSetFirstColumnAsString(
-                        combinedTargetQuery, errors, globalState);
-                ComparatorHelper.assumeResultSetsAreEqualMultiset(sourceResult, targetResult,
-                        sourceQuery, List.of(combinedTargetQuery), globalState,
-                        ComparatorHelper::canonicalizeResultValue);
+                List<String> sourceResult = ComparatorHelper.getResultSetAllColumnsAsString(sourceQuery, errors,
+                        globalState);
+                List<String> targetResult = ComparatorHelper.getResultSetAllColumnsAsString(combinedTargetQuery, errors,
+                        globalState);
+                ComparatorHelper.assumeResultSetsAreEqualMultiset(sourceResult, targetResult, sourceQuery,
+                        List.of(combinedTargetQuery), globalState, ComparatorHelper::canonicalizeResultValue);
             } catch (AssertionError e) {
                 return true;
             } catch (SQLException | IgnoreMeException e) {
@@ -72,12 +71,13 @@ public class JIROracle<G extends SQLGlobalState<?, ?>> implements TestOracle<G> 
         lastQueryString = null;
         reproducer = null;
 
-        // 1. Pick at least 2 random non-empty tables (required for JOIN)
+        // 1. Pick 2-4 random non-empty tables (required for JOIN; 2+ allows multi-JOIN trees)
         List<? extends AbstractTable<?, ?, ?>> allTables = state.getSchema().getDatabaseTables();
         if (allTables.size() < 2) {
             throw new IgnoreMeException();
         }
-        List<? extends AbstractTable<?, ?, ?>> selectedTables = Randomly.nonEmptySubsetLeast(allTables, 2);
+        int maxTables = Math.min(allTables.size(), 4);
+        List<? extends AbstractTable<?, ?, ?>> selectedTables = Randomly.nonEmptySubsetLeast(allTables, 2, maxTables);
 
         // 2. Initialize transformer with selected tables
         transformer.initialize(state, selectedTables);
@@ -105,10 +105,10 @@ public class JIROracle<G extends SQLGlobalState<?, ?>> implements TestOracle<G> 
             state.getLogger().writeCurrent(sourceQuery);
         }
 
-        // 5. Execute source query
+        // 5. Execute source query (row-level comparison for SELECT * and multi-column fetch)
         List<String> sourceResult;
         try {
-            sourceResult = ComparatorHelper.getResultSetFirstColumnAsString(sourceQuery, errors, state);
+            sourceResult = ComparatorHelper.getResultSetAllColumnsAsString(sourceQuery, errors, state);
         } catch (IgnoreMeException e) {
             throw e;
         } catch (AssertionError e) {
@@ -137,7 +137,7 @@ public class JIROracle<G extends SQLGlobalState<?, ?>> implements TestOracle<G> 
                 state.getLogger().writeCurrent(targetQuery);
             }
             try {
-                targetResult = ComparatorHelper.getResultSetFirstColumnAsString(targetQuery, errors, state);
+                targetResult = ComparatorHelper.getResultSetAllColumnsAsString(targetQuery, errors, state);
             } catch (IgnoreMeException e) {
                 throw e;
             } catch (AssertionError e) {
@@ -157,7 +157,7 @@ public class JIROracle<G extends SQLGlobalState<?, ?>> implements TestOracle<G> 
                 state.getLogger().writeCurrent(combinedTargetQuery);
             }
             try {
-                targetResult = ComparatorHelper.getResultSetFirstColumnAsString(combinedTargetQuery, errors, state);
+                targetResult = ComparatorHelper.getResultSetAllColumnsAsString(combinedTargetQuery, errors, state);
             } catch (IgnoreMeException e) {
                 throw e;
             } catch (AssertionError e) {

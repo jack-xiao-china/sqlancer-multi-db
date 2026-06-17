@@ -17,9 +17,14 @@ public class MySQLJoin implements MySQLExpression, Join<MySQLExpression, MySQLTa
         NATURAL, INNER, STRAIGHT, LEFT, RIGHT, CROSS;
     }
 
+    public enum OuterType {
+        LEFT, RIGHT; // No FULL — MySQL lacks FULL JOIN
+    }
+
     private final MySQLTable table;
     private MySQLExpression onClause;
     private JoinType type;
+    private OuterType outerType; // Nullable; only used when JoinType == NATURAL
 
     public MySQLJoin(MySQLJoin other) {
         this.table = other.table;
@@ -52,6 +57,14 @@ public class MySQLJoin implements MySQLExpression, Join<MySQLExpression, MySQLTa
 
     public void setType(JoinType type) {
         this.type = type;
+    }
+
+    public OuterType getOuterType() {
+        return outerType;
+    }
+
+    public void setOuterType(OuterType outerType) {
+        this.outerType = outerType;
     }
 
     public static List<MySQLJoin> getRandomJoinClauses(List<MySQLTable> tables, MySQLGlobalState globalState) {

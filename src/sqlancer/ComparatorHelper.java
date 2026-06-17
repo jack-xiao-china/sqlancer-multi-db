@@ -253,4 +253,64 @@ public final class ComparatorHelper {
         return value;
     }
 
+    /**
+     * Read all columns from each row and concatenate them into a single string per row. Delimiter: "|" (unlikely to
+     * appear in normal data). Required for JIR Oracle SELECT * and multi-column fetch comparisons where single-column
+     * comparison (getString(1)) is insufficient.
+     */
+    public static List<String> getResultSetAllColumnsAsString(String queryString, ExpectedErrors errors,
+            SQLGlobalState<?, ?> state) throws SQLException {
+        if (state.getOptions().logEachSelect()) {
+            state.getLogger().writeCurrent(queryString);
+            try {
+                state.getLogger().getCurrentFileWriter().flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        boolean canonicalizeString = state.getOptions().canonicalizeSqlString();
+        SQLQueryAdapter q = new SQLQueryAdapter(queryString, errors, true, canonicalizeString);
+        List<String> resultSet = new ArrayList<>();
+        SQLancerResultSet result = null;
+        try {
+            result = q.executeAndGet(state);
+            state.getManager().incrementSelectQueryCount();
+            if (result == null) {
+                throw new IgnoreMeException();
+            }
+            int columnCount = result.getMetaData().getColumnCount();
+            while (result.next()) {
+                StringBuilder rowBuilder = new StringBuilder();
+                for (int i = 1; i <= columnCount; i++) {
+                    if (i > 1) {
+                        rowBuilder.append("|");
+                    }
+                    String value = result.getString(i);
+                    if (value != null) {
+                        value = canonicalizeResultValue(value);
+                        value = value.replaceAll("[\\.]0+$", "");
+                    }
+                    rowBuilder.append(value == null ? "NULL" : value);
+                }
+                resultSet.add(rowBuilder.toString());
+            }
+        } catch (Exception e) {
+            if (e instanceof IgnoreMeException) {
+                throw e;
+            }
+            if (e.getMessage() == null) {
+                throw new AssertionError(queryString, e);
+            }
+            if (errors.errorIsExpected(e.getMessage())) {
+                throw new IgnoreMeException();
+            }
+            throw new AssertionError(queryString, e);
+        } finally {
+            if (result != null && !result.isClosed()) {
+                result.close();
+            }
+        }
+        return resultSet;
+    }
+
 }

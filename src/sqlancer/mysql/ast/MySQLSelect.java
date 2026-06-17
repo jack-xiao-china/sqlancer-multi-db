@@ -1,5 +1,6 @@
 package sqlancer.mysql.ast;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -69,5 +70,20 @@ public class MySQLSelect extends SelectBase<MySQLExpression>
     @Override
     public String asString() {
         return MySQLVisitor.asString(this);
+    }
+
+    /**
+     * Remove the last JOIN clause from this select. Used by JIR anti-join transformation: remove the last LEFT JOIN
+     * and convert it to NOT EXISTS. Returns the removed join for extracting its table and ON condition.
+     */
+    public MySQLJoin removeLastJoin() {
+        List<MySQLExpression> currentList = getJoinList();
+        if (currentList.isEmpty()) {
+            throw new AssertionError("No joins to remove");
+        }
+        List<MySQLExpression> newList = new ArrayList<>(currentList);
+        MySQLExpression removed = newList.remove(newList.size() - 1);
+        setJoinList(newList);
+        return (MySQLJoin) removed;
     }
 }

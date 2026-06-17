@@ -1,5 +1,31 @@
 # SQLancer Release Notes
 
+## v2.7.4 | 2026-06-17
+- 修复 [JIR Oracle Rule 3 算法偏差] (P0)：SEMI_ANTI_COMPLEMENT source 查询不应包含 JOIN
+  - 修改前：source = `SELECT cols FROM L {JOIN} JOIN R ON cond`（带 JOIN）→ EXISTS/NOT EXISTS 语义不对
+  - 修改后：source = `SELECT cols FROM L`（纯左表）→ SEMI + ANTI UNION ALL = 左表全部行
+  - 严格对齐论文定义：$L = (L \bowtie_P^{SEMI}) \uplus (L \bowtie_P^{ANTI})$
+- 新增 [JIR Oracle 多列 Fetch + SELECT *] (P1-1)：严格对齐原生 GeneralJIROracle.generateFetchColumns()
+  - 新增 `MySQLWildcard` AST 节点：渲染为 `*`（50/50 SELECT * vs 多列子集）
+  - Anti-join NULL 列追加：SELECT * 分支追加右表列数个 NULL（对齐原生 lines 145-153）
+  - 显式列分支：右表列 → NULL 替换（对齐原生 lines 154-167）
+  - 新增 `MySQLVisitor.visit(MySQLWildcard)` + `MySQLExpectedValueVisitor.visit(MySQLWildcard)`
+- 新增 [JIR Oracle NATURAL OUTER JOIN 变体] (P1-3)：严格对齐原生 GeneralJoin.OuterType enum
+  - 新增 `MySQLJoin.OuterType` enum (LEFT, RIGHT) + `outerType` 字段
+  - `MySQLToStringVisitor` 渲染 `NATURAL LEFT JOIN` / `NATURAL RIGHT JOIN`
+  - Rule 6 随机选 plain NATURAL / NATURAL LEFT / NATURAL RIGHT，验证等价关系
+- 新增 [JIR Oracle CROSS JOIN 多变体比较] (P1-4)：对齐论文 CROSS ≡ INNER/LEFT/RIGHT ON TRUE
+  - Rule 5 随机选 INNER/LEFT/RIGHT ON TRUE 作为 target（每次测试一种，多次迭代覆盖全部）
+- 新增 [JIR Oracle 多表 JOIN 树] (P1-2)：支持 2-4 表、1-2 JOIN 链
+  - `JIROracle` 表选择扩展：`Randomly.nonEmptySubsetLeast(allTables, 2, 4)`
+  - `MySQLSelect.removeLastJoin()`：移除最后一个 JOIN（对齐原生 GeneralSelect.removeLastJoin()）
+  - `MySQLJIRTransformer.buildJoinChain()`：构建多 JOIN 链，仅变换最后一个 JOIN
+  - `Randomly.nonEmptySubsetLeast(columns, min, max)` 新增 max 参数
+- 新增 [JIR Oracle 行级比较]：`ComparatorHelper.getResultSetAllColumnsAsString()`
+  - 读取全部列拼接为行字符串（`|` 分隔），替代仅读第 1 列的 `getResultSetFirstColumnAsString`
+  - `JIROracle` + `JIRReproducer` 全面切换为行级比较
+  - 支持 SELECT * 和多列 fetch 的完整行级 Bug 检测
+
 ## v2.7.3 | 2026-06-17
 - 修复 [JIR Oracle NPE]：`ComparatorHelper.assumeResultSetsAreEqualMultiset()` 中 `Collections.sort()` 无法处理 null 值
   - 使用 `Comparator.nullsFirst(Comparator.naturalOrder())` 替代 `Collections.sort()` 排序，null 值排在最前

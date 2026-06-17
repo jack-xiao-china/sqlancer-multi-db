@@ -39,6 +39,7 @@ import sqlancer.mysql.ast.MySQLOracleAlias;
 import sqlancer.mysql.ast.MySQLTypeof;
 import sqlancer.mysql.ast.MySQLTableAndColumnRef;
 import sqlancer.mysql.ast.MySQLTemporalFunction;
+import sqlancer.mysql.ast.MySQLWildcard;
 
 public class MySQLExpectedValueVisitor implements MySQLVisitor {
 
@@ -298,5 +299,11 @@ public class MySQLExpectedValueVisitor implements MySQLVisitor {
         print(func);
         visit(func.getTemporalExpr());
         visit(func.getIntervalExpr());
+    }
+
+    @Override
+    public void visit(MySQLWildcard wildcard) {
+        // Wildcard (*) has no expected value
+        throw new IgnoreMeException();
     }
 }
