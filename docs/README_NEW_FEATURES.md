@@ -208,7 +208,7 @@ java -jar sqlancer.jar \
 
 ## Available Oracles
 
-All 25+ oracles are available for **PostgreSQL, MySQL, and GaussDB-M**, with 23 oracles for **GaussDB-A**:
+All 25+ oracles are available for **PostgreSQL, MySQL, and GaussDB-M**, with **25 oracles** for **GaussDB-A**:
 
 | Oracle | Description | Requires Rows |
 |--------|-------------|---------------|
@@ -226,9 +226,11 @@ All 25+ oracles are available for **PostgreSQL, MySQL, and GaussDB-M**, with 23 
 | **DQP** | Deterministic Query Partitioning (NEW) | No |
 | **EET** | Equivalent Expression Transformation (NEW) | No |
 | **CODDTEST** | Expression folding test (3 modes: EXPRESSION/SUBQUERY/RANDOM) (NEW) | No |
-| **EDC** | Equivalent Database Construction (NEW) | No |
+| **EDC_RADAR** | Equivalent Database Construction - constraint optimization (NEW) | No |
+| **EDC_DATA** | Equivalent Data Construction - data operation testing (NEW) | No |
 | **SONAR** | Optimized vs unoptimized comparison (NEW) | No |
 | **WRITE_CHECK** | Transaction isolation testing (NEW) | No |
+| **WRITE_CHECK_REPRODUCE** | Reproduce WRITE_CHECK bugs (NEW) | No |
 | **FUCCI** | MVCC-based testing (NEW) | No |
 | **TX_INFER** | MVCC version inference (NEW) | No |
 | **JIR** | Join Implication Reasoning (NEW — SIGMOD 2026) | No |
@@ -300,3 +302,20 @@ Contributions welcome! Please ensure:
 1. New features maintain compatibility with existing oracles
 2. Add appropriate error handling for new error types
 3. Document new command-line options
+
+---
+
+## Recent Feature Highlights (v2.7.3–v2.7.7)
+
+| Version | Feature | Description |
+|---------|---------|-------------|
+| **v2.7.7** | PostgresIndex backsConstraint | `ADD CONSTRAINT USING INDEX` no longer selects indexes already backing a constraint (`EXISTS(pg_constraint WHERE conindid = indexrelid)` check) |
+| **v2.7.6** | JIR P1: Multi-table JOIN chain | 2-3 table JOIN chains; preceding JOINs preserved, only last JOIN is transformation target |
+| **v2.7.6** | JIR P1: CROSS 4 variants | Rule 5 expanded: CROSS ≡ INNER/LEFT/RIGHT/FULL JOIN ON TRUE (PostgreSQL adds FULL variant) |
+| **v2.7.6** | JIR P1: Rule 4 full-anti | FULL JOIN decomposition now covers all columns (INNER + left-anti + right-anti) |
+| **v2.7.5** | MySQLWildcard fix | `SELECT * AS ref0` no longer generated — `SELECT *` stays valid SQL for JIR |
+| **v2.7.4** | JIR Rule3 algorithm fix | Corrected column-selection and algorithm bugs in semi-anti complement rule |
+| **v2.7.4** | Row-level comparison | `ComparatorHelper.getResultSetAllColumnsAsString()` for multi-column equality checks |
+| **v2.7.3** | JIR NPE fix | Null-safe sort in result comparison |
+| **v2.7.3** | GaussDB-A CODDTEST robustness | Visitor/error-handling fixes for GaussDB-A CODDTEST modes |
+| **v2.7.1** | GaussDB-A 25 oracle parity | SONAR + EDC_RADAR added → GaussDB-A reaches full 25 oracle parity with PostgreSQL |
