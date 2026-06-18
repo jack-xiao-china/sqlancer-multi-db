@@ -1,6 +1,6 @@
 # SQLancer User Guide
 
-**Version**: v2.7.7 (2026-06-18)
+**Version**: v2.7.8 (2026-06-18)
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-M
 
 ## Introduction
@@ -16,10 +16,11 @@ SQLancer is a tool for testing database management systems by generating random 
 
 ---
 
-## Version Highlights (v2.7.3–v2.7.7)
+## Version Highlights (v2.7.3–v2.7.8)
 
 | Version | Key Changes |
 |---------|-------------|
+| **v2.7.8** | PostgreSQL cloud-instance non-superuser fix — removed `pg_current_logfile()` and 6 SUSET GUC params (`wal_compression`/`commit_delay`/`track_activities`/`track_counts`/`track_io_timing`/`track_functions`) that raised `permission denied` under normal roles |
 | **v2.7.7** | PostgresIndex `backsConstraint` check — prevents `ADD CONSTRAINT USING INDEX` from selecting indexes that already back a constraint |
 | **v2.7.6** | JIR P1: multi-table JOIN chain (2-3 tables), Rule 5 CROSS 4 variants (INNER/LEFT/RIGHT/FULL ON TRUE), Rule 4 full-anti column coverage |
 | **v2.7.5** | JIR P0: MySQLWildcard no longer appends `AS ref0` alias to `SELECT *` — fixes invalid SQL generation |
@@ -42,24 +43,24 @@ cd sqlancer-multi-db
 mvn clean package -DskipTests
 
 # Output: ~4MB jar + target/lib/ dependencies
-ls -lh target/sqlancer-2.7.7.jar
+ls -lh target/sqlancer-2.7.8.jar
 ```
 
 ### Run
 
 **Recommended** (all dependencies included in jar):
 ```bash
-java -jar target/sqlancer-2.7.7.jar mysql --oracle QUERY_PARTITIONING
-java -jar target/sqlancer-2.7.7.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
+java -jar target/sqlancer-2.7.8.jar mysql --oracle QUERY_PARTITIONING
+java -jar target/sqlancer-2.7.8.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
 ```
 
 **Alternative** (use external classpath):
 ```bash
 # Linux/macOS
-java -cp "target/sqlancer-2.7.7.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.7.8.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
 
 # Windows
-java -cp "target/sqlancer-2.7.7.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.7.8.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
 ```
 
 ---
@@ -102,7 +103,7 @@ java -cp "target/sqlancer-2.7.7.jar;target/lib/*" sqlancer.Main mysql --oracle N
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --host localhost \
     --port 3306 \
     --username root \
@@ -182,7 +183,7 @@ mysql --engines InnoDB,MyISAM,MEMORY
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --host localhost \
     --port 5432 \
     --username postgres \
@@ -225,7 +226,7 @@ java -jar target/sqlancer-2.7.7.jar \
 PQS and CERT oracles require tables to contain rows for proper testing. Use these recommended parameters:
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --username postgres \
     --password your_password \
     --num-threads 20 \
@@ -313,7 +314,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO root;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -400,7 +401,7 @@ This follows Oracle's schema-based isolation pattern.
 # CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 
 # 2. Run comprehensive test
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -433,7 +434,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -487,7 +488,7 @@ GaussDB-PG has a smaller oracle set (11 oracles). CERT, DQP, and DQE are current
 # Create PG-compatible database first
 # CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
 
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -530,7 +531,7 @@ GRANT ALL PRIVILEGES ON DATABASE testm TO your_user;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \
@@ -600,7 +601,7 @@ This approach is more reliable than auto-creating databases, which may fail due 
 ## Complete Example
 
 ```bash
-java -jar target/sqlancer-2.7.7.jar \
+java -jar target/sqlancer-2.7.8.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \

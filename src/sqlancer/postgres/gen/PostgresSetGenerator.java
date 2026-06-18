@@ -20,11 +20,11 @@ public final class PostgresSetGenerator {
         // FSYNC("fsync", (r) -> Randomly.fromOptions(1, 0)),
         SYNCHRONOUS_COMMIT("synchronous_commit",
                 (r) -> Randomly.fromOptions("remote_apply", "remote_write", "local", "off")),
-        WAL_COMPRESSION("wal_compression", (r) -> Randomly.fromOptions(1, 0)),
+        // wal_compression is SUSET (superuser-only); excluded for non-superuser roles.
+        // WAL_COMPRESSION("wal_compression", (r) -> Randomly.fromOptions(1, 0)),
         // wal_buffer: server start
         // wal_writer_delay: server start
         // wal_writer_flush_after
-        COMMIT_DELAY("commit_delay", (r) -> r.getInteger(0, 100000)),
         COMMIT_SIBLINGS("commit_siblings", (r) -> r.getInteger(0, 1000)),
         // 19.5.2. Checkpoints
         // checkpoint_timeout
@@ -39,11 +39,13 @@ public final class PostgresSetGenerator {
         // archive_timeout
         // https://www.postgresql.org/docs/13/runtime-config-statistics.html
         // 19.9.1. Query and Index Statistics Collector
-        TRACK_ACTIVITIES("track_activities", (r) -> Randomly.fromOptions(1, 0)),
+        // track_activities / track_counts / track_io_timing / track_functions are SUSET
+        // (superuser-only); excluded for non-superuser roles to avoid false positives.
+        // TRACK_ACTIVITIES("track_activities", (r) -> Randomly.fromOptions(1, 0)),
         // track_activity_query_size
-        TRACK_COUNTS("track_counts", (r) -> Randomly.fromOptions(1, 0)),
-        TRACK_IO_TIMING("track_io_timing", (r) -> Randomly.fromOptions(1, 0)),
-        TRACK_FUNCTIONS("track_functions", (r) -> Randomly.fromOptions("'none'", "'pl'", "'all'")),
+        // TRACK_COUNTS("track_counts", (r) -> Randomly.fromOptions(1, 0)),
+        // TRACK_IO_TIMING("track_io_timing", (r) -> Randomly.fromOptions(1, 0)),
+        // TRACK_FUNCTIONS("track_functions", (r) -> Randomly.fromOptions("'none'", "'pl'", "'all'")),
         // stats_temp_directory
         // TODO 19.9.2. Statistics Monitoring
         // https://www.postgresql.org/docs/13/runtime-config-autovacuum.html

@@ -88,7 +88,7 @@ foreach ($o in $oracles) {
     "--connection-url", $ConnectionUrl,
     "--username", $Username,
     "--password", $Password,
-    "--num-tries", "1",
+    "--num-tries", "10",
     "--timeout-seconds", "$TimeoutSeconds",
     "--num-queries", "$NumQueries",
     "--log-each-select", "true",

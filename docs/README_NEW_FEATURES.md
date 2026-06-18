@@ -305,10 +305,11 @@ Contributions welcome! Please ensure:
 
 ---
 
-## Recent Feature Highlights (v2.7.3–v2.7.7)
+## Recent Feature Highlights (v2.7.3–v2.7.8)
 
 | Version | Feature | Description |
 |---------|---------|-------------|
+| **v2.7.8** | PostgreSQL non-superuser role fix | Removed `pg_current_logfile()` and 6 SUSET GUC params (`wal_compression`/`commit_delay`/`track_activities`/`track_counts`/`track_io_timing`/`track_functions`) from generation pools — eliminated `permission denied` false positives when testing cloud PostgreSQL instances with normal (non-superuser) roles |
 | **v2.7.7** | PostgresIndex backsConstraint | `ADD CONSTRAINT USING INDEX` no longer selects indexes already backing a constraint (`EXISTS(pg_constraint WHERE conindid = indexrelid)` check) |
 | **v2.7.6** | JIR P1: Multi-table JOIN chain | 2-3 table JOIN chains; preceding JOINs preserved, only last JOIN is transformation target |
 | **v2.7.6** | JIR P1: CROSS 4 variants | Rule 5 expanded: CROSS ≡ INNER/LEFT/RIGHT/FULL JOIN ON TRUE (PostgreSQL adds FULL variant) |

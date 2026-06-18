@@ -97,7 +97,7 @@ for o in "${ORACLES[@]}"; do
     --port "$DB_PORT" \
     --username "$DB_USER" \
     --password "$DB_PASS" \
-    --num-tries 1 \
+    --num-tries 10 \
     --timeout-seconds "$TIMEOUT_SECONDS" \
     --num-queries "$NUM_QUERIES" \
     --log-each-select true \

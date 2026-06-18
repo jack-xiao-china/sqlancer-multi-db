@@ -12,7 +12,7 @@
 - **测试 Oracle（Oracles）**：25 种 Oracle 检测不同类别的逻辑 Bug
 - **实验日志与调试**：主要日志默认在 `target/logs/`
 
-### 当前版本：v2.7.7
+### 当前版本：v2.7.8
 
 ### 25 种 Oracle 完整列表
 
@@ -62,15 +62,16 @@ mvn clean package -DskipTests
 
 ```bash
 cd target
-java -jar sqlancer-2.7.7.jar --host localhost --port 3306 --username root --password password --num-tries 1 --timeout-seconds 100 --log-each-select true --num-threads 2 mysql --oracle QUERY_PARTITIONING
+java -jar sqlancer-2.7.8.jar --host localhost --port 3306 --username root --password password --num-tries 1 --timeout-seconds 100 --log-each-select true --num-threads 2 mysql --oracle QUERY_PARTITIONING
 ```
 
 > ⚠️ GaussDB-A 和 GaussDB-M 需要使用 `java -cp` 方式运行（system scope 依赖），详见 `lib/README.md`
 
-## 近期重要变更 (v2.7.3–v2.7.7)
+## 近期重要变更 (v2.7.3–v2.7.8)
 
 | 版本 | 变更 |
 |------|------|
+| v2.7.8 | PostgreSQL 普通用户角色修复 — 移除 `pg_current_logfile()` 与 6 个 SUSET GUC 参数（`wal_compression`/`commit_delay`/`track_activities`/`track_counts`/`track_io_timing`/`track_functions`），消除云实例普通用户测试时 permission denied 误报 |
 | v2.7.7 | PostgresIndex `backsConstraint` 检查 — 防止 `ADD CONSTRAINT USING INDEX` 误选已关联约束的索引 |
 | v2.7.6 | JIR P1：多表 JOIN 链（2-3 表），CROSS 4 种变体，Rule 4 full-anti 全列覆盖 |
 | v2.7.5 | MySQLWildcard 修复：`SELECT * AS ref0` 不再生成 |

@@ -1,5 +1,11 @@
 # SQLancer Release Notes
 
+## v2.7.8 | 2026-06-18
+- 修复 [PostgreSQL 云实例普通用户角色测试误报]：移除需 superuser 授权的函数与 GUC 参数
+  - `PostgresFunctionWithUnknownResult`：移除 `pg_current_logfile()`（默认仅 superuser / pg_read_server_files 可调用，普通用户报 permission denied 导致误报）
+  - `PostgresSetGenerator`：移除 6 个 SUSET（superuser-only）context 的 GUC —— `wal_compression`、`commit_delay`、`track_activities`、`track_counts`、`track_io_timing`、`track_functions`，普通用户 SET 这些参数会报 permission denied 被误判为 Bug
+  - 修复目标：SQLancer 测试 PostgreSQL 云服务实例时支持普通（非 superuser）用户角色，消除因授权不足导致的假阳性
+
 ## v2.7.7 | 2026-06-18
 - 修复 [PostgreSQL schema 生成 Bug 1]：`ADD CONSTRAINT USING INDEX` 误选已关联约束的索引
   - PostgresIndex 添加 `backsConstraint` 标志，标记索引是否已 backing 一个约束

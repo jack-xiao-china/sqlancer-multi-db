@@ -31,7 +31,9 @@ public enum PostgresFunctionWithUnknownResult {
     INET_CLIENT_PORT("inet_client_port", PostgresDataType.INT),
     // INET_SERVER_PORT("inet_server_port", PostgresDataType.INT),
     PG_BACKEND_PID("pg_backend_pid", PostgresDataType.INT),
-    PG_CURRENT_LOGFILE("pg_current_logfile", PostgresDataType.TEXT),
+    // PG_CURRENT_LOGFILE requires superuser / pg_read_server_files privilege.
+    // Under a non-superuser role it raises "permission denied", producing false positives.
+    // PG_CURRENT_LOGFILE("pg_current_logfile", PostgresDataType.TEXT),
     PG_IS_OTHER_TEMP_SCHEMA("pg_is_other_temp_schema", PostgresDataType.BOOLEAN),
     PG_JIT_AVAILABLE("pg_jit_available", PostgresDataType.BOOLEAN),
     PG_NOTIFICATION_QUEUE_USAGE("pg_notification_queue_usage", PostgresDataType.REAL),
