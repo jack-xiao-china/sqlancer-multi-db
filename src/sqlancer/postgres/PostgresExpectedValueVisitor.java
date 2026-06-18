@@ -31,6 +31,7 @@ import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
+import sqlancer.postgres.ast.PostgresWildcard;
 import sqlancer.postgres.ast.PostgresScalarSubquery;
 import sqlancer.postgres.ast.PostgresLateralSubquery;
 import sqlancer.postgres.ast.PostgresSelect;
@@ -158,6 +159,11 @@ public final class PostgresExpectedValueVisitor implements PostgresVisitor {
     @Override
     public void visit(PostgresOracleExpressionBag bag) {
         visit(bag.getExpr());
+    }
+
+    @Override
+    public void visit(PostgresWildcard wildcard) {
+        throw new IgnoreMeException();
     }
 
     @Override

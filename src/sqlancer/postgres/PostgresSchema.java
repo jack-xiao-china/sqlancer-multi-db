@@ -381,24 +381,26 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         private final boolean ready;
         private final boolean partial;
         private final boolean expression;
+        private final boolean backsConstraint;
 
         private PostgresIndex(String indexName, boolean unique, boolean valid, boolean ready, boolean partial,
-                boolean expression) {
+                boolean expression, boolean backsConstraint) {
             super(indexName);
             this.unique = unique;
             this.valid = valid;
             this.ready = ready;
             this.partial = partial;
             this.expression = expression;
+            this.backsConstraint = backsConstraint;
         }
 
         public static PostgresIndex create(String indexName) {
-            return new PostgresIndex(indexName, false, true, true, false, false);
+            return new PostgresIndex(indexName, false, true, true, false, false, false);
         }
 
         public static PostgresIndex create(String indexName, boolean unique, boolean valid, boolean ready,
-                boolean partial, boolean expression) {
-            return new PostgresIndex(indexName, unique, valid, ready, partial, expression);
+                boolean partial, boolean expression, boolean backsConstraint) {
+            return new PostgresIndex(indexName, unique, valid, ready, partial, expression, backsConstraint);
         }
 
         @Override
@@ -431,7 +433,7 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         }
 
         public boolean canBeUsedForAddConstraintUsingIndex() {
-            return unique && valid && ready && !partial && !expression;
+            return unique && valid && ready && !partial && !expression && !backsConstraint;
         }
 
         public boolean canBeUsedForReplicaIdentity() {
@@ -629,7 +631,8 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
         try (Statement s = con.createStatement()) {
             try (ResultSet rs = s.executeQuery(String
                     .format("SELECT i.indexname, ix.indisunique, ix.indisvalid, ix.indisready, "
-                            + "(ix.indpred IS NOT NULL) AS is_partial, (ix.indexprs IS NOT NULL) AS is_expression "
+                            + "(ix.indpred IS NOT NULL) AS is_partial, (ix.indexprs IS NOT NULL) AS is_expression, "
+                            + "EXISTS(SELECT 1 FROM pg_constraint WHERE conindid = ix.indexrelid) AS backs_constraint "
                             + "FROM pg_indexes i "
                             + "JOIN pg_class tbl ON tbl.relname = i.tablename "
                             + "JOIN pg_namespace n ON n.oid = tbl.relnamespace AND n.nspname = i.schemaname "
@@ -643,7 +646,8 @@ public class PostgresSchema extends AbstractSchema<PostgresGlobalState, Postgres
                     if (DBMSCommon.matchesIndexName(indexName)) {
                         indexes.add(PostgresIndex.create(indexName, rs.getBoolean("indisunique"),
                                 rs.getBoolean("indisvalid"), rs.getBoolean("indisready"),
-                                rs.getBoolean("is_partial"), rs.getBoolean("is_expression")));
+                                rs.getBoolean("is_partial"), rs.getBoolean("is_expression"),
+                                rs.getBoolean("backs_constraint")));
                     }
                 }
             }

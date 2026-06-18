@@ -37,6 +37,7 @@ import sqlancer.postgres.ast.PostgresCteDefinition;
 import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
+import sqlancer.postgres.ast.PostgresWildcard;
 import sqlancer.postgres.ast.PostgresPrintedExpression;
 import sqlancer.postgres.ast.PostgresScalarSubquery;
 import sqlancer.postgres.ast.PostgresLateralSubquery;
@@ -227,6 +228,11 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
     }
 
     @Override
+    public void visit(PostgresWildcard wildcard) {
+        sb.append("*");
+    }
+
+    @Override
     public void visit(PostgresPrintedExpression printedExpression) {
         visit(printedExpression.getOriginal());
     }
@@ -290,7 +296,23 @@ public final class PostgresToStringVisitor extends ToStringVisitor<PostgresExpre
                 sb.append("CROSS JOIN");
                 break;
             case NATURAL:
-                sb.append("NATURAL JOIN");
+                sb.append("NATURAL ");
+                if (j.getOuterType() != null) {
+                    switch (j.getOuterType()) {
+                    case LEFT:
+                        sb.append("LEFT OUTER ");
+                        break;
+                    case RIGHT:
+                        sb.append("RIGHT OUTER ");
+                        break;
+                    case FULL:
+                        sb.append("FULL OUTER ");
+                        break;
+                    default:
+                        throw new AssertionError(j.getOuterType());
+                    }
+                }
+                sb.append("JOIN");
                 break;
             default:
                 throw new AssertionError(j.getType());

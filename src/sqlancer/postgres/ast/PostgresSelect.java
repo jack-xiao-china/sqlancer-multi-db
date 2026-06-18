@@ -221,6 +221,25 @@ public class PostgresSelect extends SelectBase<PostgresExpression>
         return joinClauses;
     }
 
+    /**
+     * Remove the last JOIN clause from this SELECT.
+     * Unlike GeneralSelect.removeLastJoin() which also adds leftTable to fromList,
+     * PostgreSQL's structure keeps the primary table in FROM and only references
+     * the right table via tableReference in JOIN — so fromList modification is not needed.
+     *
+     * @return the removed PostgresJoin
+     */
+    public PostgresJoin removeLastJoin() {
+        List<PostgresJoin> joins = new ArrayList<>(getJoinClauses());
+        if (joins.isEmpty()) {
+            throw new AssertionError("No joins to remove");
+        }
+        PostgresJoin removed = joins.remove(joins.size() - 1);
+        setJoinClauses(joins);
+        // No fromList modification needed — FROM always contains the primary table
+        return removed;
+    }
+
     public PostgresExpression getDistinctOnClause() {
         return distinctOnClause;
     }

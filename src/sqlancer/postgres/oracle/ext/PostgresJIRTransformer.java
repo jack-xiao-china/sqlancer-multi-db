@@ -28,21 +28,31 @@ import sqlancer.postgres.ast.PostgresExists;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresJoin;
 import sqlancer.postgres.ast.PostgresJoin.PostgresJoinType;
+import sqlancer.postgres.ast.PostgresJoin.PostgresOuterType;
 import sqlancer.postgres.ast.PostgresPrefixOperation;
 import sqlancer.postgres.ast.PostgresPrefixOperation.PrefixOperator;
 import sqlancer.postgres.ast.PostgresSelect;
-import sqlancer.postgres.ast.PostgresSelect.PostgresFromTable;
 import sqlancer.postgres.ast.PostgresTableReference;
+import sqlancer.postgres.ast.PostgresWildcard;
 import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
 
 /**
- * PostgreSQL-specific JIR transformer implementing all 6 rules.
+ * PostgreSQL-specific JIR transformer implementing all 6 rules. Strictly aligned with
+ * MySQLJIRTransformer + original GeneralJIROracle from sqlancer-scale.
+ *
+ * Key enhancements over original:
+ * - All 6 rules (original only implements Rule 1)
+ * - SELECT * + multi-column fetch (matching original's generateFetchColumns)
+ * - NATURAL OUTER JOIN variants (OuterType.LEFT/RIGHT/FULL, PostgreSQL supports FULL)
+ * - Multi-table JOIN tree support (2-4 tables, 1-2 JOINs)
+ * - Row-level result comparison (all columns, not just column 1)
+ * - PostgresFromTable → PostgresTableReference (avoids random * suffix false positive)
  */
 public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalState> {
 
-    private PostgresTable leftTable;
-    private PostgresTable rightTable;
+    private List<PostgresTable> tables;
+    private PostgresTable primaryTable; // First table (FROM table)
     private PostgresExpressionGenerator gen;
     private final ExpectedErrors errors;
 
@@ -53,13 +63,17 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     @Override
-    public void initialize(PostgresGlobalState state, List<? extends AbstractTable<?, ?, ?>> tables) {
-        this.leftTable = (PostgresTable) tables.get(0);
-        this.rightTable = (PostgresTable) tables.get(1);
+    public void initialize(PostgresGlobalState state, List<? extends AbstractTable<?, ?, ?>> selectedTables) {
+        this.tables = new ArrayList<>();
+        for (AbstractTable<?, ?, ?> t : selectedTables) {
+            this.tables.add((PostgresTable) t);
+        }
+        this.primaryTable = this.tables.get(0);
 
         List<PostgresColumn> allColumns = new ArrayList<>();
-        allColumns.addAll(leftTable.getColumns());
-        allColumns.addAll(rightTable.getColumns());
+        for (PostgresTable table : this.tables) {
+            allColumns.addAll(table.getColumns());
+        }
         this.gen = new PostgresExpressionGenerator(state).setColumns(allColumns);
     }
 
@@ -89,59 +103,64 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     // ========== Rule 1: Left Join Decomposition ==========
-    // Strictly following original GeneralJIROracle: random multi-columns from both tables,
-    // with right table columns replaced by NULL in the anti-join variant.
+    // LEFT JOIN = INNER JOIN UNION ALL ANTI JOIN (NOT EXISTS)
+    // Strictly following original GeneralJIROracle:
+    // - 50/50 SELECT * vs multi-column fetch
+    // - SELECT * branch: append right-table-column-count NULLs after *
+    // - Explicit columns branch: replace right-table column references with NULL
+    // - Multi-table JOIN tree support: transform only the last LEFT JOIN
 
     private JIRQuerySet generateLeftJoinDecomposition() {
         PostgresExpression onCondition = gen.generateExpression(0, PostgresDataType.BOOLEAN);
-        List<PostgresExpression> fetchColumns = generateRandomFetchColumns();
+        List<PostgresExpression> fetchColumns = generateFetchColumns();
+        int joinCount = decideJoinCount();
 
-        // Source: SELECT {fetchColumns} FROM L LEFT JOIN R ON cond
-        PostgresSelect sourceSelect = new PostgresSelect();
-        sourceSelect.setFetchColumns(fetchColumns);
-        sourceSelect.setFromList(Collections.singletonList(new PostgresFromTable(leftTable, false)));
-        sourceSelect.setJoinClauses(Collections
-                .singletonList(new PostgresJoin(new PostgresTableReference(rightTable), onCondition, PostgresJoinType.LEFT)));
-        sourceSelect.setAllowForClause(false);
+        // Source: SELECT {fetchColumns} FROM primaryTable {preceding joins} LEFT JOIN lastTable ON cond
+        List<PostgresJoin> sourceJoins = buildJoinChain(joinCount, PostgresJoinType.LEFT, onCondition);
+        PostgresSelect sourceSelect = createSelectWithJoins(fetchColumns, sourceJoins);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Target 1: SELECT {fetchColumns} FROM L INNER JOIN R ON cond
-        PostgresSelect innerSelect = new PostgresSelect();
-        innerSelect.setFetchColumns(fetchColumns);
-        innerSelect.setFromList(Collections.singletonList(new PostgresFromTable(leftTable, false)));
-        innerSelect.setJoinClauses(Collections
-                .singletonList(new PostgresJoin(new PostgresTableReference(rightTable), onCondition, PostgresJoinType.INNER)));
-        innerSelect.setAllowForClause(false);
+        // Target 1: Same structure but LEFT → INNER for the last join
+        List<PostgresJoin> innerJoins = buildJoinChain(joinCount, PostgresJoinType.INNER, onCondition);
+        PostgresSelect innerSelect = createSelectWithJoins(fetchColumns, innerJoins);
         String innerSQL = PostgresVisitor.asString(innerSelect);
 
-        // Target 2: SELECT {antiJoinCols} FROM L WHERE NOT EXISTS (SELECT 1 FROM R WHERE cond)
+        // Target 2: Anti-join — remove last LEFT JOIN, add NOT EXISTS
+        List<PostgresJoin> precedingJoins = buildJoinChain(joinCount, PostgresJoinType.LEFT, onCondition);
+        PostgresJoin removedJoin = precedingJoins.remove(precedingJoins.size() - 1);
         List<PostgresExpression> antiJoinCols = buildAntiJoinFetchColumns(fetchColumns);
-        String antiSQL = buildAntiJoinSQLWithCols(onCondition, antiJoinCols);
+
+        PostgresSelect antiSelect = createSelectWithJoins(antiJoinCols,
+                precedingJoins.isEmpty() ? null : precedingJoins);
+
+        // Build NOT EXISTS subquery using the removed join's table and ON condition
+        PostgresTable removedTable = ((PostgresTableReference) removedJoin.getTableReference()).getTable();
+        PostgresSelect existsSubquery = buildExistsSubquery(removedTable, removedJoin.getOnClause());
+        PostgresPrefixOperation notExists = new PostgresPrefixOperation(new PostgresExists(existsSubquery),
+                PrefixOperator.NOT);
+        antiSelect.setWhereClause(notExists);
+        String antiSQL = PostgresVisitor.asString(antiSelect);
 
         return new JIRQuerySet(sourceSQL, Arrays.asList(innerSQL, antiSQL), JIRResultType.UNION_ALL,
                 JIRRule.LEFT_JOIN_DECOMPOSITION);
     }
 
     // ========== Rule 2: Left/Right Symmetry ==========
+    // A LEFT JOIN B ON cond ≡ B RIGHT JOIN A ON cond (for left-table columns)
 
     private JIRQuerySet generateLeftRightSymmetry() {
         PostgresExpression onCondition = gen.generateExpression(0, PostgresDataType.BOOLEAN);
-        List<PostgresExpression> fetchColumns = getLeftTableFetchColumns();
+        List<PostgresExpression> fetchColumns = generateLeftTableFetchColumns();
+        int joinCount = decideJoinCount();
 
-        // Source: SELECT {fetchColumns} FROM L LEFT JOIN R ON cond
-        PostgresSelect sourceSelect = createBaseSelectWithCols(PostgresJoinType.LEFT, onCondition, fetchColumns);
+        // Source: SELECT {fetchColumns} FROM primaryTable {preceding joins} LEFT JOIN lastTable ON cond
+        List<PostgresJoin> sourceJoins = buildJoinChain(joinCount, PostgresJoinType.LEFT, onCondition);
+        PostgresSelect sourceSelect = createSelectWithJoins(fetchColumns, sourceJoins);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Target: SELECT {fetchColumns} FROM R RIGHT JOIN L ON cond
-        PostgresSelect targetSelect = new PostgresSelect();
-        targetSelect.setFetchColumns(fetchColumns);
-        targetSelect.setFromList(Collections.singletonList(new PostgresFromTable(rightTable, false)));
-
-        PostgresJoin rightJoin = new PostgresJoin(new PostgresTableReference(leftTable), onCondition,
-                PostgresJoinType.RIGHT);
-        targetSelect.setJoinClauses(Collections.singletonList(rightJoin));
-        targetSelect.setAllowForClause(false);
-
+        // Target: Same structure but LEFT → RIGHT for the last join
+        List<PostgresJoin> targetJoins = buildJoinChain(joinCount, PostgresJoinType.RIGHT, onCondition);
+        PostgresSelect targetSelect = createSelectWithJoins(fetchColumns, targetJoins);
         String targetSQL = PostgresVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -149,27 +168,36 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     // ========== Rule 3: Semi/Anti Complement ==========
+    // L = (L WHERE EXISTS (SELECT 1 FROM R WHERE cond)) UNION ALL (L WHERE NOT EXISTS (...))
+    // Source is pure left table (no JOIN), per paper definition
 
     private JIRQuerySet generateSemiAntiComplement() {
         PostgresExpression onCondition = gen.generateExpression(0, PostgresDataType.BOOLEAN);
-        PostgresJoinType joinType = Randomly.fromOptions(PostgresJoinType.INNER, PostgresJoinType.LEFT,
-                PostgresJoinType.RIGHT, PostgresJoinType.FULL);
-        List<PostgresExpression> fetchColumns = getLeftTableFetchColumns();
+        List<PostgresExpression> fetchColumns = generateLeftTableFetchColumns();
 
-        // Source: SELECT {fetchColumns} FROM L {type} JOIN R ON cond
-        PostgresSelect sourceSelect = createBaseSelectWithCols(joinType, onCondition, fetchColumns);
+        // Source: SELECT {leftCols} FROM L (pure left table, no JOIN)
+        PostgresSelect sourceSelect = new PostgresSelect();
+        sourceSelect.setFetchColumns(fetchColumns);
+        sourceSelect.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
+        sourceSelect.setAllowForClause(false);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Build EXISTS subquery
-        PostgresSelect existsSubquery = buildExistsSubquery(onCondition);
+        // Build EXISTS subquery on right table
+        PostgresSelect existsSubquery = buildExistsSubquery(getRightTable(), onCondition);
 
-        // Target 1: Source + WHERE EXISTS
-        PostgresSelect semiSelect = createBaseSelectWithCols(joinType, onCondition, fetchColumns);
+        // Target 1 (SEMI): SELECT {leftCols} FROM L WHERE EXISTS (SELECT 1 FROM R WHERE cond)
+        PostgresSelect semiSelect = new PostgresSelect();
+        semiSelect.setFetchColumns(fetchColumns);
+        semiSelect.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
+        semiSelect.setAllowForClause(false);
         semiSelect.setWhereClause(new PostgresExists(existsSubquery));
         String semiSQL = PostgresVisitor.asString(semiSelect);
 
-        // Target 2: Source + WHERE NOT EXISTS
-        PostgresSelect antiSelect = createBaseSelectWithCols(joinType, onCondition, fetchColumns);
+        // Target 2 (ANTI): SELECT {leftCols} FROM L WHERE NOT EXISTS (SELECT 1 FROM R WHERE cond)
+        PostgresSelect antiSelect = new PostgresSelect();
+        antiSelect.setFetchColumns(fetchColumns);
+        antiSelect.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
+        antiSelect.setAllowForClause(false);
         PostgresPrefixOperation notExists = new PostgresPrefixOperation(new PostgresExists(existsSubquery),
                 PrefixOperator.NOT);
         antiSelect.setWhereClause(notExists);
@@ -180,41 +208,52 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     // ========== Rule 4: Full Join Decomposition (PG only) ==========
+    // FULL OUTER JOIN = INNER JOIN UNION ALL left-anti UNION ALL right-anti
+    // Uses generateFetchColumns() (both tables) for complete column coverage:
+    // - left-anti: left cols present + right cols → NULL
+    // - right-anti: left cols → NULL + right cols present
 
     private JIRQuerySet generateFullJoinDecomposition() {
         PostgresExpression onCondition = gen.generateExpression(0, PostgresDataType.BOOLEAN);
-        List<PostgresExpression> fetchColumns = getLeftTableFetchColumns();
+        List<PostgresExpression> fetchColumns = generateFetchColumns();
 
         // Source: SELECT {fetchColumns} FROM L FULL OUTER JOIN R ON cond
         PostgresSelect sourceSelect = createBaseSelectWithCols(PostgresJoinType.FULL, onCondition, fetchColumns);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Target 1: INNER JOIN
+        // Target 1: INNER JOIN — all columns present
         PostgresSelect innerSelect = createBaseSelectWithCols(PostgresJoinType.INNER, onCondition, fetchColumns);
         String innerSQL = PostgresVisitor.asString(innerSelect);
 
-        // Target 2: Left anti-join (L rows with no match in R)
-        String leftAntiSQL = buildAntiJoinSQL(onCondition, fetchColumns);
+        // Target 2: Left anti-join (L rows with no match in R) — left cols present, right cols → NULL
+        List<PostgresExpression> leftAntiCols = buildAntiJoinFetchColumns(fetchColumns);
+        String leftAntiSQL = buildAntiJoinSQLWithCols(onCondition, leftAntiCols);
 
-        // Target 3: Right anti-join (R rows with no match in L) → SELECT NULL
-        String rightAntiSQL = buildReverseAntiJoinSQL(onCondition);
+        // Target 3: Right anti-join (R rows with no match in L) — left cols → NULL, right cols present
+        List<PostgresExpression> rightAntiCols = buildReverseAntiJoinFetchColumns(fetchColumns);
+        String rightAntiSQL = buildReverseAntiJoinSQLWithCols(onCondition, rightAntiCols);
 
         return new JIRQuerySet(sourceSQL, Arrays.asList(innerSQL, leftAntiSQL, rightAntiSQL), JIRResultType.UNION_ALL,
                 JIRRule.FULL_JOIN_DECOMPOSITION);
     }
 
     // ========== Rule 5: Cross Join Equivalence ==========
+    // CROSS JOIN ≡ INNER JOIN ON TRUE ≡ LEFT JOIN ON TRUE ≡ RIGHT JOIN ON TRUE ≡ FULL JOIN ON TRUE
+    // Randomly pick one variant per check() call; multiple iterations cover all variants
 
     private JIRQuerySet generateCrossJoinEquivalence() {
-        List<PostgresExpression> fetchColumns = getLeftTableFetchColumns();
+        List<PostgresExpression> fetchColumns = generateLeftTableFetchColumns();
 
         // Source: SELECT {fetchColumns} FROM L CROSS JOIN R
         PostgresSelect sourceSelect = createBaseSelectWithCols(PostgresJoinType.CROSS, null, fetchColumns);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Target: SELECT {fetchColumns} FROM L INNER JOIN R ON TRUE
+        // Randomly pick target variant: INNER/LEFT/RIGHT/FULL ON TRUE
+        // PostgreSQL supports FULL JOIN, so include it (MySQL only has INNER/LEFT/RIGHT)
+        PostgresJoinType targetJoinType = Randomly.fromOptions(PostgresJoinType.INNER, PostgresJoinType.LEFT,
+                PostgresJoinType.RIGHT, PostgresJoinType.FULL);
         PostgresExpression onTrue = PostgresConstant.createTrue();
-        PostgresSelect targetSelect = createBaseSelectWithCols(PostgresJoinType.INNER, onTrue, fetchColumns);
+        PostgresSelect targetSelect = createBaseSelectWithCols(targetJoinType, onTrue, fetchColumns);
         String targetSQL = PostgresVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -222,11 +261,17 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     // ========== Rule 6: Natural Join Explication ==========
+    // NATURAL [LEFT|RIGHT|FULL OUTER] JOIN ≡ [INNER|LEFT|RIGHT|FULL OUTER] JOIN ON (equalities)
+    // Supports NATURAL LEFT/RIGHT/FULL OUTER JOIN variants via OuterType.
 
     private JIRQuerySet generateNaturalJoinExplication() {
-        // Find common column names
-        List<PostgresColumn> leftCols = leftTable.getColumns();
-        List<PostgresColumn> rightCols = rightTable.getColumns();
+        // Randomly pick NATURAL variant: plain, LEFT, RIGHT, FULL
+        PostgresOuterType outerType = Randomly.fromOptions((PostgresOuterType) null, PostgresOuterType.LEFT,
+                PostgresOuterType.RIGHT, PostgresOuterType.FULL);
+
+        // Find common column names between primary table and second table
+        List<PostgresColumn> leftCols = primaryTable.getColumns();
+        List<PostgresColumn> rightCols = tables.get(1).getColumns();
 
         List<PostgresExpression> equalities = new ArrayList<>();
         for (PostgresColumn lc : leftCols) {
@@ -252,14 +297,49 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
                     BinaryLogicalOperator.AND);
         }
 
-        List<PostgresExpression> fetchColumns = getLeftTableFetchColumns();
+        // Determine target JoinType based on OuterType:
+        // null → INNER, LEFT → LEFT, RIGHT → RIGHT, FULL → FULL
+        PostgresJoinType targetJoinType;
+        if (outerType == null) {
+            targetJoinType = PostgresJoinType.INNER;
+        } else {
+            switch (outerType) {
+            case LEFT:
+                targetJoinType = PostgresJoinType.LEFT;
+                break;
+            case RIGHT:
+                targetJoinType = PostgresJoinType.RIGHT;
+                break;
+            case FULL:
+                targetJoinType = PostgresJoinType.FULL;
+                break;
+            default:
+                throw new AssertionError(outerType);
+            }
+        }
 
-        // Source: NATURAL JOIN via AST (PostgresJoinType.NATURAL)
-        PostgresSelect sourceSelect = createBaseSelectWithCols(PostgresJoinType.NATURAL, null, fetchColumns);
+        // Rule 6 must NOT use SELECT * — NATURAL JOIN deduplicates common columns,
+        // producing fewer result columns than INNER JOIN ON (equalities).
+        List<PostgresExpression> fetchColumns = generateLeftTableFetchColumnsNoWildcard();
+
+        // Source: SELECT {fetchColumns} FROM L NATURAL [{outerType}] JOIN R
+        PostgresSelect sourceSelect = new PostgresSelect();
+        sourceSelect.setFetchColumns(fetchColumns);
+        sourceSelect.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
+        sourceSelect.setAllowForClause(false);
+        PostgresJoin naturalJoin = new PostgresJoin(new PostgresTableReference(tables.get(1)), null,
+                PostgresJoinType.NATURAL);
+        naturalJoin.setOuterType(outerType);
+        sourceSelect.setJoinClauses(Collections.singletonList(naturalJoin));
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Target: INNER JOIN with explicit equality conditions
-        PostgresSelect targetSelect = createBaseSelectWithCols(PostgresJoinType.INNER, explicitOn, fetchColumns);
+        // Target: SELECT {fetchColumns} FROM L {targetJoinType} JOIN R ON (equalities)
+        PostgresSelect targetSelect = new PostgresSelect();
+        targetSelect.setFetchColumns(fetchColumns);
+        targetSelect.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
+        targetSelect.setAllowForClause(false);
+        targetSelect.setJoinClauses(Collections.singletonList(
+                new PostgresJoin(new PostgresTableReference(tables.get(1)), explicitOn, targetJoinType)));
         String targetSQL = PostgresVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -269,26 +349,94 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     // ========== Helper Methods ==========
 
     /**
-     * Pick ONE random column from either table for Rule 1 fetch columns.
-     * Single-column ensures NULL substitution is precisely verified by getString(1).
+     * Generate fetch columns for Rule 1 (LEFT JOIN Decomposition): 50/50 SELECT * vs multi-column
+     * random subset from both tables. Matches original GeneralJIROracle.generateFetchColumns().
      */
-    private List<PostgresExpression> generateRandomFetchColumns() {
-        List<PostgresColumn> allCols = new ArrayList<>();
-        allCols.addAll(leftTable.getColumns());
-        allCols.addAll(rightTable.getColumns());
-        return Collections.singletonList(PostgresColumnValue.create(Randomly.fromList(allCols), null));
+    private List<PostgresExpression> generateFetchColumns() {
+        List<PostgresExpression> columns = new ArrayList<>();
+        if (Randomly.getBoolean()) {
+            // SELECT * — 50% probability
+            columns.add(new PostgresWildcard());
+        } else {
+            // Multi-column subset from both tables — 50% probability
+            List<PostgresColumn> allCols = new ArrayList<>();
+            allCols.addAll(primaryTable.getColumns());
+            allCols.addAll(tables.get(1).getColumns());
+            List<PostgresColumn> subset = Randomly.nonEmptySubset(allCols);
+            for (PostgresColumn col : subset) {
+                columns.add(PostgresColumnValue.create(col, null));
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * Generate fetch columns from left table only: 50/50 SELECT * vs multi-column random subset.
+     * Used by Rules 2, 3, 5 where comparison must be on left-table columns only.
+     */
+    private List<PostgresExpression> generateLeftTableFetchColumns() {
+        List<PostgresExpression> columns = new ArrayList<>();
+        List<PostgresColumn> leftCols = primaryTable.getColumns();
+        if (leftCols.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        if (Randomly.getBoolean()) {
+            // SELECT * — 50% probability
+            columns.add(new PostgresWildcard());
+        } else {
+            // Multi-column subset from left table — 50% probability
+            List<PostgresColumn> subset = Randomly.nonEmptySubset(leftCols);
+            for (PostgresColumn col : subset) {
+                columns.add(PostgresColumnValue.create(col, null));
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * Generate fetch columns from left table only WITHOUT SELECT * wildcard.
+     * Used by Rule 6 (NATURAL_JOIN_EXPLICATION) because NATURAL JOIN deduplicates
+     * common columns (fewer result columns) while INNER JOIN ON (equalities) does not.
+     * SELECT * would cause column-count mismatch → false positive.
+     */
+    private List<PostgresExpression> generateLeftTableFetchColumnsNoWildcard() {
+        List<PostgresColumn> leftCols = primaryTable.getColumns();
+        if (leftCols.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        List<PostgresColumn> subset = Randomly.nonEmptySubset(leftCols);
+        List<PostgresExpression> columns = new ArrayList<>();
+        for (PostgresColumn col : subset) {
+            columns.add(PostgresColumnValue.create(col, null));
+        }
+        return columns;
     }
 
     /**
      * Build anti-join fetch columns: replace right table columns with NULL constants.
-     * Aligns with original GeneralJIROracle anti-join NULL substitution logic.
+     * Strictly follows original GeneralJIROracle anti-join NULL substitution logic:
+     * - SELECT * branch: append *, then lastTable.getColumns().size() NULL columns
+     * - Explicit columns branch: replace right-table column references with NULL
+     * Uses tables.get(tables.size()-1) for multi-table chain correctness.
      */
     private List<PostgresExpression> buildAntiJoinFetchColumns(List<PostgresExpression> fetchColumns) {
         List<PostgresExpression> result = new ArrayList<>();
+        PostgresTable lastTable = tables.get(tables.size() - 1);
+
+        // SELECT * branch: *, NULL, NULL, ... (one NULL per right-table column)
+        if (fetchColumns.size() == 1 && fetchColumns.get(0) instanceof PostgresWildcard) {
+            result.add(new PostgresWildcard()); // * expands to left-table columns (FROM is only L)
+            for (int i = 0; i < lastTable.getColumns().size(); i++) {
+                result.add(PostgresConstant.createNullConstant());
+            }
+            return result;
+        }
+
+        // Explicit columns branch: replace right-table column references with NULL
         for (PostgresExpression expr : fetchColumns) {
             if (expr instanceof PostgresColumnValue) {
                 PostgresColumn col = ((PostgresColumnValue) expr).getColumn();
-                if (col.getTable().getName().equals(rightTable.getName())) {
+                if (col.getTable().getName().equals(lastTable.getName())) {
                     result.add(PostgresConstant.createNullConstant());
                 } else {
                     result.add(expr);
@@ -301,69 +449,102 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     /**
-     * Build anti-join SQL string with custom fetch columns:
-     * SELECT {antiJoinCols} FROM L WHERE NOT EXISTS (SELECT 1 FROM R WHERE cond).
+     * Build a chain of JOINs from the table list. The last JOIN is the transformation target.
+     * Earlier JOINs form the context (random types: INNER/LEFT/RIGHT).
+     * Matches original GeneralJoin.getJoins() pattern.
      */
-    private String buildAntiJoinSQLWithCols(PostgresExpression onCondition, List<PostgresExpression> antiJoinCols) {
-        PostgresSelect antiSelect = new PostgresSelect();
-        antiSelect.setFetchColumns(antiJoinCols);
-        antiSelect.setFromList(Collections.singletonList(new PostgresFromTable(leftTable, false)));
-        antiSelect.setAllowForClause(false);
+    private List<PostgresJoin> buildJoinChain(int joinCount, PostgresJoinType lastJoinType,
+            PostgresExpression lastOnCondition) {
+        List<PostgresJoin> joins = new ArrayList<>();
 
-        PostgresSelect existsSubquery = buildExistsSubquery(onCondition);
-        PostgresPrefixOperation notExists = new PostgresPrefixOperation(new PostgresExists(existsSubquery),
-                PrefixOperator.NOT);
-        antiSelect.setWhereClause(notExists);
+        // Build preceding JOINs (random types, random ON conditions)
+        for (int i = 1; i < joinCount; i++) {
+            PostgresTable joinTable = tables.get(i);
+            PostgresExpression onCond = gen.generateExpression(0, PostgresDataType.BOOLEAN);
+            PostgresJoinType type = Randomly.fromOptions(PostgresJoinType.INNER, PostgresJoinType.LEFT,
+                    PostgresJoinType.RIGHT);
+            joins.add(new PostgresJoin(new PostgresTableReference(joinTable), onCond, type));
+        }
 
-        return PostgresVisitor.asString(antiSelect);
+        // Build the last JOIN (transformation target with specified type and ON condition)
+        PostgresTable lastTable = tables.get(joinCount);
+        joins.add(new PostgresJoin(new PostgresTableReference(lastTable), lastOnCondition, lastJoinType));
+
+        return joins;
     }
 
     /**
-     * Create a base SELECT with external fetch columns, FROM left table, and a single JOIN to right table.
-     * Used by Rules 2-6 where fetch columns must be shared across source/target queries.
+     * Decide how many JOINs to generate. 1 JOIN most of the time (matching original),
+     * 2 JOINs with rather low probability (for multi-table JOIN tree support).
+     */
+    private int decideJoinCount() {
+        if (tables.size() >= 3 && Randomly.getBooleanWithRatherLowProbability()) {
+            return Math.min(tables.size() - 1, 2); // Up to 2 JOINs (3 tables)
+        }
+        return 1; // 1 JOIN (2 tables) — most common, matching original
+    }
+
+    /**
+     * Create a SELECT with specified fetch columns, FROM primaryTable, and optional JOIN clauses.
+     */
+    private PostgresSelect createSelectWithJoins(List<PostgresExpression> fetchColumns,
+            List<PostgresJoin> joinClauses) {
+        PostgresSelect select = new PostgresSelect();
+        select.setFetchColumns(fetchColumns);
+        select.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
+        select.setAllowForClause(false);
+        if (joinClauses != null && !joinClauses.isEmpty()) {
+            select.setJoinClauses(joinClauses);
+        }
+        return select;
+    }
+
+    /**
+     * Create a base SELECT with external fetch columns, FROM primaryTable, and a single JOIN to right table.
+     * Used by Rules 4, 5, 6 where only 2 tables are involved.
      */
     private PostgresSelect createBaseSelectWithCols(PostgresJoinType joinType, PostgresExpression onCondition,
             List<PostgresExpression> fetchColumns) {
         PostgresSelect select = new PostgresSelect();
         select.setFetchColumns(fetchColumns);
-        select.setFromList(Collections.singletonList(new PostgresFromTable(leftTable, false)));
+        select.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
         select.setAllowForClause(false);
 
         if (joinType == PostgresJoinType.CROSS || joinType == PostgresJoinType.NATURAL) {
-            PostgresJoin crossJoin = new PostgresJoin(new PostgresTableReference(rightTable), null, joinType);
+            PostgresJoin crossJoin = new PostgresJoin(new PostgresTableReference(tables.get(1)), null, joinType);
             select.setJoinClauses(Collections.singletonList(crossJoin));
         } else {
-            PostgresJoin join = new PostgresJoin(new PostgresTableReference(rightTable), onCondition, joinType);
+            PostgresJoin join = new PostgresJoin(new PostgresTableReference(tables.get(1)), onCondition, joinType);
             select.setJoinClauses(Collections.singletonList(join));
         }
 
         return select;
     }
 
-    private List<PostgresExpression> getLeftTableFetchColumns() {
-        List<PostgresColumn> cols = leftTable.getColumns();
-        if (cols.isEmpty()) {
-            throw new IgnoreMeException();
-        }
-        return Collections.singletonList(PostgresColumnValue.create(Randomly.fromList(cols), null));
+    /**
+     * Build EXISTS subquery: SELECT 1 FROM table WHERE condition.
+     */
+    private PostgresSelect buildExistsSubquery(PostgresTable table, PostgresExpression onCondition) {
+        PostgresSelect subquery = new PostgresSelect();
+        subquery.setFetchColumns(Collections.singletonList(PostgresConstant.createIntConstant(1)));
+        subquery.setFromList(Collections.singletonList(new PostgresTableReference(table)));
+        subquery.setWhereClause(onCondition);
+        subquery.setAllowForClause(false);
+        return subquery;
     }
 
-    private PostgresSelect buildExistsSubquery(PostgresExpression onCondition) {
-        PostgresSelect existsSub = new PostgresSelect();
-        existsSub.setFetchColumns(Collections.singletonList(PostgresConstant.createIntConstant(1)));
-        existsSub.setFromList(Collections.singletonList(new PostgresFromTable(rightTable, false)));
-        existsSub.setWhereClause(onCondition);
-        existsSub.setAllowForClause(false);
-        return existsSub;
-    }
-
-    private String buildAntiJoinSQL(PostgresExpression onCondition, List<PostgresExpression> fetchColumns) {
+    /**
+     * Build anti-join SQL string with custom fetch columns:
+     * SELECT {antiJoinCols} FROM primaryTable WHERE NOT EXISTS (SELECT 1 FROM R WHERE cond).
+     * Used by Rule 1 (with preceding joins) and Rule 4 (left-anti branch).
+     */
+    private String buildAntiJoinSQLWithCols(PostgresExpression onCondition, List<PostgresExpression> antiJoinCols) {
         PostgresSelect antiSelect = new PostgresSelect();
-        antiSelect.setFetchColumns(fetchColumns);
-        antiSelect.setFromList(Collections.singletonList(new PostgresFromTable(leftTable, false)));
+        antiSelect.setFetchColumns(antiJoinCols);
+        antiSelect.setFromList(Collections.singletonList(new PostgresTableReference(primaryTable)));
         antiSelect.setAllowForClause(false);
 
-        PostgresSelect existsSubquery = buildExistsSubquery(onCondition);
+        PostgresSelect existsSubquery = buildExistsSubquery(getRightTable(), onCondition);
         PostgresPrefixOperation notExists = new PostgresPrefixOperation(new PostgresExists(existsSubquery),
                 PrefixOperator.NOT);
         antiSelect.setWhereClause(notExists);
@@ -372,25 +553,66 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     /**
-     * Build reverse anti-join for Rule 4: SELECT NULL FROM R WHERE NOT EXISTS (SELECT 1 FROM L WHERE cond).
+     * Build reverse anti-join fetch columns for Rule 4: left-table columns → NULL, right-table columns preserved.
+     * Inverse of buildAntiJoinFetchColumns() which replaces right-table columns with NULL.
+     * - SELECT * branch: primaryTable.getColumns().size() NULLs + all right-table columns
+     * - Explicit columns branch: replace left-table column references with NULL, keep right-table ones
      */
-    private String buildReverseAntiJoinSQL(PostgresExpression onCondition) {
+    private List<PostgresExpression> buildReverseAntiJoinFetchColumns(List<PostgresExpression> fetchColumns) {
+        List<PostgresExpression> result = new ArrayList<>();
+
+        // SELECT * branch: |primaryTable.columns| NULLs + all right-table columns
+        if (fetchColumns.size() == 1 && fetchColumns.get(0) instanceof PostgresWildcard) {
+            for (int i = 0; i < primaryTable.getColumns().size(); i++) {
+                result.add(PostgresConstant.createNullConstant());
+            }
+            for (PostgresColumn col : getRightTable().getColumns()) {
+                result.add(PostgresColumnValue.create(col, null));
+            }
+            return result;
+        }
+
+        // Explicit columns branch: replace left-table column references with NULL, keep right-table ones
+        for (PostgresExpression expr : fetchColumns) {
+            if (expr instanceof PostgresColumnValue) {
+                PostgresColumn col = ((PostgresColumnValue) expr).getColumn();
+                if (col.getTable().getName().equals(primaryTable.getName())) {
+                    result.add(PostgresConstant.createNullConstant());
+                } else {
+                    result.add(expr);
+                }
+            } else {
+                result.add(expr);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Build reverse anti-join SQL with custom fetch columns:
+     * SELECT {rightAntiCols} FROM R WHERE NOT EXISTS (SELECT 1 FROM L WHERE cond).
+     */
+    private String buildReverseAntiJoinSQLWithCols(PostgresExpression onCondition,
+            List<PostgresExpression> rightAntiCols) {
         PostgresSelect reverseAntiSelect = new PostgresSelect();
-        reverseAntiSelect.setFetchColumns(Collections.singletonList(PostgresConstant.createNullConstant()));
-        reverseAntiSelect.setFromList(Collections.singletonList(new PostgresFromTable(rightTable, false)));
+        reverseAntiSelect.setFetchColumns(rightAntiCols);
+        reverseAntiSelect.setFromList(Collections.singletonList(new PostgresTableReference(getRightTable())));
         reverseAntiSelect.setAllowForClause(false);
 
         // Reverse EXISTS: SELECT 1 FROM L WHERE cond
-        PostgresSelect reverseExistsSub = new PostgresSelect();
-        reverseExistsSub.setFetchColumns(Collections.singletonList(PostgresConstant.createIntConstant(1)));
-        reverseExistsSub.setFromList(Collections.singletonList(new PostgresFromTable(leftTable, false)));
-        reverseExistsSub.setWhereClause(onCondition);
-        reverseExistsSub.setAllowForClause(false);
+        PostgresSelect reverseExistsSub = buildExistsSubquery(primaryTable, onCondition);
 
         PostgresPrefixOperation notExists = new PostgresPrefixOperation(new PostgresExists(reverseExistsSub),
                 PrefixOperator.NOT);
         reverseAntiSelect.setWhereClause(notExists);
 
         return PostgresVisitor.asString(reverseAntiSelect);
+    }
+
+    /**
+     * Get the right table for Rules 3, 4, 5, 6 (always tables.get(1)).
+     */
+    private PostgresTable getRightTable() {
+        return tables.get(1);
     }
 }

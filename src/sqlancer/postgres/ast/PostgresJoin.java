@@ -29,9 +29,23 @@ public class PostgresJoin implements PostgresExpression, Join<PostgresExpression
 
     }
 
+    /**
+     * Outer type for NATURAL JOIN variants: NATURAL LEFT OUTER JOIN, NATURAL RIGHT OUTER JOIN,
+     * NATURAL FULL OUTER JOIN. Matches original GeneralJoin.OuterType (FULL, LEFT, RIGHT).
+     * PostgreSQL supports all three; MySQL only supports LEFT and RIGHT (no FULL JOIN).
+     */
+    public enum PostgresOuterType {
+        LEFT, RIGHT, FULL;
+
+        public static PostgresOuterType getRandom() {
+            return Randomly.fromOptions(values());
+        }
+    }
+
     private final PostgresExpression tableReference;
     private PostgresExpression onClause;
     private PostgresJoinType type;
+    private PostgresOuterType outerType; // Nullable; only used when JoinType == NATURAL
     private final PostgresExpression leftTable;
     private final PostgresExpression rightTable;
 
@@ -106,6 +120,14 @@ public class PostgresJoin implements PostgresExpression, Join<PostgresExpression
 
     public PostgresJoinType getType() {
         return type;
+    }
+
+    public PostgresOuterType getOuterType() {
+        return outerType;
+    }
+
+    public void setOuterType(PostgresOuterType outerType) {
+        this.outerType = outerType;
     }
 
     @Override

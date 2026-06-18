@@ -1,5 +1,28 @@
 # SQLancer Release Notes
 
+## v2.7.7 | 2026-06-18
+- 修复 [PostgreSQL schema 生成 Bug 1]：`ADD CONSTRAINT USING INDEX` 误选已关联约束的索引
+  - PostgresIndex 添加 `backsConstraint` 标志，标记索引是否已 backing 一个约束
+  - `canBeUsedForAddConstraintUsingIndex()` 新增 `!backsConstraint` 条件
+  - `getIndexes()` SQL 查询添加 `EXISTS(pg_constraint WHERE conindid = indexrelid)` 子查询
+
+## v2.7.6 | 2026-06-17
+- 新增 [PostgreSQL JIR Oracle 多表 JOIN 链] (P1-1)：对齐 MySQLJIRTransformer 多表架构
+  - 字段重构：`leftTable + rightTable` → `List<PostgresTable> tables + primaryTable`
+  - 新增 `buildJoinChain()`：1-2 个 JOIN 链，仅 transform 最后一个 JOIN
+  - 新增 `decideJoinCount()`：1 JOIN（高概率）或 2 JOIN（低概率），最多 3 表
+  - Rule 1/2 支持多表链：preceding joins 保留不变，last JOIN 是变换目标
+  - `initialize()` 收集所有选中表到 `tables` 列表，generator 列池包含全部表列
+- 新增 [PostgreSQL JIR Rule 5 CROSS JOIN 多变体] (P1-3)
+  - 修改前：CROSS JOIN ≡ INNER JOIN ON TRUE（仅 1 种变体）
+  - 修改后：CROSS JOIN ≡ INNER/LEFT/RIGHT/FULL JOIN ON TRUE（4 种变体随机选）
+  - PostgreSQL 支持 FULL JOIN，因此包含 FULL ON TRUE 变体（MySQL 不支持）
+- 新增 [PostgreSQL JIR Rule 4 right-anti 完整化] (P1-4)
+  - 修改前：right-anti 输出 `SELECT NULL`（仅 1 列 NULL，与多列 fetch 不匹配）
+  - 修改后：改用 `generateFetchColumns()`（双表列），right-anti 输出 左表列→NULL + 右表列保留
+  - 新增 `buildReverseAntiJoinFetchColumns()`：左表列→NULL + 右表列保留（SELECT * 分支 + 显式列分支）
+  - FULL JOIN 分解现在完整覆盖所有列：INNER + left-anti(左保留右NULL) + right-anti(左NULL右保留)
+
 ## v2.7.5 | 2026-06-17
 - 修复 [JIR Oracle SELECT * 无效 SQL] (P0)：MySQLWildcard 被追加 AS ref<N> 别名，产生 `SELECT * AS ref0` 无效 MySQL 语法
   - 修改前：`SELECT * AS ref0 FROM ...` → syntax error → IgnoreMeException → 50% JIR check 被跳过

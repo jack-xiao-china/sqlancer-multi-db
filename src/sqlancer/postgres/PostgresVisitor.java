@@ -34,6 +34,7 @@ import sqlancer.postgres.ast.PostgresWithSelect;
 import sqlancer.postgres.ast.PostgresDerivedTable;
 import sqlancer.postgres.ast.PostgresCteTableReference;
 import sqlancer.postgres.ast.PostgresOracleExpressionBag;
+import sqlancer.postgres.ast.PostgresWildcard;
 import sqlancer.postgres.ast.PostgresScalarSubquery;
 import sqlancer.postgres.ast.PostgresLateralSubquery;
 import sqlancer.postgres.ast.PostgresSelect;
@@ -126,6 +127,8 @@ public interface PostgresVisitor {
 
     void visit(PostgresOracleExpressionBag bag);
 
+    void visit(PostgresWildcard wildcard);
+
     default void visit(PostgresExpression expression) {
         if (expression instanceof PostgresConstant) {
             visit((PostgresConstant) expression);
@@ -203,6 +206,8 @@ public interface PostgresVisitor {
             visit((PostgresCteTableReference) expression);
         } else if (expression instanceof PostgresOracleExpressionBag) {
             visit((PostgresOracleExpressionBag) expression);
+        } else if (expression instanceof PostgresWildcard) {
+            visit((PostgresWildcard) expression);
         } else {
             throw new AssertionError(expression);
         }
