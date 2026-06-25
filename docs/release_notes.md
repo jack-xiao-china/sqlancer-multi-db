@@ -1,5 +1,14 @@
 # SQLancer Release Notes
 
+## v2.7.9 | 2026-06-24
+- 修复 [PostgreSQL 普通用户测试全量 oracle 权限/工具误报清零]：以非 superuser 角色（tpcc01）跑全部 oracle，定位并消除普通用户无法执行的 SQL 与 locale 诱导的工具类误报
+  - `PostgresProvider.readFunctions`：新增超管/受限函数前缀拒绝列表（`pg_replication_origin_*`/`pg_replication_slot_*`/`pg_logical_slot_*`/`pg_logical_emit_*`/`binary_upgrade_*`/`pg_read_file`/`pg_read_binary_file`/`pg_stat_file`/`pg_ls_*`/`pg_file_*`/`pg_current_logfile`/`pg_rotate_logfile`/`pg_switch_wal`/`pg_create_restore_point`/`pg_walfile_name`/`pg_promote`/`pg_reload_conf`/`pg_stat_reset*`/`pg_stat_get_activity`/`pg_stat_get_backend_*`/`pg_terminate_backend`/`pg_cancel_backend`/`pg_export_snapshot`/`pg_snapshot_xip`/`pg_config`）。`readFunctions` 从 `pg_proc` 读函数时跳过这些前缀，从源头杜绝普通用户 `permission denied for function` 误报
+  - `EDC_DATA` 种子文件 `edc-data-seeds/postgres/func.txt`：清理 79 个超管/受限函数（同上前缀族 + `binary_upgrade_*` 16 个 pg 升级内部函数），消除 EDC_DATA oracle 生成 `pg_ls_replslotdir()`/`pg_promote()`/`pg_replication_origin_oid()`/`binary_upgrade_set_next_multirange_pg_type_oid()` 等普通用户无权/不可调用的 SQL
+  - `SQLQueryAdapter.COMMON_EXPECTED_SQLSTATES`：补 8 个 SQLSTATE，使预期错误匹配在非英文 locale 服务端（如 zh_CN）下仍生效 —— `42701`(duplicate_column)、`42702`(ambiguous_column)、`42710`(duplicate_object)、`23502`(not_null_violation)、`42830`(invalid_foreign_key)、`42P04`(duplicate_database)、`55006`(object_in_use)、`2BP01`(dependent_objects_still_exist)
+  - `PostgresSonarOracle.getUnoptimizedQuery`：新增 `PostgresBinaryComparisonOperation` 分支，原仅处理 `PostgresText`/`PostgresBinaryArithmeticOperation`，遇到比较运算（`a<b` 等）直接抛 `AssertionError(class...)`，现按 `(cmp) IS TRUE AS flag` 正确生成非优化查询；并将其他未处理表达式类型（如 `PostgresPostfixOperation`）由 `throw AssertionError` 改为 `throw IgnoreMeException` 优雅跳过
+  - `PostgresAlterTableGenerator.isActionSupported`：禁用 `FORCE_ROW_LEVEL_SECURITY`。sqlancer 不生成 `CREATE POLICY`，故 FORCE RLS 使表处于默认拒绝模式，连表主（普通用户测试角色）的 INSERT/UPDATE/DELETE 也会报 "violates row-level security policy"（SQLSTATE 42501）。该问题同时导致 CERT/PQS 的 42501 误报与 EET_UPDATE/EET_DELETE 的 "row-state mismatch" 假阳性（FORCE RLS 阻断变换 DML 的 INSERT 使行快照不一致）。ENABLE RLS 保留（表主可绕过）
+  - 环境建议：非英文 locale 的 PostgreSQL 测试实例建议设 `lc_messages='C'`，使 SQLancer 的英文 expected-error 子串匹配设计内正常工作（普通用户无法 SET 该 SUSET 参数，需 DBA 在 postgresql.conf 设置并重启）
+
 ## v2.7.8 | 2026-06-18
 - 修复 [PostgreSQL 云实例普通用户角色测试误报]：移除需 superuser 授权的函数与 GUC 参数
   - `PostgresFunctionWithUnknownResult`：移除 `pg_current_logfile()`（默认仅 superuser / pg_read_server_files 可调用，普通用户报 permission denied 导致误报）

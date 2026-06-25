@@ -331,6 +331,14 @@ public class PostgresAlterTableGenerator {
             return hasInheritanceCandidate();
         case REPLICA_IDENTITY:
             return true;
+        case FORCE_ROW_LEVEL_SECURITY:
+            // sqlancer does not generate CREATE POLICY, so FORCE ROW LEVEL SECURITY
+            // leaves the table in default-deny mode and even the table owner's
+            // INSERT/UPDATE/DELETE fail with "violates row-level security policy"
+            // (SQLSTATE 42501). Disable it to avoid false positives under the
+            // non-superuser test role (which owns the tables). ENABLE alone is safe
+            // because the owner bypasses RLS.
+            return false;
         case ALTER_VIEW_RENAME_COLUMN:
             return randomTable.isView();
         default:
