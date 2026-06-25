@@ -407,10 +407,53 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         SQLancerResultSet rs = query.executeAndGet(globalState);
         while (rs.next()) {
             String functionName = rs.getString(1);
+            if (isRestrictedFunction(functionName)) {
+                // Superuser / role-restricted builtins (e.g. pg_replication_origin_*,
+                // pg_read_file, pg_current_logfile, ...) raise "permission denied for
+                // function" under a non-superuser role, producing false positives.
+                continue;
+            }
             Character functionType = rs.getString(2).charAt(0);
             globalState.addFunctionAndType(functionName, functionType);
         }
     }
+
+    /**
+     * Name prefixes of PostgreSQL builtins that are restricted to superuser or to a
+     * specific built-in role (e.g. pg_read_server_files, pg_signal_backend). A
+     * non-superuser test role cannot execute them, so they must never be emitted.
+     */
+    private static final List<String> RESTRICTED_FUNCTION_PREFIXES = Arrays.asList(
+            // Replication origin / slot / logical decoding — superuser or pg_execute_server_program
+            "pg_replication_origin_", "pg_replication_slot_", "pg_logical_slot_", "pg_logical_emit_",
+            // Binary-upgrade internal helpers — only callable in server binary-upgrade mode
+            "binary_upgrade_",
+            // File / directory access — superuser or pg_read_server_files / pg_write_server_files
+            "pg_read_file", "pg_read_binary_file", "pg_stat_file", "pg_ls_", "pg_file_",
+            // Log / WAL control — superuser
+            "pg_current_logfile", "pg_rotate_logfile", "pg_switch_wal", "pg_create_restore_point",
+            "pg_walfile_name", "pg_promote", "pg_reload_conf",
+            // Statistics reset — superuser
+            "pg_stat_reset", "pg_stat_get_activity", "pg_stat_get_backend_",
+            // Backend control — random pid refers to other sessions; needs pg_signal_backend
+            "pg_terminate_backend", "pg_cancel_backend",
+            // Snapshot / historic snapshot — superuser
+            "pg_export_snapshot", "pg_snapshot_xip",
+            // Server config introspection requiring superuser
+            "pg_config");
+
+    private static boolean isRestrictedFunction(String functionName) {
+        if (functionName == null) {
+            return true;
+        }
+        for (String prefix : RESTRICTED_FUNCTION_PREFIXES) {
+            if (functionName.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     private static void createEnumTypes(PostgresGlobalState globalState) throws Exception {
         synchronized (ENUM_TYPES_LOCK) {

@@ -111,7 +111,7 @@ SQLancer 一键全量测试脚本
 
   # FUCCI Oracle 多参数组合
   ./run_all_tests.sh --dbms postgres --host localhost --port 5432 \
-    --username tpcc --password xxx --oracle FUCCI
+    --username tpcc01 --password your_password --oracle FUCCI
 
   # 全 DBMS 全量测试 (需要配置所有连接信息)
   ./run_all_tests.sh --all

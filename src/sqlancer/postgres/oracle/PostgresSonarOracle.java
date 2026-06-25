@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import sqlancer.ComparatorHelper;
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.oracle.NoRECBase;
 import sqlancer.common.oracle.TestOracle;
@@ -21,6 +22,7 @@ import sqlancer.postgres.PostgresSchema.PostgresTables;
 import sqlancer.postgres.PostgresVisitor;
 import sqlancer.postgres.ast.PostgresBinaryArithmeticOperation;
 import sqlancer.postgres.ast.PostgresBinaryArithmeticOperation.PostgresBinaryOperator;
+import sqlancer.postgres.ast.PostgresBinaryComparisonOperation;
 import sqlancer.postgres.ast.PostgresColumnValue;
 import sqlancer.postgres.ast.PostgresExpression;
 import sqlancer.postgres.ast.PostgresJoin;
@@ -157,8 +159,19 @@ public class PostgresSonarOracle extends NoRECBase<PostgresGlobalState> implemen
                             ((PostgresPostfixText) select.getFetchColumns().get(0)).getExpr(), right, op);
                     String flagName = "(" + PostgresVisitor.asString(fetchColumn) + ")" + " IS TRUE AS flag";
                     select.getFetchColumns().add(new PostgresText(flagName));
+                } else if (whereExp instanceof PostgresBinaryComparisonOperation) {
+                    right = ((PostgresBinaryComparisonOperation) whereExp).getRight();
+                    PostgresBinaryComparisonOperation.PostgresBinaryComparisonOperator op = ((PostgresBinaryComparisonOperation) whereExp)
+                            .getOp();
+                    PostgresBinaryComparisonOperation fetchColumn = new PostgresBinaryComparisonOperation(
+                            ((PostgresPostfixText) select.getFetchColumns().get(0)).getExpr(), right, op);
+                    String flagName = "(" + PostgresVisitor.asString(fetchColumn) + ")" + " IS TRUE AS flag";
+                    select.getFetchColumns().add(new PostgresText(flagName));
                 } else {
-                    throw new AssertionError(whereExp.getClass().toString());
+                    // Unhandled WHERE expression shape (e.g. PostgresPostfixOperation) —
+                    // SONAR cannot synthesize the flag-column form. Skip the test case
+                    // rather than crashing; the oracle only covers shapes it can rewrite.
+                    throw new IgnoreMeException();
                 }
             }
 

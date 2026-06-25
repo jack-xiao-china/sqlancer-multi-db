@@ -134,7 +134,7 @@
 ./run_all_tests.sh --dbms mysql --host localhost --port 3306 --username tpcc --password Taurus@123 --oracle EDC_DATA
 
 # 3. FUCCI 测试 (自动遍历所有参数组合)
-./run_all_tests.sh --dbms postgres --host localhost --port 5432 --username tpcc --password Taurus@123 --oracle FUCCI
+./run_all_tests.sh --dbms postgres --host localhost --port 5432 --username tpcc01 --password your_password --oracle FUCCI
 
 # 4. GaussDB-M 测试
 ./run_all_tests.sh --dbms gaussdb-m --host 121.37.186.131 --port 19995 --username sqlbuilder1 --password huawei@123 --target-database testm --num-tries 100

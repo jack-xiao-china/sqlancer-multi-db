@@ -20,7 +20,7 @@ This directory contains local JDBC drivers for database connections.
 mvn clean package -DskipTests
 
 # Run (use -cp, NOT -jar)
-java -cp "target/sqlancer-2.7.8.jar:target/lib/*" sqlancer.Main gaussdb-m ...
+java -cp "target/sqlancer-2.7.9.jar:target/lib/*" sqlancer.Main gaussdb-m ...
 ```
 
 ### Windows
@@ -29,7 +29,7 @@ java -cp "target/sqlancer-2.7.8.jar:target/lib/*" sqlancer.Main gaussdb-m ...
 mvn clean package -DskipTests
 
 # Run (use -cp, NOT -jar)
-java -cp "target/sqlancer-2.7.8.jar;target/lib/*" sqlancer.Main gaussdb-m ...
+java -cp "target/sqlancer-2.7.9.jar;target/lib/*" sqlancer.Main gaussdb-m ...
 ```
 
 ### Why NOT use `-jar`?
@@ -54,7 +54,7 @@ project-root/
 ├── pom.xml
 ├── src/
 └── target/
-    ├── sqlancer-2.7.8.jar           <- Main application
+    ├── sqlancer-2.7.9.jar           <- Main application
     └── lib/
         └── opengauss-jdbc-6.0.2-og.jar  <- Copied during build
 ```

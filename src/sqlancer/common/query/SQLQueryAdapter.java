@@ -73,6 +73,17 @@ public class SQLQueryAdapter extends Query<SQLConnection> implements Serializabl
             "42704",
             // Undefined column
             "42703",
+            // Duplicate column ("column already exists") — surfaces during FK-setup
+            // ALTER TABLE ADD COLUMN on a locale-localized server where the English
+            // substring "already exists" cannot be matched.
+            "42701",
+            // Ambiguous column (NATURAL/USING JOIN with duplicate column references)
+            "42702",
+            // Duplicate object (e.g., CREATE TYPE on an existing name)
+            "42710",
+            // Object in use ("cannot ALTER ... because it is being used by active queries
+            // in this session") — same localized-message problem during FK/constraint setup.
+            "55006",
             // Wrong object type (e.g., typed table operations on non-typed table)
             "42809",
             // Syntax error or access rule violation
@@ -82,12 +93,21 @@ public class SQLQueryAdapter extends Query<SQLConnection> implements Serializabl
             "42P01",
             // Duplicate table/index (relation already exists)
             "42P07",
+            // Duplicate database (e.g., "CREATE DATABASE" on an existing name)
+            "42P04",
+            // Invalid foreign key (e.g., "there is no unique constraint matching given
+            // keys for referenced table") — surfaces during FK-constraint setup
+            "42830",
+            // Dependent objects still exist (e.g., DROP TABLE/COLUMN with dependents)
+            "2BP01",
             // Invalid column reference / constraint does not exist (ON CONFLICT errors)
             "42P10",
             // Unique violation
             "23505",
             // Foreign key violation
             "23503",
+            // Not-null violation (INSERT omitting a NOT NULL column)
+            "23502",
             // Check violation
             "23514",
             // Feature not supported
