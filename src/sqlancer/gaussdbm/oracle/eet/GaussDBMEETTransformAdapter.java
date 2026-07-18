@@ -311,12 +311,14 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
             }
             GaussDBExpression modifiedUnion = new GaussDBUnionSelect(modifiedBranches, union.isUnionAll());
             GaussDBExpression existsExpr = new GaussDBExists(modifiedUnion);
-            // CASE WHEN (lhs IN subquery) IS NOT NULL THEN EXISTS ELSE NULL END
+            // "lhs NOT IN (subquery)" ⟺ NOT EXISTS; positive EXISTS would invert the result.
+            GaussDBExpression matchExpr = in.isTrue() ? existsExpr : createNot(existsExpr);
+            // CASE WHEN (lhs [NOT] IN subquery) IS NOT NULL THEN match_result ELSE NULL END
             GaussDBExpression originalIn = new GaussDBInOperation(lhs, List.of(subquery), in.isTrue());
             GaussDBExpression isNotNull = new GaussDBUnaryPostfixOperation(originalIn,
                     UnaryPostfixOperator.IS_NOT_NULL);
             GaussDBExpression nullVal = GaussDBConstant.createNullConstant();
-            return new GaussDBCaseWhen(isNotNull, existsExpr, nullVal);
+            return new GaussDBCaseWhen(isNotNull, matchExpr, nullVal);
         }
 
         // Handle simple SELECT subquery
@@ -342,11 +344,14 @@ public class GaussDBMEETTransformAdapter implements EETTransformAdapter<GaussDBE
         GaussDBSelect existsSelect = shallowCopyGaussDBSelect(select);
         existsSelect.setWhereClause(newPredicate);
         GaussDBExpression existsExpr = new GaussDBExists(existsSelect);
-        // CASE WHEN (lhs IN subquery) IS NOT NULL THEN EXISTS_result ELSE NULL END
+        // For "lhs NOT IN (subquery)" (isTrue()==false) the predicate is TRUE exactly when there is
+        // NO match, i.e. NOT EXISTS. Positive EXISTS would invert the result.
+        GaussDBExpression matchExpr = in.isTrue() ? existsExpr : createNot(existsExpr);
+        // CASE WHEN (lhs [NOT] IN subquery) IS NOT NULL THEN match_result ELSE NULL END
         GaussDBExpression originalIn = new GaussDBInOperation(lhs, List.of(subquery), in.isTrue());
         GaussDBExpression isNotNull = new GaussDBUnaryPostfixOperation(originalIn, UnaryPostfixOperator.IS_NOT_NULL);
         GaussDBExpression nullVal = GaussDBConstant.createNullConstant();
-        return new GaussDBCaseWhen(isNotNull, existsExpr, nullVal);
+        return new GaussDBCaseWhen(isNotNull, matchExpr, nullVal);
     }
 
     @Override

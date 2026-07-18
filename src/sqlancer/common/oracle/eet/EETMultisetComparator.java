@@ -25,9 +25,11 @@ public final class EETMultisetComparator {
         }
         List<String> parts = new ArrayList<>(row.size());
         for (String c : row) {
-            parts.add(c == null ? "null" : c);
+            // Length-prefixed, type-tagged encoding: SQL NULL (tag N) never collides with the string
+            // "null", and "a"+"b" never collides with "ab" (the length makes each cell self-delimiting).
+            parts.add(c == null ? "N;" : "S" + c.length() + ";" + c);
         }
-        return String.join("\t", parts);
+        return String.join("", parts);
     }
 
     /**
@@ -56,9 +58,8 @@ public final class EETMultisetComparator {
             return false;
         }
         for (int i = 0; i < a.size(); i++) {
-            String va = a.get(i) == null ? "null" : a.get(i);
-            String vb = b.get(i) == null ? "null" : b.get(i);
-            if (!va.equals(vb)) {
+            // Objects.equals distinguishes SQL NULL (java null) from the literal string "null".
+            if (!Objects.equals(a.get(i), b.get(i))) {
                 return false;
             }
         }

@@ -313,10 +313,14 @@ public class GaussDBAEETTransformAdapter implements EETTransformAdapter<GaussDBA
             }
             GaussDBAExpression modifiedUnion = new GaussDBAUnionSelect(modifiedSelects, union.isUnionAll());
             GaussDBAExpression existsExpr = new GaussDBAExists(modifiedUnion);
+            // "lhs NOT IN (subquery)" ⟺ NOT EXISTS; positive EXISTS would invert the result.
+            GaussDBAExpression matchExpr = in.isNegated()
+                    ? new GaussDBAUnaryPrefixOperation(existsExpr, UnaryPrefixOperator.NOT)
+                    : existsExpr;
             GaussDBAExpression originalIn = new GaussDBAInOperation(lhs, List.of(subquery), in.isNegated());
             GaussDBAExpression isNotNull = new GaussDBAUnaryPostfixOperation(originalIn, UnaryPostfixOperator.IS_NOT_NULL);
             GaussDBAExpression nullVal = GaussDBAConstant.createNullConstant();
-            return GaussDBACaseWhen.create(isNotNull, existsExpr, nullVal);
+            return GaussDBACaseWhen.create(isNotNull, matchExpr, nullVal);
         }
 
         // Handle simple SELECT subquery
@@ -342,11 +346,16 @@ public class GaussDBAEETTransformAdapter implements EETTransformAdapter<GaussDBA
         GaussDBASelect existsSelect = shallowCopyGaussDBASelect(select);
         existsSelect.setWhereClause(newPredicate);
         GaussDBAExpression existsExpr = new GaussDBAExists(existsSelect);
-        // CASE WHEN (lhs IN subquery) IS NOT NULL THEN EXISTS_result ELSE NULL END
+        // For "lhs NOT IN (subquery)" the predicate is TRUE exactly when there is NO match,
+        // which corresponds to NOT EXISTS. Using the positive EXISTS here would invert the result.
+        GaussDBAExpression matchExpr = in.isNegated()
+                ? new GaussDBAUnaryPrefixOperation(existsExpr, UnaryPrefixOperator.NOT)
+                : existsExpr;
+        // CASE WHEN (lhs [NOT] IN subquery) IS NOT NULL THEN match_result ELSE NULL END
         GaussDBAExpression originalIn = new GaussDBAInOperation(lhs, List.of(subquery), in.isNegated());
         GaussDBAExpression isNotNull = new GaussDBAUnaryPostfixOperation(originalIn, UnaryPostfixOperator.IS_NOT_NULL);
         GaussDBAExpression nullVal = GaussDBAConstant.createNullConstant();
-        return GaussDBACaseWhen.create(isNotNull, existsExpr, nullVal);
+        return GaussDBACaseWhen.create(isNotNull, matchExpr, nullVal);
     }
 
     @Override
@@ -370,6 +379,12 @@ public class GaussDBAEETTransformAdapter implements EETTransformAdapter<GaussDBA
             return null;
         }
         GaussDBAMinusSelect minus = (GaussDBAMinusSelect) expr;
+        if (minus.isMinusAll()) {
+            // MINUS ALL would keep duplicate multiplicities; the NOT-EXISTS + DISTINCT rewrite is only
+            // valid for MINUS DISTINCT. (GaussDB-A's generator always uses minusAll=false, but guard
+            // defensively so the DISTINCT we add can never drop duplicates and cause a false positive.)
+            return null;
+        }
         List<GaussDBASelect> selects = minus.getSelects();
         if (selects.size() < 2) {
             return null;
@@ -415,6 +430,10 @@ public class GaussDBAEETTransformAdapter implements EETTransformAdapter<GaussDBA
         }
         GaussDBASelect resultQ1 = shallowCopyGaussDBASelect(q1);
         resultQ1.setWhereClause(newQ1Predicate);
+        // MINUS (EXCEPT DISTINCT) de-duplicates its result. The rewritten "Q1 WHERE NOT EXISTS(...)"
+        // preserves Q1's duplicate rows, so we must force DISTINCT to keep the multiset equal —
+        // otherwise duplicate Q1 rows cause a spurious row-count mismatch (false positive).
+        resultQ1.setSelectType(GaussDBASelect.GaussDBASelectType.DISTINCT);
         return resultQ1;
     }
 

@@ -1,15 +1,13 @@
 package sqlancer.gaussdbm.oracle;
 
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
 import sqlancer.common.oracle.TestOracle;
@@ -24,13 +22,13 @@ import sqlancer.gaussdbm.ast.GaussDBAggregate.GaussDBAggregateFunction;
 import sqlancer.gaussdbm.ast.GaussDBBinaryLogicalOperation;
 import sqlancer.gaussdbm.ast.GaussDBBinaryLogicalOperation.GaussDBBinaryLogicalOperator;
 import sqlancer.gaussdbm.ast.GaussDBColumnReference;
-import sqlancer.gaussdbm.ast.GaussDBConstant;
 import sqlancer.gaussdbm.ast.GaussDBExpression;
 import sqlancer.gaussdbm.ast.GaussDBJoin;
 import sqlancer.gaussdbm.ast.GaussDBOracleAlias;
 import sqlancer.gaussdbm.ast.GaussDBOracleExpressionBag;
 import sqlancer.gaussdbm.ast.GaussDBSelect;
 import sqlancer.gaussdbm.ast.GaussDBTableReference;
+import sqlancer.gaussdbm.ast.GaussDBText;
 import sqlancer.gaussdbm.gen.GaussDBMExpressionGenerator;
 
 public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
@@ -44,6 +42,11 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
 
     private Boolean useSubqueryAsFoldedExpr;
     private Boolean useCorrelatedSubqueryAsFoldedExpr;
+
+    // State for the non-correlated scalar-subquery constant folding (SUBQUERY mode).
+    private String foldTableName;
+    private String foldCmp;
+    private long foldConst;
 
     public GaussDBCODDTestOracle(GaussDBMGlobalState globalState) {
         super(globalState);
@@ -66,46 +69,42 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
         useSubqueryAsFoldedExpr = useSubquery();
         useCorrelatedSubqueryAsFoldedExpr = useCorrelatedSubquery();
 
-        generateAuxiliaryQuery();
-
-        GaussDBSelect originalQuery = null;
-        Map<String, List<GaussDBConstant>> foldedResult = new HashMap<>();
-        Map<String, List<GaussDBConstant>> originalResult = new HashMap<>();
-
-        if (useSubqueryAsFoldedExpr && !useCorrelatedSubqueryAsFoldedExpr) {
-            originalQuery = genSelectExpression(null, null);
-            GaussDBSelect foldedQuery = getFoldedQuery(originalQuery);
-            foldedResult = executeQuery(foldedQuery);
-            originalResult = executeQuery(originalQuery);
-        } else if (!useSubqueryAsFoldedExpr && !useCorrelatedSubqueryAsFoldedExpr) {
-            originalQuery = genSimpleSelect();
-            foldedResult = executeFoldedQuery(originalQuery);
-            originalResult = executeQuery(originalQuery);
-        } else if (useCorrelatedSubqueryAsFoldedExpr) {
-            originalQuery = genSelectWithCorrelatedSubquery();
-            foldedResult = executeFoldedQuery(originalQuery);
-            originalResult = executeQuery(originalQuery);
+        // Real constant folding across all modes (see rationale in the GaussDB-A oracle): embed a
+        // non-correlated scalar-subquery predicate "(k <cmp> (SELECT COUNT(*) FROM t2))" via a mutable
+        // bag, run it, then fold the subquery to its constant and run again — a strict equivalence.
+        // The former EXPRESSION/CORRELATED branches re-ran the same query twice (a no-op that could
+        // only surface query non-determinism as a spurious mismatch), so they were removed.
+        GaussDBOracleExpressionBag foldBag = buildFoldableCondition();
+        if (foldBag == null) {
+            throw new IgnoreMeException();
         }
-
+        GaussDBSelect originalQuery;
+        if (useCorrelatedSubqueryAsFoldedExpr) {
+            originalQuery = genSelectWithCorrelatedSubquery();
+            injectFoldCondition(originalQuery, foldBag);
+        } else if (useSubqueryAsFoldedExpr) {
+            originalQuery = genSelectExpression(null, foldBag);
+        } else {
+            originalQuery = genSimpleSelect();
+            injectFoldCondition(originalQuery, foldBag);
+        }
+        String originalSql = originalQuery.asString();
+        List<List<String>> originalResult = executeQuery(originalQuery);
+        long foldedValue = evalCount(foldTableName);
+        foldBag.updateInnerExpr(new GaussDBText("(" + foldConst + " " + foldCmp + " " + foldedValue + ")"));
+        String foldedSql = originalQuery.asString();
+        List<List<String>> foldedResult = executeQuery(originalQuery);
         if (!compareResult(foldedResult, originalResult)) {
-            throw new AssertionError("Results mismatch");
+            throw new AssertionError("CODDTEST folding mismatch\n-- original: " + originalSql
+                    + "\n-- folded:   " + foldedSql);
         }
     }
 
-    private GaussDBSelect generateAuxiliaryQuery() throws SQLException {
-        GaussDBSelect select = new GaussDBSelect();
-
-        if (useSubqueryAsFoldedExpr) {
-            if (useCorrelatedSubqueryAsFoldedExpr) {
-                select = genSelectWithCorrelatedSubquery();
-            } else {
-                select = genSelectExpression(null, null);
-            }
-        } else {
-            select = genSimpleSelect();
-        }
-
-        return select;
+    /** AND the mutable fold predicate (a bag) into a generated query's WHERE clause. */
+    private void injectFoldCondition(GaussDBSelect query, GaussDBOracleExpressionBag foldBag) {
+        GaussDBExpression where = query.getWhereClause();
+        query.setWhereClause(where == null ? foldBag
+                : new GaussDBBinaryLogicalOperation(where, foldBag, GaussDBBinaryLogicalOperator.AND));
     }
 
     private GaussDBSelect genSimpleSelect() throws SQLException {
@@ -240,7 +239,9 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
         GaussDBExpression randomWhereCondition = gen.generateExpression();
         GaussDBExpression whereCondition;
         if (specificCondition != null) {
-            whereCondition = new GaussDBBinaryLogicalOperation(randomWhereCondition, specificCondition.getInnerExpr(),
+            // Inject the bag itself (not a snapshot of its inner expr) so a later updateInnerExpr()
+            // that folds the scalar subquery to a constant is reflected on re-render.
+            whereCondition = new GaussDBBinaryLogicalOperation(randomWhereCondition, specificCondition,
                     GaussDBBinaryLogicalOperator.AND);
         } else {
             whereCondition = randomWhereCondition;
@@ -272,99 +273,78 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
         return select;
     }
 
-    private Map<String, List<GaussDBConstant>> executeQuery(GaussDBSelect query) throws SQLException {
-        Map<String, List<GaussDBConstant>> result = new HashMap<>();
-
+    private List<List<String>> executeQuery(GaussDBSelect query) throws SQLException {
+        List<List<String>> rows = new ArrayList<>();
         try (Statement st = con.createStatement()) {
             st.setQueryTimeout(600);
-            String queryString = query.asString();
-            try (ResultSet rs = st.executeQuery(queryString)) {
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
-
-                for (int i = 1; i <= columnCount; i++) {
-                    String columnName = metaData.getColumnLabel(i);
-                    result.put(columnName, new ArrayList<>());
-                }
-
+            try (ResultSet rs = st.executeQuery(query.asString())) {
+                int columnCount = rs.getMetaData().getColumnCount();
                 while (rs.next()) {
+                    List<String> row = new ArrayList<>(columnCount);
                     for (int i = 1; i <= columnCount; i++) {
-                        String columnName = metaData.getColumnLabel(i);
-                        Object value = rs.getObject(i);
-                        GaussDBConstant constant = convertToGaussDBConstant(value);
-                        result.get(columnName).add(constant);
+                        row.add(rs.getString(i)); // JDBC getString returns null for SQL NULL
                     }
+                    rows.add(row);
                 }
             }
         }
-
-        return result;
+        return rows;
     }
 
-    private Map<String, List<GaussDBConstant>> executeFoldedQuery(GaussDBSelect query) throws SQLException {
-        return executeQuery(query);
-    }
-
-    private GaussDBConstant convertToGaussDBConstant(Object value) {
-        if (value == null) {
-            return GaussDBConstant.createNullConstant();
-        } else if (value instanceof String) {
-            return GaussDBConstant.createStringConstant((String) value);
-        } else if (value instanceof Integer) {
-            return GaussDBConstant.createIntConstant((Integer) value);
-        } else if (value instanceof Long) {
-            return GaussDBConstant.createIntConstant((Long) value);
-        } else if (value instanceof Double) {
-            return GaussDBConstant.createIntConstant(((Double) value).longValue());
-        } else {
-            return GaussDBConstant.createStringConstant(value.toString());
-        }
-    }
-
-    private boolean compareResult(Map<String, List<GaussDBConstant>> r1, Map<String, List<GaussDBConstant>> r2) {
+    /**
+     * Compares two result sets as ROW multisets (order-insensitive, duplicates preserved). The
+     * earlier per-column-label grouping was fragile: duplicate labels from multi-table queries
+     * (e.g. two "c0") collided in the map, and comparing each column's values independently loses
+     * the row association — both of which can make identical result sets compare unequal.
+     */
+    private boolean compareResult(List<List<String>> r1, List<List<String>> r2) {
         if (r1.size() != r2.size()) {
             return false;
         }
-
-        for (String column : r1.keySet()) {
-            List<GaussDBConstant> v1 = r1.get(column);
-            List<GaussDBConstant> v2 = r2.get(column);
-
-            if (v1.size() != v2.size()) {
-                return false;
-            }
-
-            List<GaussDBConstant> sortedV1 = new ArrayList<>(v1);
-            List<GaussDBConstant> sortedV2 = new ArrayList<>(v2);
-
-            Collections.sort(sortedV1, (c1, c2) -> {
-                if (c1 == null || c2 == null) {
-                    return 0;
-                }
-                return c1.getTextRepresentation().compareTo(c2.getTextRepresentation());
-            });
-
-            Collections.sort(sortedV2, (c1, c2) -> {
-                if (c1 == null || c2 == null) {
-                    return 0;
-                }
-                return c1.getTextRepresentation().compareTo(c2.getTextRepresentation());
-            });
-
-            for (int i = 0; i < sortedV1.size(); i++) {
-                String t1 = sortedV1.get(i).getTextRepresentation();
-                String t2 = sortedV2.get(i).getTextRepresentation();
-                if (!t1.equals(t2)) {
-                    return false;
-                }
-            }
+        List<String> k1 = new ArrayList<>(r1.size());
+        for (List<String> row : r1) {
+            k1.add(rowKey(row));
         }
-
-        return true;
+        List<String> k2 = new ArrayList<>(r2.size());
+        for (List<String> row : r2) {
+            k2.add(rowKey(row));
+        }
+        Collections.sort(k1);
+        Collections.sort(k2);
+        return k1.equals(k2);
     }
 
-    private GaussDBSelect getFoldedQuery(GaussDBSelect originalQuery) {
-        return originalQuery;
+    private static String rowKey(List<String> row) {
+        // Length-prefixed, type-tagged encoding: NULL (tag N) never collides with the string "null",
+        // and cell values are self-delimiting so "a"+"b" cannot collide with "ab".
+        StringBuilder sb = new StringBuilder();
+        for (String c : row) {
+            if (c == null) {
+                sb.append("N;");
+            } else {
+                sb.append('S').append(c.length()).append(';').append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private GaussDBOracleExpressionBag buildFoldableCondition() {
+        GaussDBTables subTables = s.getRandomTableNonEmptyTables();
+        if (subTables.getTables().isEmpty()) {
+            return null;
+        }
+        foldTableName = subTables.getTables().get(0).getName();
+        foldConst = Randomly.getNotCachedInteger(0, 6);
+        foldCmp = Randomly.fromOptions("<=", "<", ">=", ">", "=", "<>");
+        String cond = "(" + foldConst + " " + foldCmp + " (SELECT COUNT(*) FROM " + foldTableName + "))";
+        return new GaussDBOracleExpressionBag(new GaussDBText(cond));
+    }
+
+    private long evalCount(String tableName) throws SQLException {
+        try (Statement st = con.createStatement();
+                ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        }
     }
 
     public boolean useSubquery() {

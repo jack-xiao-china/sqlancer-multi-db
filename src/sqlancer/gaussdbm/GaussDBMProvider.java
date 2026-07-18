@@ -301,6 +301,25 @@ public class GaussDBMProvider extends SQLProviderAdapter<GaussDBMGlobalState, Ga
             System.err.println("[DEBUG] Executing: " + setPathSql);
             s.execute(setPathSql);
 
+            // Enable PG-style EXPLAIN output (plan lines with "rows=" estimates) so the CERT oracle
+            // can extract cardinality. Best-effort: if this GUC is absent, CERT-M safely falls back
+            // to skipping (IgnoreMeException) instead of misbehaving.
+            try {
+                s.execute("SET explain_perf_mode = normal");
+            } catch (SQLException ignored) {
+                System.err.println("[WARN] explain_perf_mode not available; CERT-M will skip.");
+            }
+            try {
+                // Disable GaussDB's automatic parameterization of ad-hoc queries. Without this, once a
+                // query shape has been EXPLAINed ~10 times its estimate switches from the real histogram
+                // value to a generic parameterized estimate; CERT would then compare a generic base
+                // estimate against a real mutated estimate and misfire (estimate rises after adding a
+                // restriction). Keeping estimates real makes the monotonicity invariant comparable.
+                s.execute("SET enable_pbe_optimization = off");
+            } catch (SQLException ignored) {
+                System.err.println("[WARN] enable_pbe_optimization not available; CERT-M estimates may be noisy.");
+            }
+
             System.err.println("[INFO] Schema created: " + schemaName);
         }
 

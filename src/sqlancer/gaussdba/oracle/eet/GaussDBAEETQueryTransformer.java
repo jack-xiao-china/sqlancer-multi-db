@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.Randomly;
 import sqlancer.gaussdba.ast.GaussDBACteDefinition;
 import sqlancer.gaussdba.ast.GaussDBADerivedTable;
 import sqlancer.gaussdba.ast.GaussDBAExpression;
@@ -36,6 +37,17 @@ public class GaussDBAEETQueryTransformer {
         }
         if (root instanceof GaussDBAMinusSelect) {
             GaussDBAMinusSelect m = (GaussDBAMinusSelect) root;
+            // Set-op rewrite: with 50% probability, rewrite "Q1 MINUS Q2" into
+            // "SELECT DISTINCT ... FROM Q1 WHERE NOT EXISTS(Q2 with NULL-safe column equality)" — a
+            // semantic equivalent that exercises the set-difference optimizer. Wired here because the
+            // per-expression transform path skips query-level nodes, leaving the rule unreachable.
+            // Otherwise (or if the rewrite declines), fall back to transforming each branch.
+            if (Randomly.getBoolean()) {
+                GaussDBAExpression rewritten = transformer.applyExceptToNotExists(m);
+                if (rewritten != null) {
+                    return rewritten;
+                }
+            }
             List<GaussDBASelect> newSelects = new ArrayList<>();
             for (GaussDBASelect s : m.getSelects()) {
                 newSelects.add(eqTransformQuery(s));

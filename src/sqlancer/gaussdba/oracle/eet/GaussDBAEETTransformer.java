@@ -8,6 +8,7 @@ import sqlancer.common.oracle.eet.EETExistsToInRule;
 import sqlancer.common.oracle.eet.EETInToExistsRule;
 import sqlancer.common.oracle.eet.EETNullifToCaseRule;
 import sqlancer.common.oracle.eet.EETTransformerBase;
+import sqlancer.IgnoreMeException;
 import sqlancer.common.schema.AbstractTables;
 import sqlancer.gaussdba.GaussDBASchema.GaussDBAColumn;
 import sqlancer.gaussdba.GaussDBASchema.GaussDBATable;
@@ -41,5 +42,19 @@ public class GaussDBAEETTransformer {
 
     public GaussDBAExpression transformExpression(GaussDBAExpression expr) {
         return base.transformExpression(expr);
+    }
+
+    /**
+     * Apply the MINUS → NOT EXISTS set-op rewrite to a root MINUS query, returning null if it does
+     * not apply (MINUS ALL, GROUP BY on either side, mismatched columns, etc.). This is exposed so
+     * the query transformer can reach the rule directly: the per-expression path skips query-level
+     * nodes, which otherwise leaves the set-op rewrite unreachable.
+     */
+    public GaussDBAExpression applyExceptToNotExists(GaussDBAExpression minus) {
+        try {
+            return base.getAdapter().applyExceptToNotExistsTransform(minus);
+        } catch (IgnoreMeException e) {
+            return null;
+        }
     }
 }

@@ -32,6 +32,16 @@ public final class GaussDBAErrors {
         errors.add("ERROR: Incorrect datetime value");
         errors.add("ERROR: Incorrect date value");
         errors.add("ERROR: Incorrect time value");
+        // Benign runtime type/range errors: the DB legitimately rejects an out-of-domain cast or an
+        // unsupported type combination in a generated predicate. These are not logic bugs, so oracles
+        // must skip such statements rather than report them.
+        errors.add("out of range");             // timestamp/date/numeric out-of-range on implicit cast
+        errors.add("operator does not exist");  // no operator for a generated type combination
+        errors.add("cannot be cast");
+        errors.add("cannot cast");
+        errors.add("inconsistent datatypes");   // ORA-00932
+        errors.add("ORA-00932");
+        errors.add("ORA-01481");                // invalid number format model
         return errors;
     }
 
@@ -92,6 +102,14 @@ public final class GaussDBAErrors {
         errors.add("ERROR: Incorrect datetime value");
         errors.add("ERROR: Incorrect date value");
         errors.add("ERROR: Incorrect time value");
+        // Benign runtime type/range errors (see getExpressionErrors) — skip, not a logic bug.
+        errors.add("out of range");
+        errors.add("operator does not exist");
+        errors.add("cannot be cast");
+        errors.add("cannot cast");
+        errors.add("inconsistent datatypes");
+        errors.add("ORA-00932");
+        errors.add("ORA-01481");
         return errors;
     }
 

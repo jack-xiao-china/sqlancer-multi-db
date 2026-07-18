@@ -44,7 +44,7 @@ import sqlancer.mysql.gen.MySQLExpressionGenerator;
  * - 5 rules (original only implements Rule 1)
  * - SELECT * + multi-column fetch (matching original's generateFetchColumns)
  * - NATURAL OUTER JOIN variants (OuterType.LEFT/RIGHT, matching original's OuterType enum)
- * - CROSS JOIN multi-variant comparison (INNER/LEFT/RIGHT ON TRUE)
+ * - CROSS JOIN vs INNER JOIN ON TRUE comparison (the only join type equivalent to CROSS)
  * - Multi-table JOIN tree support (2-4 tables, 1-2 JOINs)
  * - Row-level result comparison (all columns, not just column 1)
  */
@@ -147,17 +147,23 @@ public class MySQLJIRTransformer implements JIRTransformer<MySQLGlobalState> {
 
     private JIRQuerySet generateLeftRightSymmetry() {
         MySQLExpression onCondition = gen.generateExpression(0);
-        List<MySQLExpression> fetchColumns = generateLeftTableFetchColumns();
-        int joinCount = decideJoinCount();
+        // No wildcard: after the operand swap, SELECT * would expand to different column orders
+        // (L-cols then R-cols vs R-cols then L-cols), so only left-table columns are projected.
+        List<MySQLExpression> fetchColumns = generateLeftTableFetchColumnsNoWildcard();
 
-        // Source: SELECT {fetchColumns} FROM primaryTable {preceding joins} LEFT JOIN lastTable ON cond
-        List<MySQLJoin> sourceJoins = buildJoinChain(joinCount, JoinType.LEFT, onCondition);
-        MySQLSelect sourceSelect = createSelectWithJoins(fetchColumns, sourceJoins);
+        // Source: SELECT {fetchColumns} FROM L LEFT JOIN R ON cond (single JOIN only; the
+        // symmetry rewrite is defined for one join, not for a join chain)
+        MySQLSelect sourceSelect = createSelectWithJoins(fetchColumns,
+                Collections.singletonList(new MySQLJoin(tables.get(1), onCondition, JoinType.LEFT)));
         String sourceSQL = MySQLVisitor.asString(sourceSelect);
 
-        // Target: Same structure but LEFT → RIGHT for the last join
-        List<MySQLJoin> targetJoins = buildJoinChain(joinCount, JoinType.RIGHT, onCondition);
-        MySQLSelect targetSelect = createSelectWithJoins(fetchColumns, targetJoins);
+        // Target: SELECT {fetchColumns} FROM R RIGHT JOIN L ON cond — operands must be swapped:
+        // L LEFT JOIN R preserves L rows, which equals R RIGHT JOIN L, not L RIGHT JOIN R.
+        MySQLSelect targetSelect = new MySQLSelect();
+        targetSelect.setFetchColumns(fetchColumns);
+        targetSelect.setFromList(Collections.singletonList(new MySQLTableReference(tables.get(1))));
+        targetSelect.setJoinClauses(
+                Collections.singletonList(new MySQLJoin(primaryTable, onCondition, JoinType.RIGHT)));
         String targetSQL = MySQLVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -204,8 +210,8 @@ public class MySQLJIRTransformer implements JIRTransformer<MySQLGlobalState> {
     }
 
     // ========== Rule 5: Cross Join Equivalence ==========
-    // CROSS JOIN ≡ INNER JOIN ON TRUE ≡ LEFT JOIN ON TRUE ≡ RIGHT JOIN ON TRUE
-    // Randomly pick one variant per check() call; multiple iterations cover all variants
+    // CROSS JOIN ≡ INNER JOIN ON TRUE only. LEFT/RIGHT JOIN ON TRUE are NOT equivalent:
+    // with an empty side, CROSS yields no rows but outer joins keep the other side NULL-padded.
 
     private JIRQuerySet generateCrossJoinEquivalence() {
         List<MySQLExpression> fetchColumns = generateLeftTableFetchColumns();
@@ -218,15 +224,15 @@ public class MySQLJIRTransformer implements JIRTransformer<MySQLGlobalState> {
                 Collections.singletonList(new MySQLJoin(tables.get(1), null, JoinType.CROSS)));
         String sourceSQL = MySQLVisitor.asString(sourceSelect);
 
-        // Randomly pick target variant: INNER/LEFT/RIGHT ON TRUE
-        JoinType targetJoinType = Randomly.fromOptions(JoinType.INNER, JoinType.LEFT, JoinType.RIGHT);
+        // Target is fixed to INNER JOIN ON TRUE: LEFT/RIGHT JOIN ON TRUE preserve unmatched rows
+        // (NULL-padded) when one side is empty, so they are not equivalent to CROSS JOIN.
         MySQLExpression onTrue = MySQLConstant.createIntConstant(1); // ON 1 (TRUE in MySQL)
 
         MySQLSelect targetSelect = new MySQLSelect();
         targetSelect.setFetchColumns(fetchColumns);
         targetSelect.setFromList(Collections.singletonList(new MySQLTableReference(primaryTable)));
         targetSelect.setJoinClauses(
-                Collections.singletonList(new MySQLJoin(tables.get(1), onTrue, targetJoinType)));
+                Collections.singletonList(new MySQLJoin(tables.get(1), onTrue, JoinType.INNER)));
         String targetSQL = MySQLVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -270,7 +276,9 @@ public class MySQLJIRTransformer implements JIRTransformer<MySQLGlobalState> {
                     MySQLBinaryLogicalOperator.AND);
         }
 
-        List<MySQLExpression> fetchColumns = generateLeftTableFetchColumns();
+        // No wildcard: NATURAL JOIN merges common columns while the explicit-ON target keeps both
+        // copies, so SELECT * yields different column counts → false positive.
+        List<MySQLExpression> fetchColumns = generateLeftTableFetchColumnsNoWildcard();
 
         // Determine target JoinType based on OuterType:
         // null → INNER, LEFT → LEFT, RIGHT → RIGHT
@@ -331,7 +339,7 @@ public class MySQLJIRTransformer implements JIRTransformer<MySQLGlobalState> {
 
     /**
      * Generate fetch columns from left table only: 50% SELECT * vs 50% multi-column random subset from primary
-     * table. Used by Rules 2, 3, 5, 6 where comparison must be on left-table columns only.
+     * table. Used by Rules 3, 5 where comparison must be on left-table columns only.
      */
     private List<MySQLExpression> generateLeftTableFetchColumns() {
         List<MySQLExpression> columns = new ArrayList<>();
@@ -348,6 +356,24 @@ public class MySQLJIRTransformer implements JIRTransformer<MySQLGlobalState> {
             for (MySQLColumn col : subset) {
                 columns.add(MySQLColumnReference.create(col, null));
             }
+        }
+        return columns;
+    }
+
+    /**
+     * Generate fetch columns from left table only WITHOUT the SELECT * wildcard. Used by Rule 2 (the operand swap
+     * makes the two sides expand * in different column orders) and Rule 6 (NATURAL JOIN merges common columns, so
+     * SELECT * yields fewer columns than the explicit-ON target).
+     */
+    private List<MySQLExpression> generateLeftTableFetchColumnsNoWildcard() {
+        List<MySQLColumn> leftCols = primaryTable.getColumns();
+        if (leftCols.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        List<MySQLColumn> subset = Randomly.nonEmptySubset(leftCols);
+        List<MySQLExpression> columns = new ArrayList<>();
+        for (MySQLColumn col : subset) {
+            columns.add(MySQLColumnReference.create(col, null));
         }
         return columns;
     }
