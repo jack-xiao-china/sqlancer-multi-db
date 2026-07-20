@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.common.oracle.PivotedQuerySynthesisBase;
@@ -17,6 +18,8 @@ import sqlancer.gaussdba.GaussDBASchema.GaussDBAColumn;
 import sqlancer.gaussdba.GaussDBASchema.GaussDBARowValue;
 import sqlancer.gaussdba.GaussDBASchema.GaussDBATables;
 import sqlancer.gaussdba.GaussDBAToStringVisitor;
+import sqlancer.gaussdba.ast.GaussDBABinaryComparisonOperation;
+import sqlancer.gaussdba.ast.GaussDBABinaryComparisonOperation.GaussDBABinaryComparisonOperator;
 import sqlancer.gaussdba.ast.GaussDBAColumnValue;
 import sqlancer.gaussdba.ast.GaussDBAConstant;
 import sqlancer.gaussdba.ast.GaussDBADataType;
@@ -105,15 +108,32 @@ public class GaussDBAPivotedQuerySynthesisOracle
                 .generateExpressionWithExpectedResult(GaussDBADataType.NUMBER);
         GaussDBAExpression result;
 
-        // Oracle语义关键：空串被视为NULL
         GaussDBAConstant expectedVal = expr.getExpectedValue();
-        if (expectedVal == null || expectedVal.isNull()) {
+        if (expectedVal == null) {
+            // The engine cannot reliably predict this expression's pivot-row value (e.g. it involves
+            // division, whose scale/rounding may not match the DB). Building a rectified predicate on
+            // an unreliable prediction risks excluding the pivot row (a false positive), so skip.
+            throw new IgnoreMeException();
+        }
+        if (expectedVal.isNull()) {
+            // Oracle semantics: empty string is NULL — matched by IS NULL.
             result = GaussDBAUnaryPostfixOperation.create(expr, UnaryPostfixOperator.IS_NULL);
+        } else if (expectedVal.isNumber()) {
+            // Truthiness rectification, robust to arithmetic precision: GaussDB-A treats non-zero as
+            // true. Use "(expr) <> 0" when the pivot value is non-zero and "(expr) = 0" when it is
+            // zero — both depend only on the engine agreeing with the DB on zero vs non-zero, not on
+            // an exact decimal value, so a rounded/truncated engine result cannot exclude the pivot row.
+            // (Do NOT use IS TRUE/IS FALSE: on GaussDB-A their semantics are unstable for non-canonical
+            // values — measured 0.0 IS FALSE = false, 0.5 IS TRUE = true.)
+            GaussDBAConstant zero = GaussDBAConstant.createNumberConstant(0);
+            GaussDBABinaryComparisonOperator cmp = expectedVal.asBigDecimal().signum() != 0
+                    ? GaussDBABinaryComparisonOperator.NOT_EQUALS
+                    : GaussDBABinaryComparisonOperator.EQUALS;
+            result = new GaussDBABinaryComparisonOperation(expr, zero, cmp);
         } else {
-            // A模式无BOOLEAN，用NUMBER表示
-            long val = expectedVal.isNumber() ? expectedVal.asNumber() : 0;
-            result = GaussDBAUnaryPostfixOperation.create(expr,
-                    val == 1 ? UnaryPostfixOperator.IS_TRUE : UnaryPostfixOperator.IS_FALSE);
+            // Non-numeric expected value (string/date): equality with the exact predicted constant.
+            result = new GaussDBABinaryComparisonOperation(expr, expectedVal,
+                    GaussDBABinaryComparisonOperator.EQUALS);
         }
         rectifiedPredicates.add(result);
         return result;

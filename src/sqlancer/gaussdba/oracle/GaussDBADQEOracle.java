@@ -175,7 +175,13 @@ public class GaussDBADQEOracle extends DQEBase<GaussDBAGlobalState> implements T
         try {
             resultSet = new SQLQueryAdapter(selectStmt, selectExpectedErrors).executeAndGet(state, false);
         } catch (SQLException ignored) {
-            // Handle errors
+            // Unreachable in practice: these statements run with reportException=false, so
+            // SQLQueryAdapter returns null/false instead of throwing. A failed UPDATE/DELETE is
+            // skipped upstream via the transaction-abort (25P02) path in the finally block (whose
+            // getResultSetFirstColumnAsString runs with reportException=true and re-raises the
+            // original error, in COMMON_EXPECTED_SQLSTATES, as IgnoreMeException). So this oracle
+            // does not produce the "accessed different rows" false positive, and recording errors
+            // here would be dead code.
         } finally {
             if (resultSet != null) {
                 for (GaussDBATable table : tables.getTables()) {
@@ -200,7 +206,13 @@ public class GaussDBADQEOracle extends DQEBase<GaussDBAGlobalState> implements T
             new SQLQueryAdapter("BEGIN").execute(state, false);
             new SQLQueryAdapter(updateStmt, updateExpectedErrors).execute(state, false);
         } catch (SQLException ignored) {
-            // Handle errors
+            // Unreachable in practice: these statements run with reportException=false, so
+            // SQLQueryAdapter returns null/false instead of throwing. A failed UPDATE/DELETE is
+            // skipped upstream via the transaction-abort (25P02) path in the finally block (whose
+            // getResultSetFirstColumnAsString runs with reportException=true and re-raises the
+            // original error, in COMMON_EXPECTED_SQLSTATES, as IgnoreMeException). So this oracle
+            // does not produce the "accessed different rows" false positive, and recording errors
+            // here would be dead code.
         } finally {
             for (GaussDBATable table : tables.getTables()) {
                 String tableName = table.getName();
@@ -232,7 +244,13 @@ public class GaussDBADQEOracle extends DQEBase<GaussDBAGlobalState> implements T
             new SQLQueryAdapter("BEGIN").execute(state, false);
             new SQLQueryAdapter(deleteStmt, deleteExpectedErrors).execute(state, false);
         } catch (SQLException ignored) {
-            // Handle errors
+            // Unreachable in practice: these statements run with reportException=false, so
+            // SQLQueryAdapter returns null/false instead of throwing. A failed UPDATE/DELETE is
+            // skipped upstream via the transaction-abort (25P02) path in the finally block (whose
+            // getResultSetFirstColumnAsString runs with reportException=true and re-raises the
+            // original error, in COMMON_EXPECTED_SQLSTATES, as IgnoreMeException). So this oracle
+            // does not produce the "accessed different rows" false positive, and recording errors
+            // here would be dead code.
         } finally {
             for (GaussDBATable table : tables.getTables()) {
                 String tableName = table.getName();

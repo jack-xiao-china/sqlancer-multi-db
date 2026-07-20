@@ -377,6 +377,12 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
             return null;
         }
         PostgresIntersectSelect intersect = (PostgresIntersectSelect) expr;
+        if (intersect.isIntersectAll()) {
+            // INTERSECT ALL keeps duplicate multiplicities; the NOT-EXISTS + DISTINCT rewrite is only
+            // valid for INTERSECT DISTINCT. Forcing DISTINCT on an ALL query would drop duplicates
+            // and cause a false positive, so decline to transform.
+            return null;
+        }
         List<PostgresSelect> selects = intersect.getSelects();
         if (selects.size() < 2) {
             return null;
@@ -436,9 +442,12 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
             newQ1Predicate = existsExpr;
         }
 
-        // Return modified Q1 (without INTERSECT, just SELECT with EXISTS)
+        // Return modified Q1 (without INTERSECT, just SELECT with EXISTS).
+        // INTERSECT de-duplicates; "Q1 WHERE EXISTS(...)" keeps Q1's duplicates, so force DISTINCT
+        // to preserve multiset equality (otherwise duplicate Q1 rows cause a false positive).
         PostgresSelect resultQ1 = shallowCopyPostgresSelect(q1);
         resultQ1.setWhereClause(newQ1Predicate);
+        resultQ1.setSelectType(PostgresSelect.SelectType.DISTINCT);
         return resultQ1;
     }
 
@@ -448,6 +457,12 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
             return null;
         }
         PostgresExceptSelect except = (PostgresExceptSelect) expr;
+        if (except.isExceptAll()) {
+            // EXCEPT ALL keeps duplicate multiplicities; the NOT-EXISTS + DISTINCT rewrite is only
+            // valid for EXCEPT DISTINCT. Forcing DISTINCT on an ALL query would drop duplicates and
+            // cause a false positive, so decline to transform.
+            return null;
+        }
         List<PostgresSelect> selects = except.getSelects();
         if (selects.size() < 2) {
             return null;
@@ -507,9 +522,12 @@ public class PostgresEETTransformAdapter implements EETTransformAdapter<Postgres
             newQ1Predicate = notExistsExpr;
         }
 
-        // Return modified Q1 (without EXCEPT, just SELECT with NOT EXISTS)
+        // Return modified Q1 (without EXCEPT, just SELECT with NOT EXISTS).
+        // EXCEPT de-duplicates; "Q1 WHERE NOT EXISTS(...)" keeps Q1's duplicates, so force DISTINCT
+        // to preserve multiset equality (otherwise duplicate Q1 rows cause a false positive).
         PostgresSelect resultQ1 = shallowCopyPostgresSelect(q1);
         resultQ1.setWhereClause(newQ1Predicate);
+        resultQ1.setSelectType(PostgresSelect.SelectType.DISTINCT);
         return resultQ1;
     }
 

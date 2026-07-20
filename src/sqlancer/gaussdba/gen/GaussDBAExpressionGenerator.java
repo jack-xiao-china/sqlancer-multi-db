@@ -41,6 +41,7 @@ import sqlancer.gaussdba.ast.GaussDBAUnaryPrefixOperation;
 import sqlancer.gaussdba.ast.GaussDBAUnaryPrefixOperation.UnaryPrefixOperator;
 import sqlancer.gaussdba.ast.GaussDBAAggregate;
 import sqlancer.gaussdba.ast.GaussDBAAggregate.GaussDBAAggregateFunction;
+import sqlancer.gaussdba.ast.GaussDBAAlias;
 
 public class GaussDBAExpressionGenerator
         implements ExpressionGenerator<GaussDBAExpression>,
@@ -293,7 +294,10 @@ public class GaussDBAExpressionGenerator
                 whereCondition,
                 GaussDBAConstant.createNumberConstant(1),
                 GaussDBAConstant.createNumberConstant(0));
-        select.setFetchColumns(List.of(caseExpr));
+        // Alias the projected CASE expression as ref0 so the outer SUM(ref0) can reference it.
+        // The GaussDB-A visitor does not add projection aliases automatically (unlike the M visitor),
+        // so without this the outer query fails with "column ref0 does not exist" (SQLSTATE 42703).
+        select.setFetchColumns(List.of(new GaussDBAAlias(caseExpr, "ref0")));
         select.setWhereClause(null);
         select.setOrderByClauses(List.of());
         select.setSelectType(GaussDBASelect.GaussDBASelectType.ALL);

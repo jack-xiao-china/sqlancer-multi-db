@@ -17,6 +17,7 @@ import sqlancer.gaussdba.GaussDBAGlobalState;
 import sqlancer.gaussdba.GaussDBAToStringVisitor;
 import sqlancer.gaussdba.ast.GaussDBAAggregate;
 import sqlancer.gaussdba.ast.GaussDBAAggregate.GaussDBAAggregateFunction;
+import sqlancer.gaussdba.ast.GaussDBAAlias;
 import sqlancer.gaussdba.ast.GaussDBAExpression;
 import sqlancer.gaussdba.ast.GaussDBAJoin;
 import sqlancer.gaussdba.ast.GaussDBASelect;
@@ -97,7 +98,10 @@ public class GaussDBATLPAggregateOracle extends GaussDBATLPBase implements TestO
         GaussDBAExpression whereClause = gen.generateBooleanExpression();
         GaussDBAExpression negatedClause = new GaussDBAUnaryPrefixOperation(whereClause, UnaryPrefixOperator.NOT);
         GaussDBAExpression isNullClause = new GaussDBAUnaryPostfixOperation(whereClause, UnaryPostfixOperator.IS_NULL);
-        List<GaussDBAExpression> mappedAggregate = Arrays.asList(aggregate);
+        // Alias the aggregate as agg0 so the outer aggregate (e.g. SUM(agg0)) can reference it.
+        // The GaussDB-A visitor does not add projection aliases automatically, so without this
+        // the metamorphic query fails with "column agg0 does not exist" (SQLSTATE 42703).
+        List<GaussDBAExpression> mappedAggregate = Arrays.asList(new GaussDBAAlias(aggregate, "agg0"));
         GaussDBASelect leftSelect = getSelect(mappedAggregate, from, whereClause, select.getJoinClauses());
         GaussDBASelect middleSelect = getSelect(mappedAggregate, from, negatedClause, select.getJoinClauses());
         GaussDBASelect rightSelect = getSelect(mappedAggregate, from, isNullClause, select.getJoinClauses());
@@ -146,7 +150,9 @@ public class GaussDBATLPAggregateOracle extends GaussDBATLPBase implements TestO
         GaussDBAAggregateFunction func = aggregate.getFunc();
         switch (func) {
         case COUNT:
-            return "SUM(agg0)";
+            // COALESCE guards the empty-table case: the UNION ALL of partitions yields no rows,
+            // so SUM(agg0) would be NULL while the original COUNT(...) returns 0.
+            return "COALESCE(SUM(agg0), 0)";
         default:
             return func.toString() + "(agg0)";
         }

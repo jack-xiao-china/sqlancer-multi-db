@@ -3,6 +3,8 @@ package sqlancer.postgres.oracle.ext.eet;
 import java.util.ArrayList;
 import java.util.List;
 
+import sqlancer.IgnoreMeException;
+import sqlancer.Randomly;
 import sqlancer.postgres.ast.PostgresCteDefinition;
 import sqlancer.postgres.ast.PostgresExceptSelect;
 import sqlancer.postgres.ast.PostgresIntersectSelect;
@@ -39,6 +41,19 @@ public final class PostgresEETQueryTransformer {
         }
         if (root instanceof PostgresIntersectSelect) {
             PostgresIntersectSelect i = (PostgresIntersectSelect) root;
+            // Set-op rewrite (INTERSECT DISTINCT only; the rule declines ALL): with 50% probability
+            // rewrite into "Q1 WHERE EXISTS(Q2, NULL-safe eq) DISTINCT". Wired here because the
+            // per-expression path skips query-level nodes, leaving the rule otherwise unreachable.
+            if (Randomly.getBoolean()) {
+                try {
+                    PostgresExpression rewritten = transformer.getAdapter().applyIntersectToExistsTransform(i);
+                    if (rewritten != null) {
+                        return rewritten;
+                    }
+                } catch (IgnoreMeException ex) {
+                    // fall through to branch transform
+                }
+            }
             List<PostgresSelect> newBranches = new ArrayList<>();
             for (PostgresSelect b : i.getSelects()) {
                 newBranches.add(eqTransformQuery(b));
@@ -47,6 +62,18 @@ public final class PostgresEETQueryTransformer {
         }
         if (root instanceof PostgresExceptSelect) {
             PostgresExceptSelect e = (PostgresExceptSelect) root;
+            // Set-op rewrite (EXCEPT DISTINCT only; the rule declines ALL): with 50% probability
+            // rewrite into "Q1 WHERE NOT EXISTS(Q2, NULL-safe eq) DISTINCT".
+            if (Randomly.getBoolean()) {
+                try {
+                    PostgresExpression rewritten = transformer.getAdapter().applyExceptToNotExistsTransform(e);
+                    if (rewritten != null) {
+                        return rewritten;
+                    }
+                } catch (IgnoreMeException ex) {
+                    // fall through to branch transform
+                }
+            }
             List<PostgresSelect> newBranches = new ArrayList<>();
             for (PostgresSelect b : e.getSelects()) {
                 newBranches.add(eqTransformQuery(b));

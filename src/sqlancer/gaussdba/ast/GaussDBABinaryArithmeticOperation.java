@@ -56,20 +56,28 @@ public class GaussDBABinaryArithmeticOperation implements GaussDBAExpression {
         if (leftVal.isNull() || rightVal.isNull()) {
             return GaussDBAConstant.createNullConstant();
         }
-        long leftNum = leftVal.asNumber();
-        long rightNum = rightVal.asNumber();
+        // Use exact BigDecimal arithmetic — NOT asNumber()/long, which truncates (0.5 -> 0, 7/2 -> 3)
+        // and diverges from the DB's high-precision NUMBER semantics. A truncated prediction makes
+        // callers (e.g. PQS rectification) build predicates that the DB evaluates differently.
+        if (!leftVal.isNumber() || !rightVal.isNumber()) {
+            return null; // non-numeric operand: cannot reliably predict the arithmetic result
+        }
+        java.math.BigDecimal l = leftVal.asBigDecimal();
+        java.math.BigDecimal r = rightVal.asBigDecimal();
         switch (op) {
         case ADDITION:
-            return GaussDBAConstant.createNumberConstant(leftNum + rightNum);
+            return GaussDBAConstant.createNumberConstant(l.add(r));
         case SUBTRACTION:
-            return GaussDBAConstant.createNumberConstant(leftNum - rightNum);
+            return GaussDBAConstant.createNumberConstant(l.subtract(r));
         case MULTIPLICATION:
-            return GaussDBAConstant.createNumberConstant(leftNum * rightNum);
+            return GaussDBAConstant.createNumberConstant(l.multiply(r));
         case DIVISION:
-            if (rightNum == 0) {
+            if (r.signum() == 0) {
                 return GaussDBAConstant.createNullConstant();
             }
-            return GaussDBAConstant.createNumberConstant(leftNum / rightNum);
+            // Division may yield a non-terminating decimal whose scale/rounding need not match the
+            // DB exactly; predicting the precise value is unsafe, so decline to predict (return null).
+            return null;
         default:
             throw new AssertionError(op);
         }

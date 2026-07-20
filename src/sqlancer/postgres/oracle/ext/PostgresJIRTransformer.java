@@ -150,17 +150,23 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
 
     private JIRQuerySet generateLeftRightSymmetry() {
         PostgresExpression onCondition = gen.generateExpression(0, PostgresDataType.BOOLEAN);
-        List<PostgresExpression> fetchColumns = generateLeftTableFetchColumns();
-        int joinCount = decideJoinCount();
+        // No wildcard: after the operand swap, SELECT * would expand to different column orders
+        // (L-cols then R-cols vs R-cols then L-cols), so only left-table columns are projected.
+        List<PostgresExpression> fetchColumns = generateLeftTableFetchColumnsNoWildcard();
 
-        // Source: SELECT {fetchColumns} FROM primaryTable {preceding joins} LEFT JOIN lastTable ON cond
-        List<PostgresJoin> sourceJoins = buildJoinChain(joinCount, PostgresJoinType.LEFT, onCondition);
-        PostgresSelect sourceSelect = createSelectWithJoins(fetchColumns, sourceJoins);
+        // Source: SELECT {fetchColumns} FROM L LEFT JOIN R ON cond (single JOIN only; the
+        // symmetry rewrite is defined for one join, not for a join chain)
+        PostgresSelect sourceSelect = createBaseSelectWithCols(PostgresJoinType.LEFT, onCondition, fetchColumns);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Target: Same structure but LEFT → RIGHT for the last join
-        List<PostgresJoin> targetJoins = buildJoinChain(joinCount, PostgresJoinType.RIGHT, onCondition);
-        PostgresSelect targetSelect = createSelectWithJoins(fetchColumns, targetJoins);
+        // Target: SELECT {fetchColumns} FROM R RIGHT JOIN L ON cond — operands must be swapped:
+        // L LEFT JOIN R preserves L rows, which equals R RIGHT JOIN L, not L RIGHT JOIN R.
+        PostgresSelect targetSelect = new PostgresSelect();
+        targetSelect.setFetchColumns(fetchColumns);
+        targetSelect.setFromList(Collections.singletonList(new PostgresTableReference(getRightTable())));
+        targetSelect.setAllowForClause(false);
+        targetSelect.setJoinClauses(Collections.singletonList(
+                new PostgresJoin(new PostgresTableReference(primaryTable), onCondition, PostgresJoinType.RIGHT)));
         String targetSQL = PostgresVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -238,8 +244,8 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
     }
 
     // ========== Rule 5: Cross Join Equivalence ==========
-    // CROSS JOIN ≡ INNER JOIN ON TRUE ≡ LEFT JOIN ON TRUE ≡ RIGHT JOIN ON TRUE ≡ FULL JOIN ON TRUE
-    // Randomly pick one variant per check() call; multiple iterations cover all variants
+    // CROSS JOIN ≡ INNER JOIN ON TRUE only. LEFT/RIGHT/FULL JOIN ON TRUE are NOT equivalent:
+    // with an empty side, CROSS yields no rows but outer joins keep the other side NULL-padded.
 
     private JIRQuerySet generateCrossJoinEquivalence() {
         List<PostgresExpression> fetchColumns = generateLeftTableFetchColumns();
@@ -248,12 +254,10 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
         PostgresSelect sourceSelect = createBaseSelectWithCols(PostgresJoinType.CROSS, null, fetchColumns);
         String sourceSQL = PostgresVisitor.asString(sourceSelect);
 
-        // Randomly pick target variant: INNER/LEFT/RIGHT/FULL ON TRUE
-        // PostgreSQL supports FULL JOIN, so include it (MySQL only has INNER/LEFT/RIGHT)
-        PostgresJoinType targetJoinType = Randomly.fromOptions(PostgresJoinType.INNER, PostgresJoinType.LEFT,
-                PostgresJoinType.RIGHT, PostgresJoinType.FULL);
+        // Target is fixed to INNER JOIN ON TRUE: LEFT/RIGHT/FULL JOIN ON TRUE preserve unmatched
+        // rows (NULL-padded) when one side is empty, so they are not equivalent to CROSS JOIN.
         PostgresExpression onTrue = PostgresConstant.createTrue();
-        PostgresSelect targetSelect = createBaseSelectWithCols(targetJoinType, onTrue, fetchColumns);
+        PostgresSelect targetSelect = createBaseSelectWithCols(PostgresJoinType.INNER, onTrue, fetchColumns);
         String targetSQL = PostgresVisitor.asString(targetSelect);
 
         return new JIRQuerySet(sourceSQL, Collections.singletonList(targetSQL), JIRResultType.EQUAL,
@@ -372,7 +376,7 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
 
     /**
      * Generate fetch columns from left table only: 50/50 SELECT * vs multi-column random subset.
-     * Used by Rules 2, 3, 5 where comparison must be on left-table columns only.
+     * Used by Rules 3, 5 where comparison must be on left-table columns only.
      */
     private List<PostgresExpression> generateLeftTableFetchColumns() {
         List<PostgresExpression> columns = new ArrayList<>();
@@ -398,6 +402,8 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
      * Used by Rule 6 (NATURAL_JOIN_EXPLICATION) because NATURAL JOIN deduplicates
      * common columns (fewer result columns) while INNER JOIN ON (equalities) does not.
      * SELECT * would cause column-count mismatch → false positive.
+     * Also used by Rule 2 (LEFT_RIGHT_SYMMETRY) because the operand swap makes the
+     * two sides expand * in different column orders.
      */
     private List<PostgresExpression> generateLeftTableFetchColumnsNoWildcard() {
         List<PostgresColumn> leftCols = primaryTable.getColumns();
@@ -501,7 +507,7 @@ public class PostgresJIRTransformer implements JIRTransformer<PostgresGlobalStat
 
     /**
      * Create a base SELECT with external fetch columns, FROM primaryTable, and a single JOIN to right table.
-     * Used by Rules 4, 5, 6 where only 2 tables are involved.
+     * Used by Rules 2, 4, 5, 6 where only 2 tables are involved.
      */
     private PostgresSelect createBaseSelectWithCols(PostgresJoinType joinType, PostgresExpression onCondition,
             List<PostgresExpression> fetchColumns) {

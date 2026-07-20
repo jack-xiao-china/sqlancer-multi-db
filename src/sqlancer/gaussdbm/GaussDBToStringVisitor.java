@@ -24,6 +24,7 @@ import sqlancer.gaussdbm.ast.GaussDBJsonFunction;
 import sqlancer.gaussdbm.ast.GaussDBJoin;
 import sqlancer.gaussdbm.ast.GaussDBManuelPredicate;
 import sqlancer.gaussdbm.ast.GaussDBOracleAlias;
+import sqlancer.gaussdbm.ast.GaussDBOracleExpressionBag;
 import sqlancer.gaussdbm.ast.GaussDBPostfixText;
 import sqlancer.gaussdbm.ast.GaussDBPrintedExpression;
 import sqlancer.gaussdbm.ast.GaussDBSelect;
@@ -86,6 +87,8 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
             visit((GaussDBCteTableReference) expr);
         } else if (expr instanceof GaussDBOracleAlias) {
             visit((GaussDBOracleAlias) expr);
+        } else if (expr instanceof GaussDBOracleExpressionBag) {
+            visit((GaussDBOracleExpressionBag) expr);
         } else if (expr instanceof GaussDBManuelPredicate) {
             visit((GaussDBManuelPredicate) expr);
         } else if (expr instanceof GaussDBPostfixText) {
@@ -153,6 +156,12 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
 
     public void visit(GaussDBCteTableReference r) {
         sb.append(r.getCteName());
+    }
+
+    public void visit(GaussDBOracleExpressionBag bag) {
+        // Render the bag's current inner expression; used by CODDTEST folding, where the same query
+        // is re-rendered after updateInnerExpr() swaps the subquery for its constant.
+        visit(bag.getInnerExpr());
     }
 
     public void visit(GaussDBOracleAlias alias) {
