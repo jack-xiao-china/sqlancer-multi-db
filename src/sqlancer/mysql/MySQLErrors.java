@@ -118,6 +118,11 @@ public final class MySQLErrors {
         // Self-referencing table and deadlock errors
         errors.add("Can't reopen table");
         errors.add("Deadlock found when trying to get lock");
+        // Schema drift: after ALTER renames/drops a column, statements built from the previous
+        // snapshot reference columns that no longer exist.
+        errors.add("Unknown column");
+        // INSERT ... SELECT over self-joins/subqueries can produce ambiguous column references.
+        errors.add("is ambiguous");
 
         return errors;
     }

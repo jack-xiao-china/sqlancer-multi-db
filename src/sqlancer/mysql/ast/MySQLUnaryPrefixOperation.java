@@ -35,7 +35,10 @@ public class MySQLUnaryPrefixOperation extends UnaryOperatorNode<MySQLExpression
                     }
                     return MySQLConstant.createIntConstant(-expr.getInt());
                 } else {
-                    throw new AssertionError(expr);
+                    // Unhandled constant kinds (binary/bit, double, temporal) reach the
+                    // expected-value machinery during generation; decline to predict instead of
+                    // crashing the round.
+                    throw new IgnoreMeException();
                 }
             }
         };

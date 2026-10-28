@@ -257,7 +257,9 @@ public abstract class MySQLConstant implements MySQLExpression {
                 // 0);
                 throw new IgnoreMeException();
             } else {
-                throw new AssertionError(rightVal);
+                // Unhandled constant kinds (double, binary/bit, temporal, JSON): decline to
+                // predict instead of crashing the round.
+                throw new IgnoreMeException();
             }
         }
 
@@ -319,7 +321,10 @@ public abstract class MySQLConstant implements MySQLExpression {
                 }
                 return isEquals(rightVal.castAs(CastType.SIGNED));
             } else {
-                throw new AssertionError(rightVal);
+                // Unhandled constant kinds (double, binary/bit, temporal, JSON) reach the
+                // expected-value machinery during generation; decline to predict instead of
+                // crashing the round.
+                throw new IgnoreMeException();
             }
         }
 
@@ -381,7 +386,9 @@ public abstract class MySQLConstant implements MySQLExpression {
                 }
                 return isLessThan(rightVal.castAs(isSigned ? CastType.SIGNED : CastType.UNSIGNED));
             } else {
-                throw new AssertionError(rightVal);
+                // Unhandled constant kinds (double, binary/bit, temporal, JSON): decline to
+                // predict instead of crashing the round.
+                throw new IgnoreMeException();
             }
         }
 

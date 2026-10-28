@@ -1,16 +1,13 @@
 package sqlancer.mysql.oracle;
 
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
 import sqlancer.common.oracle.TestOracle;
@@ -24,13 +21,13 @@ import sqlancer.mysql.ast.MySQLAggregate;
 import sqlancer.mysql.ast.MySQLBinaryLogicalOperation;
 import sqlancer.mysql.ast.MySQLBinaryLogicalOperation.MySQLBinaryLogicalOperator;
 import sqlancer.mysql.ast.MySQLColumnReference;
-import sqlancer.mysql.ast.MySQLConstant;
 import sqlancer.mysql.ast.MySQLOracleAlias;
+import sqlancer.mysql.ast.MySQLOracleExpressionBag;
 import sqlancer.mysql.ast.MySQLExpression;
 import sqlancer.mysql.ast.MySQLJoin;
 import sqlancer.mysql.ast.MySQLSelect;
-import sqlancer.mysql.ast.MySQLOracleExpressionBag;
 import sqlancer.mysql.ast.MySQLTableReference;
+import sqlancer.mysql.ast.MySQLText;
 import sqlancer.mysql.gen.MySQLExpressionGenerator;
 
 public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implements TestOracle<MySQLGlobalState> {
@@ -40,14 +37,14 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
 
     private List<MySQLTable> tablesFromOuterContext = new ArrayList<>();
     private List<MySQLJoin> joinsInExpr;
-    private Map<String, List<MySQLConstant>> auxiliaryQueryResult = new HashMap<>();
-    private Map<String, List<MySQLConstant>> selectResult = new HashMap<>();
-
-    // private MySQLExpression foldedExpr; // removed as unused
-    // private MySQLExpression constantResOfFoldedExpr; // removed as unused
 
     private Boolean useSubqueryAsFoldedExpr;
     private Boolean useCorrelatedSubqueryAsFoldedExpr;
+
+    // State for the non-correlated scalar-subquery constant folding (SUBQUERY mode).
+    private String foldTableName;
+    private String foldCmp;
+    private long foldConst;
 
     public MySQLCODDTestOracle(MySQLGlobalState globalState) {
         super(globalState);
@@ -69,57 +66,64 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
     public void check() throws SQLException {
         joinsInExpr = null;
         tablesFromOuterContext.clear();
-        auxiliaryQueryResult.clear();
-        selectResult.clear();
 
         useSubqueryAsFoldedExpr = useSubquery();
         useCorrelatedSubqueryAsFoldedExpr = useCorrelatedSubquery();
 
-        generateAuxiliaryQuery();
-
-        MySQLSelect originalQuery = null;
-        MySQLSelect foldedQuery = null;
-        Map<String, List<MySQLConstant>> foldedResult = new HashMap<>();
-        Map<String, List<MySQLConstant>> originalResult = new HashMap<>();
-
-        if (useSubqueryAsFoldedExpr && !useCorrelatedSubqueryAsFoldedExpr) {
-            originalQuery = genSelectExpression(null, null);
-            foldedQuery = getFoldedQuery(originalQuery);
-            foldedResult = executeQuery(foldedQuery);
-            originalResult = executeQuery(originalQuery);
-        } else if (!useSubqueryAsFoldedExpr && !useCorrelatedSubqueryAsFoldedExpr) {
-            originalQuery = genSimpleSelect();
-            // Create folded version by replacing expression with constant
-            foldedResult = executeFoldedQuery(originalQuery);
-            originalResult = executeQuery(originalQuery);
-        } else if (useCorrelatedSubqueryAsFoldedExpr) {
-            originalQuery = genSelectWithCorrelatedSubquery();
-            // Handle correlated subquery folding
-            foldedResult = executeFoldedQuery(originalQuery);
-            originalResult = executeQuery(originalQuery);
+        // Real constant folding across all modes (see rationale in the GaussDB-M oracle): embed a
+        // non-correlated scalar-subquery predicate "(k <cmp> (SELECT COUNT(*) FROM t2))" via a
+        // mutable bag, run it, then fold the subquery to its constant and run again — a strict
+        // equivalence. The former EXPRESSION/CORRELATED branches re-ran the same query twice (a
+        // no-op that could only surface query non-determinism as a spurious mismatch), and
+        // getFoldedQuery() returned the original query unchanged, so they were removed.
+        MySQLOracleExpressionBag foldBag = buildFoldableCondition();
+        if (foldBag == null) {
+            throw new IgnoreMeException();
         }
-
+        MySQLSelect originalQuery;
+        if (useCorrelatedSubqueryAsFoldedExpr) {
+            originalQuery = genSelectWithCorrelatedSubquery();
+            injectFoldCondition(originalQuery, foldBag);
+        } else if (useSubqueryAsFoldedExpr) {
+            originalQuery = genSelectExpression(null, foldBag);
+        } else {
+            originalQuery = genSimpleSelect();
+            injectFoldCondition(originalQuery, foldBag);
+        }
+        String originalSql = originalQuery.asString();
+        if (containsNondeterministicCall(originalSql)) {
+            // Non-deterministic projections (CURTIME()/NOW()/RAND()/...) legitimately differ
+            // between the two executions; the folding comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
+        List<List<String>> originalResult;
+        List<List<String>> foldedResult;
+        String foldedSql;
+        try {
+            originalResult = executeQuery(originalQuery);
+            long foldedValue = evalCount(foldTableName);
+            foldBag.updateInnerExpr(new MySQLText("(" + foldConst + " " + foldCmp + " " + foldedValue + ")"));
+            foldedSql = originalQuery.asString();
+            foldedResult = executeQuery(originalQuery);
+        } catch (SQLException e) {
+            if (isBenignExpectedError(e)) {
+                // The folded query would fail identically, so skip the round instead of
+                // aborting the run.
+                throw new IgnoreMeException();
+            }
+            throw e;
+        }
         if (!compareResult(foldedResult, originalResult)) {
-            throw new AssertionError("Results mismatch");
+            throw new AssertionError("CODDTEST folding mismatch\n-- original: " + originalSql
+                    + "\n-- folded:   " + foldedSql);
         }
     }
 
-    private MySQLSelect generateAuxiliaryQuery() throws SQLException {
-        // Generate auxiliary query to get expression results
-        // This will be used to fold expressions in the main query
-        MySQLSelect select = new MySQLSelect();
-
-        if (useSubqueryAsFoldedExpr) {
-            if (useCorrelatedSubqueryAsFoldedExpr) {
-                select = genSelectWithCorrelatedSubquery();
-            } else {
-                select = genSelectExpression(null, null);
-            }
-        } else {
-            select = genSimpleSelect();
-        }
-
-        return select;
+    /** AND the mutable fold predicate (a bag) into a generated query's WHERE clause. */
+    private void injectFoldCondition(MySQLSelect query, MySQLOracleExpressionBag foldBag) {
+        MySQLExpression where = query.getWhereClause();
+        query.setWhereClause(where == null ? foldBag
+                : new MySQLBinaryLogicalOperation(where, foldBag, MySQLBinaryLogicalOperator.AND));
     }
 
     private MySQLSelect genSimpleSelect() throws SQLException {
@@ -167,17 +171,6 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
         MySQLOracleAlias columnAlias = new MySQLOracleAlias(whereCondition, null);
         fetchColumns.add(columnAlias);
         select.setFetchColumns(fetchColumns);
-
-        // Execute the query and get results
-        Map<String, List<MySQLConstant>> queryRes = getQueryResult(select.asString(), state);
-
-        // Store results and create constant result for folded expression
-        selectResult.clear();
-        selectResult.putAll(queryRes);
-        // List<MySQLConstant> summary = queryRes.remove("c" + (0 - 1)); // removed as unused
-
-        // Create constant result for folded expression (removed as unused)
-        // this.constantResOfFoldedExpr = summary.get(0);
 
         return select;
     }
@@ -305,9 +298,11 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
         MySQLExpression randomWhereCondition = gen.generateExpression();
         MySQLExpression whereCondition = null;
         if (specificCondition != null) {
+            // Inject the bag itself (not a snapshot of its inner expr) so a later updateInnerExpr()
+            // that folds the scalar subquery to a constant is reflected on re-render.
             whereCondition = new MySQLBinaryLogicalOperation(
                 randomWhereCondition,
-                specificCondition.getInnerExpr(),
+                specificCondition,
                 MySQLBinaryLogicalOperator.AND
             );
         } else {
@@ -347,104 +342,128 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
         return select;
     }
 
-    private Map<String, List<MySQLConstant>> executeQuery(MySQLSelect query) throws SQLException {
-        // Execute the query and return results
-        Map<String, List<MySQLConstant>> result = new HashMap<>();
-
-        try (Statement s = con.createStatement()) {
-            s.setQueryTimeout(600);
-            String queryString = query.asString();
-            try (ResultSet rs = s.executeQuery(queryString)) {
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
-
-                // Initialize result structure with column names
-                for (int i = 1; i <= columnCount; i++) {
-                    String columnName = metaData.getColumnLabel(i);
-                    result.put(columnName, new ArrayList<>());
-                }
-
-                // Process result rows
+    private List<List<String>> executeQuery(MySQLSelect query) throws SQLException {
+        List<List<String>> rows = new ArrayList<>();
+        String sql = query.asString();
+        try (Statement st = con.createStatement()) {
+            st.setQueryTimeout(600);
+            try (ResultSet rs = st.executeQuery(sql)) {
+                int columnCount = rs.getMetaData().getColumnCount();
                 while (rs.next()) {
+                    List<String> row = new ArrayList<>(columnCount);
                     for (int i = 1; i <= columnCount; i++) {
-                        String columnName = metaData.getColumnLabel(i);
-                        Object value = rs.getObject(i);
-                        MySQLConstant constant = convertToMySQLConstant(value);
-                        result.get(columnName).add(constant);
+                        row.add(rs.getString(i)); // JDBC getString returns null for SQL NULL
                     }
+                    rows.add(row);
                 }
             }
+        } catch (SQLException e) {
+            throw new SQLException("CODDTEST query failed: " + sql, e);
         }
-
-        return result;
+        return rows;
     }
 
-    private Map<String, List<MySQLConstant>> executeFoldedQuery(MySQLSelect query) throws SQLException {
-        // Execute the folded query (with expressions replaced by constants)
-        return executeQuery(query);
-    }
-
-    private MySQLConstant convertToMySQLConstant(Object value) {
-        if (value == null) {
-            return MySQLConstant.createNullConstant();
-        } else if (value instanceof String) {
-            return MySQLConstant.createStringConstant((String) value);
-        } else if (value instanceof Integer) {
-            return MySQLConstant.createIntConstant((Integer) value);
-        } else if (value instanceof Long) {
-            return MySQLConstant.createIntConstant((Long) value);
-        } else if (value instanceof Double) {
-            // MySQL doesn't have DoubleConstant in this implementation
-            return MySQLConstant.createIntConstant(((Double) value).longValue());
-        } else {
-            return MySQLConstant.createStringConstant(value.toString());
-        }
-    }
-
-    private boolean compareResult(Map<String, List<MySQLConstant>> r1, Map<String, List<MySQLConstant>> r2) {
+    /**
+     * Compares two result sets as ROW multisets (order-insensitive, duplicates preserved). The
+     * earlier per-column-label grouping was fragile: duplicate labels from multi-table queries
+     * (e.g. two "c0") collided in the map, and comparing each column's values independently loses
+     * the row association — both of which can make identical result sets compare unequal.
+     */
+    private boolean compareResult(List<List<String>> r1, List<List<String>> r2) {
         if (r1.size() != r2.size()) {
             return false;
         }
-
-        for (String column : r1.keySet()) {
-            List<MySQLConstant> v1 = r1.get(column);
-            List<MySQLConstant> v2 = r2.get(column);
-
-            if (v1.size() != v2.size()) {
-                return false;
-            }
-
-            // Sort both lists before comparison
-            List<MySQLConstant> sortedV1 = new ArrayList<>(v1);
-            List<MySQLConstant> sortedV2 = new ArrayList<>(v2);
-
-            Collections.sort(sortedV1, (c1, c2) -> {
-                if (c1 == null || c2 == null) {
-                    return 0;
-                }
-                return c1.getTextRepresentation().compareTo(c2.getTextRepresentation());
-            });
-
-            Collections.sort(sortedV2, (c1, c2) -> {
-                if (c1 == null || c2 == null) {
-                    return 0;
-                }
-                return c1.getTextRepresentation().compareTo(c2.getTextRepresentation());
-            });
-
-            if (!sortedV1.equals(sortedV2)) {
-                return false;
-            }
+        List<String> k1 = new ArrayList<>(r1.size());
+        for (List<String> row : r1) {
+            k1.add(rowKey(row));
         }
-
-        return true;
+        List<String> k2 = new ArrayList<>(r2.size());
+        for (List<String> row : r2) {
+            k2.add(rowKey(row));
+        }
+        Collections.sort(k1);
+        Collections.sort(k2);
+        return k1.equals(k2);
     }
 
-    private MySQLSelect getFoldedQuery(MySQLSelect originalQuery) {
-        // Create a folded version of the query by replacing expressions with constants
-        // For now, return the original query - full implementation would traverse the AST
-        // and replace the folded expression with constantResOfFoldedExpr
-        return originalQuery;
+    private static String rowKey(List<String> row) {
+        // Length-prefixed, type-tagged encoding: NULL (tag N) never collides with the string "null",
+        // and cell values are self-delimiting so "a"+"b" cannot collide with "ab".
+        StringBuilder sb = new StringBuilder();
+        for (String c : row) {
+            if (c == null) {
+                sb.append("N;");
+            } else {
+                sb.append('S').append(c.length()).append(';').append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private MySQLOracleExpressionBag buildFoldableCondition() {
+        MySQLTables subTables = s.getRandomTableNonEmptyTables();
+        if (subTables.getTables().isEmpty()) {
+            return null;
+        }
+        foldTableName = subTables.getTables().get(0).getName();
+        foldConst = Randomly.getNotCachedInteger(0, 6);
+        foldCmp = Randomly.fromOptions("<=", "<", ">=", ">", "=", "<>");
+        String cond = "(" + foldConst + " " + foldCmp + " (SELECT COUNT(*) FROM " + foldTableName + "))";
+        return new MySQLOracleExpressionBag(new MySQLText(cond));
+    }
+
+    private long evalCount(String tableName) throws SQLException {
+        try (Statement st = con.createStatement();
+                ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM " + tableName)) {
+            return rs.next() ? rs.getLong(1) : 0L;
+        }
+    }
+
+    private static boolean containsNondeterministicCall(String sql) {
+        // The visitor renders function names canonically (upper case), so a plain contains() is
+        // sufficient; SLEEP also perturbs run-to-run timing semantics.
+        for (String fn : new String[] { "CURTIME(", "CURDATE(", "NOW(", "SYSDATE(", "RAND(", "UUID(",
+                "UUID_SHORT(", "UNIX_TIMESTAMP(", "CURRENT_TIMESTAMP", "SLEEP(" }) {
+            if (sql.contains(fn)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Known-benign execution errors, skipped by retrying the round (the folded query fails
+     * identically, so the folding equivalence is trivially preserved):
+     * - JSON functions over non-JSON or invalid-JSON arguments: MySQL validates JSON content at
+     *   runtime, and the expression generator is not JSON-type-aware.
+     * - Out-of-domain generated constants (garbage temporal/numeric strings) make MySQL raise
+     *   conversion errors — the same message family the INSERT/UPDATE error list tolerates.
+     */
+    private static boolean isBenignExpectedError(SQLException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String msg = t.getMessage();
+            if (msg == null) {
+                continue;
+            }
+            if (msg.contains("Invalid JSON text") || msg.contains("Invalid JSON path")
+                    || msg.contains("Invalid data type for JSON")
+                    || msg.contains("Cannot create a JSON value")
+                    || msg.contains("JSON documents may not contain NULL member names")
+                    || msg.contains("Incorrect DATE value") || msg.contains("Incorrect TIME value")
+                    || msg.contains("Incorrect DATETIME value") || msg.contains("Incorrect TIMESTAMP value")
+                    || msg.contains("Incorrect integer value") || msg.contains("Incorrect decimal value")
+                    || msg.contains("Incorrect double value") || msg.contains("Incorrect string value")
+                    || msg.contains("Data truncated") || msg.contains("Truncated incorrect")
+                    || msg.contains("out of range") || msg.contains("Out of range value")
+                    // Bitwise operators require equal-width BIT operands; generated bit literals
+                    // have random widths.
+                    || msg.contains("must be of equal length")
+                    // Binary-to-utf8 conversion of generated binary strings can fail.
+                    || msg.contains("Cannot convert string")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean useSubquery() {
@@ -482,6 +501,11 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
                         MySQLBinaryLogicalOperator.AND);
             }
             MySQLJoin.JoinType selectedOption = Randomly.fromList(options);
+            if (selectedOption == MySQLJoin.JoinType.NATURAL) {
+                // NATURAL joins do not have an ON clause (upstream behavior); rendering
+                // "NATURAL JOIN t ON ..." is a syntax error.
+                onCondition = null;
+            }
             MySQLJoin j = new MySQLJoin(table, onCondition, selectedOption);
             joinStatements.add(j);
         }
@@ -505,33 +529,6 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
                     MySQLBinaryLogicalOperator.AND);
         }
         return expr;
-    }
-
-    private Map<String, List<MySQLConstant>> getQueryResult(String queryString,
-            MySQLGlobalState state) throws SQLException {
-        Map<String, List<MySQLConstant>> result = new LinkedHashMap<>();
-        try (Statement stmt = this.con.createStatement()) {
-            stmt.setQueryTimeout(600);
-            try (ResultSet rs = stmt.executeQuery(queryString)) {
-                ResultSetMetaData metaData = rs.getMetaData();
-                int columnCount = metaData.getColumnCount();
-
-                // Initialize result structure
-                for (int i = 1; i <= columnCount; i++) {
-                    result.put("c" + (i - 1), new ArrayList<>());
-                }
-
-                // Process result rows
-                while (rs.next()) {
-                    for (int i = 1; i <= columnCount; i++) {
-                        Object value = rs.getObject(i);
-                        MySQLConstant constant = convertToMySQLConstant(value);
-                        result.get("c" + (i - 1)).add(constant);
-                    }
-                }
-            }
-        }
-        return result;
     }
 
 }

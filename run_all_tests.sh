@@ -21,7 +21,7 @@ NC='\033[0m' # No Color
 # ── 项目根目录 ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}"
-JAR_NAME="sqlancer-2.7.10.jar"
+JAR_NAME="sqlancer-2.7.11.jar"
 JAR_PATH="${PROJECT_DIR}/target/${JAR_NAME}"
 LIB_PATH="${PROJECT_DIR}/target/lib"
 OG_JAR="${PROJECT_DIR}/lib/opengauss-jdbc-6.0.2-og.jar"

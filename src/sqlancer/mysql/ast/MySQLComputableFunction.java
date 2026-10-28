@@ -384,7 +384,9 @@ public class MySQLComputableFunction implements MySQLExpression {
             }
         },
         // ========== 扩展字符串函数 ==========
-        SUBSTRING(2, "SUBSTRING", true) {
+        // Fixed 3-arg (not variadic): MySQL's SUBSTRING accepts exactly 2 or 3 arguments, so a
+        // variadic pick could render a 4-argument call, a syntax error.
+        SUBSTRING(3, "SUBSTRING") {
             @Override
             public MySQLConstant apply(MySQLConstant[] evaluatedArgs, MySQLExpression... args) {
                 MySQLConstant strArg = evaluatedArgs[0];
@@ -453,7 +455,9 @@ public class MySQLComputableFunction implements MySQLExpression {
                 return MySQLConstant.createStringConstant(str.replace(fromStr, toStr));
             }
         },
-        LOCATE(2, "LOCATE", true) {
+        // Bounded native arity (not variadic): MySQL rejects extra arguments at parse time
+        // ("Incorrect parameter count in the call to native function").
+        LOCATE(3, "LOCATE") {
             @Override
             public MySQLConstant apply(MySQLConstant[] evaluatedArgs, MySQLExpression... args) {
                 MySQLConstant substrArg = evaluatedArgs[0];
@@ -526,6 +530,12 @@ public class MySQLComputableFunction implements MySQLExpression {
                 if (len < 0) {
                     return MySQLConstant.createNullConstant();
                 }
+                if (len > 100_000) {
+                    // The expected-value machinery only feeds type inference and oracle checks;
+                    // a generated huge length would balloon the builder (observed
+                    // OutOfMemoryError in EET runs).
+                    throw new IgnoreMeException();
+                }
 
                 if (str.length() >= len) {
                     return MySQLConstant.createStringConstant(str.substring(0, len));
@@ -562,6 +572,12 @@ public class MySQLComputableFunction implements MySQLExpression {
 
                 if (len < 0) {
                     return MySQLConstant.createNullConstant();
+                }
+                if (len > 100_000) {
+                    // The expected-value machinery only feeds type inference and oracle checks;
+                    // a generated huge length would balloon the builder (observed
+                    // OutOfMemoryError in EET runs).
+                    throw new IgnoreMeException();
                 }
 
                 if (str.length() >= len) {
@@ -979,7 +995,8 @@ public class MySQLComputableFunction implements MySQLExpression {
                 throw new IgnoreMeException();
             }
         },
-        JSON_CONTAINS(2, "JSON_CONTAINS", true) {
+        // Bounded native arity: JSON_CONTAINS(target, candidate[, path]) — max 3.
+        JSON_CONTAINS(3, "JSON_CONTAINS") {
             @Override
             public MySQLConstant apply(MySQLConstant[] evaluatedArgs, MySQLExpression... args) {
                 MySQLConstant targetArg = evaluatedArgs[0];
@@ -1006,7 +1023,8 @@ public class MySQLComputableFunction implements MySQLExpression {
                 return MySQLConstant.createIntConstant(0);
             }
         },
-        JSON_KEYS(1, "JSON_KEYS", true) {
+        // Bounded native arity: JSON_KEYS(json[, path]) — max 2.
+        JSON_KEYS(2, "JSON_KEYS") {
             @Override
             public MySQLConstant apply(MySQLConstant[] evaluatedArgs, MySQLExpression... args) {
                 MySQLConstant jsonArg = evaluatedArgs[0];
@@ -1146,7 +1164,8 @@ public class MySQLComputableFunction implements MySQLExpression {
                 return MySQLConstant.createIntConstant(MySQLTemporalUtil.dayOfYear(dateStr));
             }
         },
-        WEEK(1, "WEEK", true) {
+        // Bounded native arity: WEEK(date[, mode]) — max 2.
+        WEEK(2, "WEEK") {
             @Override
             public MySQLConstant apply(MySQLConstant[] evaluatedArgs, MySQLExpression... args) {
                 MySQLConstant arg = evaluatedArgs[0];
