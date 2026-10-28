@@ -181,14 +181,21 @@ public class GaussDBACODDTestOracle extends CODDTestBase<GaussDBAGlobalState>
         GaussDBATables innerQueryRandomTables = s.getRandomTableNonEmptyTables();
 
         List<GaussDBAExpression> innerQueryFromTables = new ArrayList<>();
+        // Subquery-local tables: list tables that appear only in the inner set in the inner FROM.
+        // Without them, references to their columns dangle ("Missing FROM-clause entry").
+        for (GaussDBATable t : innerQueryRandomTables.getTables()) {
+            if (!outerQueryRandomTables.isContained(t)) {
+                innerQueryFromTables.add(GaussDBATableReference.create(t));
+            }
+        }
+        // Tables present in both sets are listed in the inner FROM (self-aliased) so their inner
+        // references bind locally; references to outer-only tables remain true correlated
+        // references resolved against the outer query (upstream SQLite3 CODDTest construction).
         for (GaussDBATable t : outerQueryRandomTables.getTables()) {
             if (innerQueryRandomTables.isContained(t)) {
-                GaussDBATable correlatedTable = t;
-                GaussDBAOracleAlias alias = new GaussDBAOracleAlias(GaussDBATableReference.create(correlatedTable),
-                        GaussDBATableReference.create(correlatedTable));
+                GaussDBAOracleAlias alias = new GaussDBAOracleAlias(GaussDBATableReference.create(t),
+                        GaussDBATableReference.create(t));
                 innerQueryFromTables.add(alias);
-            } else {
-                innerQueryFromTables.add(GaussDBATableReference.create(t));
             }
         }
 

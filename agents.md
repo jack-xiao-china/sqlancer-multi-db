@@ -12,7 +12,7 @@
 - **测试 Oracle（Oracles）**：25 种 Oracle 检测不同类别的逻辑 Bug
 - **实验日志与调试**：主要日志默认在 `target/logs/`
 
-### 当前版本：v2.7.9
+### 当前版本：v2.7.10
 
 ### 25 种 Oracle 完整列表
 
@@ -62,15 +62,16 @@ mvn clean package -DskipTests
 
 ```bash
 cd target
-java -jar sqlancer-2.7.9.jar --host localhost --port 3306 --username root --password password --num-tries 1 --timeout-seconds 100 --log-each-select true --num-threads 2 mysql --oracle QUERY_PARTITIONING
+java -jar sqlancer-2.7.10.jar --host localhost --port 3306 --username root --password password --num-tries 1 --timeout-seconds 100 --log-each-select true --num-threads 2 mysql --oracle QUERY_PARTITIONING
 ```
 
 > ⚠️ GaussDB-A 和 GaussDB-M 需要使用 `java -cp` 方式运行（system scope 依赖），详见 `lib/README.md`
 
-## 近期重要变更 (v2.7.3–v2.7.9)
+## 近期重要变更 (v2.7.3–v2.7.10)
 
 | 版本 | 变更 |
 |------|------|
+| v2.7.10 | 合入并验证 PR #15（GaussDB-A/M、PG、MySQL oracle 正确性修复：NOREC/AGGREGATE 别名、PQS 精确算术、CODDTEST 真折叠、EET MINUS→NOT EXISTS、CERT explain 设置、JIR 规则、PG EET 行编码）+ 冒烟驱动的工具修复：EET CoalesceToCase ≥3 参桥接强转 CCE（copyOfRange+回归测试）；CODDTEST 相关子查询 FROM 作用域对齐上游（M/A/MySQL）；GaussDB-M JOIN 生成 tables.remove+NATURAL 守卫+空格链接渲染；BIT_*_DISTINCT 枚举移除；CODDTEST-M 良性错误容忍（JSON/强类型/JOIN 作用域族）。GaussDB 侧 9 oracle + PostgreSQL JIR/EET 冒烟 0 bug；MySQL 冒烟被本地实例 datadir 孤儿 schema 目录阻塞（环境问题，非代码；存量 isEquals/ALTER 断言问题待后续版本）；CERT-M 记录 1 个估计器单调性违反待研判 |
 | v2.7.9 | PostgreSQL 普通用户全量 oracle 测试修复 — `readFunctions` 跳过超管/受限内置函数（`pg_replication_origin_*`/`pg_ls_*`/`pg_promote`/`pg_read_file` 等）；EDC_DATA `func.txt` 清理 79 个受限函数；`COMMON_EXPECTED_SQLSTATES` 补 8 个状态码支持非英文 locale；SONAR 支持比较运算+IgnoreMeException；禁用 `FORCE ROW LEVEL SECURITY`（RLS 42501 根因，同时消除 EET row-state mismatch 假阳性） |
 | v2.7.8 | PostgreSQL 普通用户角色修复 — 移除 `pg_current_logfile()` 与 6 个 SUSET GUC 参数（`wal_compression`/`commit_delay`/`track_activities`/`track_counts`/`track_io_timing`/`track_functions`），消除云实例普通用户测试时 permission denied 误报 |
 | v2.7.7 | PostgresIndex `backsConstraint` 检查 — 防止 `ADD CONSTRAINT USING INDEX` 误选已关联约束的索引 |

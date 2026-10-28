@@ -213,7 +213,15 @@ public class GaussDBToStringVisitor extends ToStringVisitor<GaussDBExpression> {
         }
         if (!s.getJoinList().isEmpty()) {
             sb.append(" ");
-            super.visit(s.getJoinList());
+            // Consecutive joins chain with spaces ("a JOIN b ON c JOIN d ON e"); the generic
+            // list visitor's comma separator renders ", JOIN", a syntax error.
+            List<GaussDBJoin> joinList = s.getJoinClauses();
+            for (int i = 0; i < joinList.size(); i++) {
+                if (i != 0) {
+                    sb.append(" ");
+                }
+                visit(joinList.get(i));
+            }
         }
         if (s.getWhereClause() != null) {
             sb.append(" WHERE ");

@@ -192,6 +192,16 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
 
         // Handle table aliasing and correlation
         List<MySQLExpression> innerQueryFromTables = new ArrayList<>();
+        // Subquery-local tables: list tables that appear only in the inner set in the inner FROM.
+        // Without them, references to their columns dangle ("Unknown column" / missing FROM).
+        for (MySQLTable t : innerQueryRandomTables.getTables()) {
+            if (!outerQueryRandomTables.isContained(t)) {
+                innerQueryFromTables.add(new MySQLTableReference(t));
+            }
+        }
+        // Tables present in both sets are listed in the inner FROM (self-aliased) so their inner
+        // references bind locally; references to outer-only tables remain true correlated
+        // references resolved against the outer query (upstream SQLite3 CODDTest construction).
         for (MySQLTable t : outerQueryRandomTables.getTables()) {
             if (innerQueryRandomTables.isContained(t)) {
                 // Create alias for correlated table
@@ -202,8 +212,6 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
                     new MySQLTableReference(correlatedTable)
                 );
                 innerQueryFromTables.add(alias);
-            } else {
-                innerQueryFromTables.add(new MySQLTableReference(t));
             }
         }
 
@@ -464,6 +472,9 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
         int nrJoinClauses = (int) Randomly.getNotCachedInteger(0, tables.size());
         for (int i = 0; i < nrJoinClauses; i++) {
             MySQLTable table = Randomly.fromList(tables);
+            // Remove the picked table so it is provided by the JOIN clause only (upstream SQLite3
+            // construction); leaving it in the FROM list as well duplicates the table name.
+            tables.remove(table);
             MySQLExpression randomOnCondition = gen.generateExpression();
             MySQLExpression onCondition = randomOnCondition;
             if (specificCondition != null) {

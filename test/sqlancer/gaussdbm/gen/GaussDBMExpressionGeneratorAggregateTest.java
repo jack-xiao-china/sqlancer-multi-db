@@ -53,11 +53,8 @@ class GaussDBMExpressionGeneratorAggregateTest {
 
                 // Check if it's a bitwise function
                 if (func == GaussDBAggregateFunction.BIT_AND
-                        || func == GaussDBAggregateFunction.BIT_AND_DISTINCT
                         || func == GaussDBAggregateFunction.BIT_OR
-                        || func == GaussDBAggregateFunction.BIT_OR_DISTINCT
-                        || func == GaussDBAggregateFunction.BIT_XOR
-                        || func == GaussDBAggregateFunction.BIT_XOR_DISTINCT) {
+                        || func == GaussDBAggregateFunction.BIT_XOR) {
                     generatedBitwise.add(func);
                 }
             } catch (IllegalArgumentException e) {
@@ -135,45 +132,6 @@ class GaussDBMExpressionGeneratorAggregateTest {
 
         String sql = GaussDBToStringVisitor.asString(aggregate);
         assertEquals("BIT_XOR(7)", sql, "BIT_XOR SQL format should be 'BIT_XOR(expr)'");
-    }
-
-    /**
-     * Tests that BIT_AND DISTINCT SQL generation format is correct.
-     */
-    @Test
-    void testBitAndDistinctSqlGenerationFormat() {
-        GaussDBAggregate aggregate = new GaussDBAggregate(
-                List.of(GaussDBConstant.createIntConstant(1)),
-                GaussDBAggregateFunction.BIT_AND_DISTINCT);
-
-        String sql = GaussDBToStringVisitor.asString(aggregate);
-        assertEquals("BIT_AND(DISTINCT 1)", sql, "BIT_AND DISTINCT SQL format should be 'BIT_AND(DISTINCT expr)'");
-    }
-
-    /**
-     * Tests that BIT_OR DISTINCT SQL generation format is correct.
-     */
-    @Test
-    void testBitOrDistinctSqlGenerationFormat() {
-        GaussDBAggregate aggregate = new GaussDBAggregate(
-                List.of(GaussDBConstant.createIntConstant(2)),
-                GaussDBAggregateFunction.BIT_OR_DISTINCT);
-
-        String sql = GaussDBToStringVisitor.asString(aggregate);
-        assertEquals("BIT_OR(DISTINCT 2)", sql, "BIT_OR DISTINCT SQL format should be 'BIT_OR(DISTINCT expr)'");
-    }
-
-    /**
-     * Tests that BIT_XOR DISTINCT SQL generation format is correct.
-     */
-    @Test
-    void testBitXorDistinctSqlGenerationFormat() {
-        GaussDBAggregate aggregate = new GaussDBAggregate(
-                List.of(GaussDBConstant.createIntConstant(3)),
-                GaussDBAggregateFunction.BIT_XOR_DISTINCT);
-
-        String sql = GaussDBToStringVisitor.asString(aggregate);
-        assertEquals("BIT_XOR(DISTINCT 3)", sql, "BIT_XOR DISTINCT SQL format should be 'BIT_XOR(DISTINCT expr)'");
     }
 
     /**
@@ -292,11 +250,8 @@ class GaussDBMExpressionGeneratorAggregateTest {
     @Test
     void testBitwiseAggregatesAreNotVariadic() {
         assertFalse(GaussDBAggregateFunction.BIT_AND.isVariadic(), "BIT_AND should not be variadic");
-        assertFalse(GaussDBAggregateFunction.BIT_AND_DISTINCT.isVariadic(), "BIT_AND_DISTINCT should not be variadic");
         assertFalse(GaussDBAggregateFunction.BIT_OR.isVariadic(), "BIT_OR should not be variadic");
-        assertFalse(GaussDBAggregateFunction.BIT_OR_DISTINCT.isVariadic(), "BIT_OR_DISTINCT should not be variadic");
         assertFalse(GaussDBAggregateFunction.BIT_XOR.isVariadic(), "BIT_XOR should not be variadic");
-        assertFalse(GaussDBAggregateFunction.BIT_XOR_DISTINCT.isVariadic(), "BIT_XOR_DISTINCT should not be variadic");
     }
 
     /**
@@ -320,10 +275,11 @@ class GaussDBMExpressionGeneratorAggregateTest {
     void testAggregateFunctionCount() {
         GaussDBAggregateFunction[] values = GaussDBAggregateFunction.values();
         // COUNT: 2, SUM: 2, MIN: 2, MAX: 2, AVG: 2 = 10 basic
-        // BIT_AND: 2, BIT_OR: 2, BIT_XOR: 2 = 6 bitwise
+        // BIT_AND: 1, BIT_OR: 1, BIT_XOR: 1 = 3 bitwise (no DISTINCT variants: GaussDB-M's
+        // parser rejects e.g. BIT_XOR(DISTINCT x) with a syntax error)
         // STDDEV: 1, STDDEV_POP: 1, STDDEV_SAMP: 1, STD: 1 = 4
         // VARIANCE: 1, VAR_POP: 1, VAR_SAMP: 1 = 3
-        // Total: 10 + 6 + 7 = 23
-        assertEquals(23, values.length, "Total aggregate functions should be 23");
+        // Total: 10 + 3 + 7 = 20
+        assertEquals(20, values.length, "Total aggregate functions should be 20");
     }
 }

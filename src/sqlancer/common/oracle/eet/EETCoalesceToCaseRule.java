@@ -1,5 +1,7 @@
 package sqlancer.common.oracle.eet;
 
+import java.util.Arrays;
+
 import sqlancer.IgnoreMeException;
 
 /**
@@ -43,11 +45,11 @@ public class EETCoalesceToCaseRule<E> implements EETRule<E> {
         // Handle recursively
         E a = args[0];
         E isNotNull = adapter.createIsNullCheck(a, true);
-        @SuppressWarnings("unchecked")
-        E[] remainingArgs = (E[]) new Object[args.length - 1];
-        for (int i = 1; i < args.length; i++) {
-            remainingArgs[i - 1] = args[i];
-        }
+        // copyOfRange keeps the runtime component type of args, so adapters declaring a concrete
+        // array parameter (e.g. createCoalesce(GaussDBExpression[])) receive a properly typed
+        // array; casting a new Object[] instead fails the compiler-generated bridge-method cast
+        // with ClassCastException.
+        E[] remainingArgs = Arrays.copyOfRange(args, 1, args.length);
         E remainingCoalesce = adapter.createCoalesce(remainingArgs);
         return adapter.createCaseWhen(isNotNull, a, remainingCoalesce);
     }

@@ -1,5 +1,16 @@
 # SQLancer Release Notes
 
+## v2.7.10 | 2026-10-27
+- 合入并验证 PR #15（fed24b74，GaussDB-A/M、PostgreSQL、MySQL oracle 正确性修复）：GaussDB-A NOREC/AGGREGATE 投影别名（`AS ref0/agg0`）与 `COALESCE(SUM(agg0),0)`、PQS 精确 BigDecimal 算术与真值判定、CODDTEST 标量子查询真折叠（可变 bag）与 ROW multiset 比对、EET `MINUS→NOT EXISTS` 重写接线；GaussDB-M CERT `SET explain_perf_mode=normal`+`SET enable_pbe_optimization=off`；MySQL JIR Rule 2/5/6 修正；PG EET 长度前缀行编码防 NULL/"null" 碰撞
+- 修复 PR #15 冒烟验证暴露的工具缺陷（GaussDB 侧 9 oracle 冒烟全通过后发布）：
+  - EET `CoalesceToCase` 规则 ≥3 参分支 `(E[]) new Object[]` 堆污染：适配器具体数组参数（如 `createCoalesce(GaussDBExpression[])`）触发 javac 桥接方法强转 → `ClassCastException` 中止运行（GaussDB-M 实测复现，MySQL 同潜伏）。改用 `Arrays.copyOfRange` 保留运行时组件类型；新增回归测试 `EETCoalesceToCaseRuleTest`（修复前 RED 复现，修复后 GREEN）
+  - CODDTEST 相关子查询作用域（存量移植缺陷，非 PR 回归）：内层 FROM 只放 outer 表而列池含 inner-only 表 → 引用悬空 `Missing FROM-clause entry`（GaussDB-M 冒烟 ~90% 回合失败）。对齐上游 SQLite3 构造：内层 FROM = inner-only 表 + 共享表（自别名），outer-only 表引用成为真正相关引用；同步修复 GaussDB-A 与 MySQL 同构代码
+  - GaussDB-M/MySQL `genJoinExpression` 缺上游 `tables.remove(table)`：JOIN 表与 FROM 重复列出 → `Table name ... is specified more than once`；补上游 NATURAL 守卫（`nrJoinClauses>1` 时移除，避免列名重复冲突）；`GaussDBToStringVisitor` 连续 JOIN 改空格链接（原泛型列表访问器逗号分隔渲染出 `, JOIN` 语法错误，仅 ≥2 join 时触发）
+  - GaussDB-M 聚合枚举移除 `BIT_AND/BIT_OR/BIT_XOR_DISTINCT`：GaussDB-M 语法层拒绝位聚合 DISTINCT（`BIT_XOR(DISTINCT x)` 即 syntax error，`SUM(DISTINCT x)` 正常）；同步修剪 `GaussDBAggregateBitwiseTest`/`GaussDBMExpressionGeneratorAggregateTest` 断言（枚举总数 23→20）
+  - GaussDB-M CODDTEST 良性运行时错误容忍（对齐 PR 在 GaussDB-A 侧的 benign-error 覆盖思路）：JSON 类型/内容/path 消息族 + 强类型族（`operator does not exist`/`out of range`/`cannot be cast`/`must be type boolean`/`failed to find conversion function`）+ JOIN 作用域族（`invalid reference to FROM-clause entry` 等）→ `IgnoreMeException` 跳过回合（折叠查询同样失败，等价性平凡保持）；`executeQuery` 失败时将 SQL 文本包进异常消息便于诊断
+- GaussDB-M CERT 记录一个待研判发现：弱化谓词（OR 追加项）后基数估计反而下降（1945→1081），违反 CERT 单调性不变量（oracle 按设计工作，为潜在 GaussDB 估计器问题，非工具缺陷）
+- 验证结果：`mvn test`（EETCoalesceToCaseRuleTest / GaussDBMExpressionGeneratorAggregateTest / GaussDBAggregateBitwiseTest 共 24 用例）通过；GaussDB-A 6 oracle（NOREC/AGGREGATE/PQS/CODDTEST/EET/DQE）与 GaussDB-M CODDTEST/EET 远程实例冒烟 0 bug 0 崩溃；PostgreSQL JIR/EET 本地实例冒烟通过；MySQL 冒烟被本地实例 datadir 孤儿 schema 目录（历史 sqlancer 运行残留，如 database1/5/6/7，目录存在但数据字典无条目）阻塞——属环境问题非代码缺陷；单线程抽查发现的 `MySQLIntConstant.isEquals` 不支持 DoubleConstant 比较、ALTER 变异语句未预期错误均为存量问题（非 PR #15 回归），留待后续版本处理
+
 ## v2.7.9 | 2026-06-24
 - 修复 [PostgreSQL 普通用户测试全量 oracle 权限/工具误报清零]：以非 superuser 角色（tpcc01）跑全部 oracle，定位并消除普通用户无法执行的 SQL 与 locale 诱导的工具类误报
   - `PostgresProvider.readFunctions`：新增超管/受限函数前缀拒绝列表（`pg_replication_origin_*`/`pg_replication_slot_*`/`pg_logical_slot_*`/`pg_logical_emit_*`/`binary_upgrade_*`/`pg_read_file`/`pg_read_binary_file`/`pg_stat_file`/`pg_ls_*`/`pg_file_*`/`pg_current_logfile`/`pg_rotate_logfile`/`pg_switch_wal`/`pg_create_restore_point`/`pg_walfile_name`/`pg_promote`/`pg_reload_conf`/`pg_stat_reset*`/`pg_stat_get_activity`/`pg_stat_get_backend_*`/`pg_terminate_backend`/`pg_cancel_backend`/`pg_export_snapshot`/`pg_snapshot_xip`/`pg_config`）。`readFunctions` 从 `pg_proc` 读函数时跳过这些前缀，从源头杜绝普通用户 `permission denied for function` 误报
