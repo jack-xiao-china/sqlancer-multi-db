@@ -89,15 +89,69 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
             injectFoldCondition(originalQuery, foldBag);
         }
         String originalSql = originalQuery.asString();
-        List<List<String>> originalResult = executeQuery(originalQuery);
-        long foldedValue = evalCount(foldTableName);
-        foldBag.updateInnerExpr(new GaussDBText("(" + foldConst + " " + foldCmp + " " + foldedValue + ")"));
-        String foldedSql = originalQuery.asString();
-        List<List<String>> foldedResult = executeQuery(originalQuery);
+        List<List<String>> originalResult;
+        List<List<String>> foldedResult;
+        String foldedSql;
+        try {
+            originalResult = executeQuery(originalQuery);
+            long foldedValue = evalCount(foldTableName);
+            foldBag.updateInnerExpr(new GaussDBText("(" + foldConst + " " + foldCmp + " " + foldedValue + ")"));
+            foldedSql = originalQuery.asString();
+            foldedResult = executeQuery(originalQuery);
+        } catch (SQLException e) {
+            if (isBenignExpectedError(e)) {
+                // The folded query would fail identically, so skip the round instead of
+                // aborting the run.
+                throw new IgnoreMeException();
+            }
+            throw e;
+        }
         if (!compareResult(foldedResult, originalResult)) {
             throw new AssertionError("CODDTEST folding mismatch\n-- original: " + originalSql
                     + "\n-- folded:   " + foldedSql);
         }
+    }
+
+    /**
+     * Known-benign execution errors, skipped by retrying the round (the folded query fails
+     * identically, so the folding equivalence is trivially preserved). Mirrors the GaussDB-A
+     * benign runtime-error coverage: the DB legitimately rejects an out-of-domain cast or an
+     * unsupported type combination in a generated predicate — not a logic bug. Includes:
+     * - JSON type/content errors: the generator is not JSON-type-aware (GaussDB-M, unlike
+     *   MySQL, validates JSON arguments at the type level before evaluation).
+     * - Type/range strictness: the generator has no type-aware expression path, and GaussDB-M
+     *   (unlike MySQL) does not coerce operand types ("operator does not exist", out-of-range).
+     * - Comma-vs-join scope: an ON clause referencing a comma-separated FROM sibling is
+     *   rejected without LATERAL.
+     */
+    private static boolean isBenignExpectedError(SQLException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            String msg = t.getMessage();
+            if (msg == null) {
+                continue;
+            }
+            if (msg.contains("Invalid data type for JSON data in argument")
+                    || msg.contains("The token is invalid for type json")
+                    || msg.contains("Invalid JSON text")
+                    || msg.contains("The input value is invalid for type json")
+                    || msg.contains("Cannot create a JSON value")
+                    || msg.contains("Invalid JSON path expression")
+                    || msg.contains("JSON documents may not contain NULL member names")
+                    || msg.contains("must be type boolean")
+                    || msg.contains("out of range")
+                    || msg.contains("Unsupport type")
+                    || msg.contains("operator does not exist")
+                    || msg.contains("cannot be cast")
+                    || msg.contains("cannot cast")
+                    || msg.contains("cannot be matched")
+                    || msg.contains("failed to find conversion function")
+                    || msg.contains("invalid reference to FROM-clause entry")
+                    || msg.contains("Missing FROM-clause entry")
+                    || msg.contains("appears more than once in left table")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** AND the mutable fold predicate (a bag) into a generated query's WHERE clause. */
@@ -154,14 +208,21 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
         GaussDBTables innerQueryRandomTables = s.getRandomTableNonEmptyTables();
 
         List<GaussDBExpression> innerQueryFromTables = new ArrayList<>();
+        // Subquery-local tables: list tables that appear only in the inner set in the inner FROM.
+        // Without them, references to their columns dangle ("Missing FROM-clause entry").
+        for (GaussDBTable t : innerQueryRandomTables.getTables()) {
+            if (!outerQueryRandomTables.isContained(t)) {
+                innerQueryFromTables.add(GaussDBTableReference.create(t));
+            }
+        }
+        // Tables present in both sets are listed in the inner FROM (self-aliased) so their inner
+        // references bind locally; references to outer-only tables remain true correlated
+        // references resolved against the outer query (upstream SQLite3 CODDTest construction).
         for (GaussDBTable t : outerQueryRandomTables.getTables()) {
             if (innerQueryRandomTables.isContained(t)) {
-                GaussDBTable correlatedTable = t;
-                GaussDBOracleAlias alias = new GaussDBOracleAlias(GaussDBTableReference.create(correlatedTable),
-                        GaussDBTableReference.create(correlatedTable));
+                GaussDBOracleAlias alias = new GaussDBOracleAlias(GaussDBTableReference.create(t),
+                        GaussDBTableReference.create(t));
                 innerQueryFromTables.add(alias);
-            } else {
-                innerQueryFromTables.add(GaussDBTableReference.create(t));
             }
         }
 
@@ -275,9 +336,10 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
 
     private List<List<String>> executeQuery(GaussDBSelect query) throws SQLException {
         List<List<String>> rows = new ArrayList<>();
+        String sql = query.asString();
         try (Statement st = con.createStatement()) {
             st.setQueryTimeout(600);
-            try (ResultSet rs = st.executeQuery(query.asString())) {
+            try (ResultSet rs = st.executeQuery(sql)) {
                 int columnCount = rs.getMetaData().getColumnCount();
                 while (rs.next()) {
                     List<String> row = new ArrayList<>(columnCount);
@@ -287,6 +349,8 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
                     rows.add(row);
                 }
             }
+        } catch (SQLException e) {
+            throw new SQLException("CODDTEST query failed: " + sql, e);
         }
         return rows;
     }
@@ -370,8 +434,17 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
         List<GaussDBJoin.JoinType> options = new ArrayList<>(List.of(GaussDBJoin.JoinType.values()));
 
         int nrJoinClauses = (int) Randomly.getNotCachedInteger(0, tables.size());
+        // Natural join is incompatible with other joins: it needs unique column names, while
+        // other joins (and comma-separated tables) produce duplicate names (upstream guard).
+        if (nrJoinClauses > 1) {
+            options.remove(GaussDBJoin.JoinType.NATURAL);
+        }
         for (int i = 0; i < nrJoinClauses; i++) {
             GaussDBTable table = Randomly.fromList(tables);
+            // Remove the picked table so it is provided by the JOIN clause only (upstream SQLite3
+            // construction); leaving it in the FROM list as well triggers
+            // "Table name ... is specified more than once" and repeat picks duplicate joins.
+            tables.remove(table);
             GaussDBExpression randomOnCondition = gen.generateExpression();
             GaussDBExpression onCondition = randomOnCondition;
             if (specificCondition != null) {

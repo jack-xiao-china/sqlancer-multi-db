@@ -305,10 +305,15 @@ Contributions welcome! Please ensure:
 
 ---
 
-## Recent Feature Highlights (v2.7.3–v2.7.9)
+## Recent Feature Highlights (v2.7.3–v2.7.10)
 
 | Version | Feature | Description |
 |---------|---------|-------------|
+| **v2.7.10** | PR #15 oracle correctness fixes (merged + verified) | GaussDB-A NOREC/AGGREGATE projection aliases + `COALESCE(SUM(agg0),0)`; PQS exact BigDecimal arithmetic; CODDTEST real scalar-subquery constant folding + ROW multiset comparison; EET `MINUS→NOT EXISTS` wiring; GaussDB-M CERT `explain_perf_mode=normal` + `enable_pbe_optimization=off`; MySQL JIR Rule 2/5/6; PG EET length-prefixed row encoding |
+| **v2.7.10** | EET CoalesceToCase bridge-cast fix | ≥3-arg COALESCE branch used `(E[]) new Object[]` — adapters with concrete array parameters hit the compiler bridge-method cast and crashed with `ClassCastException`; now `Arrays.copyOfRange` preserves the runtime component type (regression test added) |
+| **v2.7.10** | CODDTEST correlated-subquery scope fix | Inner FROM now lists inner-only tables + shared tables (upstream SQLite3 construction); outer-only table references become true correlated references — previously inner-only references dangled (`Missing FROM-clause entry`, ~90% of GaussDB-M rounds); GaussDB-A and MySQL mirrors fixed too |
+| **v2.7.10** | GaussDB-M join generation & rendering | `tables.remove(table)` after join pick (upstream parity, no duplicate FROM entries); NATURAL join guarded when multiple joins; consecutive JOIN clauses space-chained (was comma-separated → `, JOIN` syntax error); `BIT_*_DISTINCT` aggregate variants removed (parser rejects) |
+| **v2.7.10** | GaussDB-M CODDTEST benign-error tolerance | JSON type/content/path families, strict-typing family (`operator does not exist`/`out of range`/`must be type boolean`/conversion-function), join-scope family → `IgnoreMeException` skip (mirrors the GaussDB-A benign-error coverage) |
 | **v2.7.9** | PostgreSQL non-superuser full-oracle sweep | `readFunctions` skips superuser/restricted builtins (`pg_replication_origin_*`/`pg_ls_*`/`pg_promote`/`pg_read_file`/etc.); EDC_DATA `func.txt` seed cleaned of 79 restricted functions; `COMMON_EXPECTED_SQLSTATES` +8 states (`42701`/`42702`/`42710`/`23502`/`42830`/`42P04`/`55006`/`2BP01`) for non-English locale; SONAR `getUnoptimizedQuery` handles `PostgresBinaryComparisonOperation`; unhandled types `IgnoreMeException`; disabled `FORCE ROW LEVEL SECURITY` (RLS 42501 root cause) |
 | **v2.7.8** | PostgreSQL non-superuser role fix | Removed `pg_current_logfile()` and 6 SUSET GUC params (`wal_compression`/`commit_delay`/`track_activities`/`track_counts`/`track_io_timing`/`track_functions`) from generation pools — eliminated `permission denied` false positives when testing cloud PostgreSQL instances with normal (non-superuser) roles |
 | **v2.7.7** | PostgresIndex backsConstraint | `ADD CONSTRAINT USING INDEX` no longer selects indexes already backing a constraint (`EXISTS(pg_constraint WHERE conindid = indexrelid)` check) |
