@@ -111,6 +111,8 @@ public class MySQLIndexGenerator {
         errors.add("A primary key index cannot be invisible");
         errors.add("Functional index on a column is not supported. Consider using a regular index instead.");
         errors.add("Incorrect usage of spatial/fulltext/hash index and explicit index order");
+        // Functional index over an AUTO_INCREMENT column is not allowed.
+        errors.add("cannot refer to an auto-increment");
         errors.add("The storage engine for the table doesn't support descending indexes");
         errors.add("must include all columns");
         errors.add("cannot index the expression");

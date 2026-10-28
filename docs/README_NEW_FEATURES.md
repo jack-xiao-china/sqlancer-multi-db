@@ -305,10 +305,11 @@ Contributions welcome! Please ensure:
 
 ---
 
-## Recent Feature Highlights (v2.7.3–v2.7.10)
+## Recent Feature Highlights (v2.7.3–v2.7.11)
 
 | Version | Feature | Description |
 |---------|---------|-------------|
+| **v2.7.11** | MySQL CODDTEST real-folding revival | Scalar-subquery constant folding via a mutable bag (ported from the GaussDB-M design); ROW multiset comparison; benign-error tolerance (JSON/value-domain/bit-width/charset families) |
 | **v2.7.10** | PR #15 oracle correctness fixes (merged + verified) | GaussDB-A NOREC/AGGREGATE projection aliases + `COALESCE(SUM(agg0),0)`; PQS exact BigDecimal arithmetic; CODDTEST real scalar-subquery constant folding + ROW multiset comparison; EET `MINUS→NOT EXISTS` wiring; GaussDB-M CERT `explain_perf_mode=normal` + `enable_pbe_optimization=off`; MySQL JIR Rule 2/5/6; PG EET length-prefixed row encoding |
 | **v2.7.10** | EET CoalesceToCase bridge-cast fix | ≥3-arg COALESCE branch used `(E[]) new Object[]` — adapters with concrete array parameters hit the compiler bridge-method cast and crashed with `ClassCastException`; now `Arrays.copyOfRange` preserves the runtime component type (regression test added) |
 | **v2.7.10** | CODDTEST correlated-subquery scope fix | Inner FROM now lists inner-only tables + shared tables (upstream SQLite3 construction); outer-only table references become true correlated references — previously inner-only references dangled (`Missing FROM-clause entry`, ~90% of GaussDB-M rounds); GaussDB-A and MySQL mirrors fixed too |

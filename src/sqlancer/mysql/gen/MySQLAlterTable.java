@@ -88,6 +88,22 @@ public class MySQLAlterTable {
         errors.add("Compression failed with the following error");
         errors.add("Punch hole not supported by the filesystem");
         errors.add("For float(M,D), double(M,D) or decimal(M,D), M must be >= D");
+        // Column type conversions of existing rows can fail mid-ALTER (e.g. CHANGE ... YEAR over
+        // binary data) — the same message family as INSERT/UPDATE conversions.
+        errors.add("Incorrect integer value");
+        errors.add("Incorrect decimal value");
+        errors.add("Incorrect double value");
+        errors.add("Incorrect DATE value");
+        errors.add("Incorrect TIME value");
+        errors.add("Incorrect DATETIME value");
+        errors.add("Incorrect TIMESTAMP value");
+        errors.add("Data truncated for column");
+        errors.add("Unknown column");
+        // Charset conversion failures when MODIFY/CHANGE converts binary data to text columns.
+        errors.add("Incorrect string value");
+        errors.add("Cannot convert string");
+        // Adding a UNIQUE/PRIMARY constraint over existing duplicate rows.
+        errors.add("Duplicate entry");
         sb.append("ALTER TABLE ");
         MySQLTable table = schema.getRandomTableNoViewOrBailout();
         sb.append(table.getName());

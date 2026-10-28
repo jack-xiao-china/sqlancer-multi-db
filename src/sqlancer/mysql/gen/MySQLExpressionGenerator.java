@@ -176,7 +176,12 @@ public class MySQLExpressionGenerator extends UntypedExpressionGenerator<MySQLEx
 
     private MySQLExpression getTemporalFunction(int depth) {
         // Generate temporal functions with INTERVAL syntax (DATE_ADD, DATE_SUB, etc.)
-        TemporalFunctionKind kind = TemporalFunctionKind.getRandom();
+        // TIMESTAMPDIFF is excluded: its (unit, temporal, temporal) signature cannot be
+        // expressed by this one-temporal-argument AST, and rendering it in INTERVAL form
+        // is a syntax error.
+        TemporalFunctionKind kind = Randomly.fromOptions(TemporalFunctionKind.DATE_ADD,
+                TemporalFunctionKind.DATE_SUB, TemporalFunctionKind.ADDDATE, TemporalFunctionKind.SUBDATE,
+                TemporalFunctionKind.TIMESTAMPADD);
 
         // Generate the temporal expression (date/datetime/timestamp)
         MySQLExpression temporalExpr = generateExpression(depth + 1);

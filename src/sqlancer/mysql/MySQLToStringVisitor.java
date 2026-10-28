@@ -484,11 +484,12 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
 
     @Override
     public void visit(MySQLOracleExpressionBag bag) {
-        sb.append("ORACLE_EXPRESSION_BAG(");
+        // Render the bag's current inner expression; used by CODDTEST folding, where the same
+        // query is re-rendered after updateInnerExpr() swaps the subquery for its constant.
+        // (Rendering a synthetic ORACLE_EXPRESSION_BAG(...) function call is invalid SQL.)
         if (bag.getInnerExpr() != null) {
             visit(bag.getInnerExpr());
         }
-        sb.append(")");
     }
 
     @Override
@@ -531,9 +532,17 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
     @Override
     public void visit(MySQLOracleAlias alias) {
         // This node is a CODDTest helper used for expected-value tracking.
-        // When generating executable SQL, only print the underlying expression.
+        // When generating executable SQL, only print the underlying expression; scalar
+        // subqueries in a select list must be wrapped in parentheses.
         if (alias.getOriginalExpression() != null) {
-            visit(alias.getOriginalExpression());
+            MySQLExpression expr = alias.getOriginalExpression();
+            if (expr instanceof MySQLSelect) {
+                sb.append("(");
+                visit(expr);
+                sb.append(")");
+            } else {
+                visit(expr);
+            }
         } else {
             // Defensive: should not happen, but avoid emitting invalid SQL.
             sb.append("NULL");
@@ -558,11 +567,20 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
     public void visit(MySQLTemporalFunction func) {
         sb.append(func.getKind().getFunctionName());
         sb.append("(");
-        visit(func.getTemporalExpr());
-        sb.append(", INTERVAL ");
-        visit(func.getIntervalExpr());
-        sb.append(" ");
-        sb.append(func.getIntervalUnit());
+        if (func.getKind() == MySQLTemporalFunction.TemporalFunctionKind.TIMESTAMPADD) {
+            // MySQL signature: TIMESTAMPADD(unit, interval, datetime_expr)
+            sb.append(func.getIntervalUnit());
+            sb.append(", ");
+            visit(func.getIntervalExpr());
+            sb.append(", ");
+            visit(func.getTemporalExpr());
+        } else {
+            visit(func.getTemporalExpr());
+            sb.append(", INTERVAL ");
+            visit(func.getIntervalExpr());
+            sb.append(" ");
+            sb.append(func.getIntervalUnit());
+        }
         sb.append(")");
     }
 }

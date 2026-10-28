@@ -1,5 +1,16 @@
 # SQLancer Release Notes
 
+## v2.7.11 | 2026-10-28
+- 修复 [MySQL 侧存量 oracle/生成器缺陷]（v2.7.10 冒烟暴露、8 轮收敛至 0 报告后发布；GaussDB/PG 侧无改动，维持 v2.7.10 验证状态）：
+  - **MySQL CODDTEST 空转 oracle 复活**（移植 GaussDB-M 修复版设计）：原 `getFoldedQuery()` 原样返回原查询（代码注释自认未实现折叠）、`executeFoldedQuery()` 重跑同一查询，所有 "Results mismatch" 均为非确定性误报（NOW()/CURDATE() 重跑变值）。现实现真折叠：可变 bag 注入 `(k <cmp> (SELECT COUNT(*) FROM t))` 谓词 → 执行 → `updateInnerExpr` 折叠为常量 → 再执行比对（严格等价）；ROW multiset 行比对（长度前缀+类型标签编码，NULL 与 "null" 字符串不碰撞）；失败 SQL 包进异常消息；良性运行时错误容忍（JSON 类型/内容/path、值域转换族 `Incorrect * value`/`Data truncated`/`out of range`、位运算等宽约束、二进制转 utf8 失败）→ `IgnoreMeException` 跳过回合
+  - **期望值机器崩溃修复**：`MySQLIntConstant.isEquals/isLessThan`、`MySQLTextConstant.isLessThan`、`MySQLUnaryPrefixOperation` MINUS 的终态 `AssertionError(常量)`（Binary/Double/时间戳常量触发）→ `IgnoreMeException` 拒预测；`LPAD/RPAD` 期望值计算无界填充循环（生成巨长 len 时 `OutOfMemoryError`）→ >100000 拒预测
+  - **无效 SQL 生成修复**：`MySQLToStringVisitor` 把 `MySQLOracleExpressionBag` 渲染成伪函数 `ORACLE_EXPRESSION_BAG(...)` → 改为渲染内部表达式；select 列表标量子查询无括号包裹 → 加括号；`TIMESTAMPADD(expr, INTERVAL n unit)` 错误签名 → 正确的 `TIMESTAMPADD(unit, n, expr)`；`SUBSTRING/LOCATE/JSON_CONTAINS/JSON_KEYS/WEEK` 标记为变参导致超参 → 固定为 MySQL 真实参数数（解析层 "Incorrect parameter count" 即拒绝）；`TIMESTAMPDIFF` 双时间参数签名无法用现有 AST 表达 → 生成器排除；`NATURAL JOIN t ON ...` 非法 → NATURAL 选中时置空 ON（上游对齐）
+  - **数值溢出修复**：`MySQLInsertGenerator.generateBitEnumSetConstant` 在 BIT(≥63) 宽度时 `1L << 63` 溢出为负 → `maxValue+1` 回绕成 Long.MIN → `Randomly.getLong(0, MIN)` 抛 `IllegalArgumentException` → 改为全非负 long 域取值
+  - **预期错误覆盖补齐**：`MySQLAlterTable`（列类型转换族 `Incorrect * value`/`Data truncated for column`/`Unknown column`/`Incorrect string value`/`Cannot convert string`/`Duplicate entry`）、`MySQLIndexGenerator`（函数索引引用自增列）、`MySQLErrors.getInsertUpdateErrors`（`Unknown column` schema 漂移、`is ambiguous` 歧义列）
+  - **非确定性投影守卫**：生成的查询投影列含 `CURTIME()/NOW()/RAND()/UUID()/SLEEP()` 等非确定函数时跳过回合（两次执行时刻不同导致值漂移，折叠比对无意义——终版确认冒烟中唯一残留报告即 `CURTIME()` 投影）
+  - 新增回归测试 `MySQLOracleRegressionTest`（TIMESTAMPADD 渲染签名 / MINUS 位常量拒预测 / LPAD 巨长拒预测）
+- 验证结果：`mvn test`（EETCoalesceToCaseRuleTest / GaussDBMExpressionGeneratorAggregateTest / GaussDBAggregateBitwiseTest / MySQLOracleRegressionTest 共 27 用例）通过；MySQL JIR / CODDTEST / EET 本地实例冒烟 0 bug 0 崩溃（报告收敛轨迹 20→10→10→10→10→10→10→0，JIR/EET 先行归零后复验）
+
 ## v2.7.10 | 2026-10-27
 - 合入并验证 PR #15（fed24b74，GaussDB-A/M、PostgreSQL、MySQL oracle 正确性修复）：GaussDB-A NOREC/AGGREGATE 投影别名（`AS ref0/agg0`）与 `COALESCE(SUM(agg0),0)`、PQS 精确 BigDecimal 算术与真值判定、CODDTEST 标量子查询真折叠（可变 bag）与 ROW multiset 比对、EET `MINUS→NOT EXISTS` 重写接线；GaussDB-M CERT `SET explain_perf_mode=normal`+`SET enable_pbe_optimization=off`；MySQL JIR Rule 2/5/6 修正；PG EET 长度前缀行编码防 NULL/"null" 碰撞
 - 修复 PR #15 冒烟验证暴露的工具缺陷（GaussDB 侧 9 oracle 冒烟全通过后发布）：

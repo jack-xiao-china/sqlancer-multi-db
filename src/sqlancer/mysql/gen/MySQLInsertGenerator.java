@@ -220,8 +220,16 @@ public class MySQLInsertGenerator {
         switch (column.getType()) {
         case BIT:
             int width = column.getBitWidth();
-            if (width <= 0) width = 1;  // 默认宽度
-            long maxValue = (1L << Math.min(width, 63)) - 1;  // 限制在 63 位以内
+            if (width <= 0) {
+                width = 1;  // 默认宽度
+            }
+            if (width >= 63) {
+                // 1L << 63 overflows to Long.MIN_VALUE, which would make maxValue + 1 negative
+                // and crash Randomly.getLong with lower > upper. Draw from the full non-negative
+                // long range instead.
+                return MySQLConstant.createBitConstant(r.getLong(0, Long.MAX_VALUE), width);
+            }
+            long maxValue = (1L << width) - 1;
             long bitValue = r.getLong(0, maxValue + 1);
             return MySQLConstant.createBitConstant(bitValue, width);
         case ENUM:
