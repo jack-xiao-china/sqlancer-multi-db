@@ -45,6 +45,8 @@ public final class MySQLErrors {
         errors.add("Binary operands of bitwise operators must be of equal length");
         errors.add("Incorrect DECIMAL value");
         errors.add("Deadlock found when trying to get lock");
+        // Server-side sort buffer limit on generated ORDER BY queries.
+        errors.add("Out of sort memory");
 
         if (MySQLBugs.bug111471) {
             errors.add("Memory capacity exceeded");

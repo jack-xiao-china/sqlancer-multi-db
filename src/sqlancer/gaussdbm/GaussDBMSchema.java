@@ -128,7 +128,12 @@ public class GaussDBMSchema extends AbstractSchema<GaussDBMGlobalState, GaussDBM
                             break;
                         }
                         default:
-                            throw new AssertionError(column.getType());
+                            // Remaining types (DOUBLE etc.): read via the JDBC string
+                            // conversion; PQS only needs a comparable row value.
+                            String rawValue = randomRowValues.getString(columnIndex);
+                            constant = rawValue == null ? GaussDBConstant.createNullConstant()
+                                    : GaussDBConstant.createStringConstant(rawValue);
+                            break;
                         }
                     }
                     values.put(column, constant);

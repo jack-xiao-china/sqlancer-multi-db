@@ -134,6 +134,11 @@ public class GaussDBBinaryComparisonOperation implements GaussDBExpression {
 
     @Override
     public GaussDBConstant getExpectedValue() {
-        return op.getExpectedValue(left.getExpectedValue(), right.getExpectedValue());
+        GaussDBConstant leftValue = left.getExpectedValue();
+        GaussDBConstant rightValue = right.getExpectedValue();
+        if (leftValue == null || rightValue == null) {
+            return null; // unpredictable operand: propagate
+        }
+        return op.getExpectedValue(leftValue, rightValue);
     }
 }

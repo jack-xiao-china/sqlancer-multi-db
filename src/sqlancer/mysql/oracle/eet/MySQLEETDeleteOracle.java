@@ -6,7 +6,6 @@ import java.util.List;
 
 import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
-import sqlancer.common.oracle.TestOracleUtils;
 import sqlancer.common.oracle.eet.EETDMLOracleBase;
 import sqlancer.common.oracle.eet.EETQueryExecutor;
 import sqlancer.common.query.ExpectedErrors;
@@ -35,7 +34,14 @@ public class MySQLEETDeleteOracle
 
     @Override
     protected AbstractTables<MySQLTable, MySQLColumn> getRandomTables() {
-        return TestOracleUtils.getRandomTableNonEmptyTables(state.getSchema());
+        // DML targets must be base tables: DELETE/UPDATE/INSERT against a view is rejected
+        // outright ("not updatable" / "not insertable-into").
+        List<MySQLTable> nonViewTables = state.getSchema().getDatabaseTables().stream()
+                .filter(t -> !t.isView()).collect(java.util.stream.Collectors.toList());
+        if (nonViewTables.isEmpty()) {
+            throw new IgnoreMeException();
+        }
+        return new sqlancer.mysql.MySQLSchema.MySQLTables(Randomly.nonEmptySubset(nonViewTables));
     }
 
     @Override

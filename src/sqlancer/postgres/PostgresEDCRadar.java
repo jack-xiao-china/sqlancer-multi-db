@@ -106,6 +106,15 @@ public class PostgresEDCRadar {
      *
      * @param statement SQL statement for execution (connected to raw DB)
      */
+    private static boolean isPlainNumericLiteral(String strValue) {
+        try {
+            new java.math.BigDecimal(strValue);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     private void copyEnumTypes(Statement statement) throws SQLException {
         // Query enum types from original database
         try (Statement origStatement = state.getConnection().createStatement()) {
@@ -260,8 +269,13 @@ public class PostgresEDCRadar {
                                     || strValue.equalsIgnoreCase("-Infinity")) {
                                 batchInsert.append("'").append(strValue).append("'::")
                                         .append(metaData.getColumnTypeName(i));
-                            } else {
+                            } else if (isPlainNumericLiteral(strValue)) {
                                 batchInsert.append(strValue);
+                            } else {
+                                // e.g. money values carry a currency prefix ("$0.56"): a bare
+                                // append would be a syntax error; quote and cast instead.
+                                batchInsert.append("'").append(strValue.replace("'", "''")).append("'::")
+                                        .append(metaData.getColumnTypeName(i));
                             }
                         } else if (columnType.contains("bool")) {
                             batchInsert.append(strValue);

@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.common.oracle.PivotedQuerySynthesisBase;
@@ -100,6 +101,11 @@ public class GaussDBMPivotedQuerySynthesisOracle
                 .generateExpression();
         GaussDBConstant expectedValue = expression.getExpectedValue();
         GaussDBExpression result;
+        if (expectedValue == null) {
+            // The generator could not predict this expression; decline the round instead of
+            // crashing with a NullPointerException.
+            throw new IgnoreMeException();
+        }
         if (expectedValue.isNull()) {
             result = new GaussDBUnaryPostfixOperation(expression, UnaryPostfixOperator.IS_NULL);
         } else if (expectedValue.asBooleanNotNull()) {

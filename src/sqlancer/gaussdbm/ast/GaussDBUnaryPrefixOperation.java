@@ -61,6 +61,9 @@ public class GaussDBUnaryPrefixOperation implements GaussDBExpression {
     @Override
     public GaussDBConstant getExpectedValue() {
         GaussDBConstant v = expr.getExpectedValue();
+        if (v == null) {
+            return null; // unpredictable operand: propagate
+        }
         if (v.isNull()) {
             return GaussDBConstant.createNullConstant();
         }

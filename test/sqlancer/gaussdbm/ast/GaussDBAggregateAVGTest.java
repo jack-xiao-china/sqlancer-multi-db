@@ -55,6 +55,6 @@ class GaussDBAggregateAVGTest {
     @Test
     void testAllAggregateFunctionsCount() {
         // Verify we have all expected aggregate functions
-        assertEquals(23, GaussDBAggregateFunction.values().length);
+        assertEquals(20, GaussDBAggregateFunction.values().length); // BIT_*_DISTINCT removed in v2.7.10 (parser rejects)
     }
 }

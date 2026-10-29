@@ -1,5 +1,18 @@
 # SQLancer Release Notes
 
+## v2.7.12 | 2026-10-29
+- 修复 [全量 oracle 矩阵评估暴露的存量工具问题]（docs/oracle-full-matrix-assessment-2026-10-29.md，多轮冒烟收敛验证；详见评估报告第二节 12 项清单，本轮修复其中 10 项代码类 + 1 项脚本注释 + 1 项环境建议）：
+  - **TLP 族 join 重复表**（GaussDB-M + MySQL）：`TLPBase` 在 `getRandomJoinClauses` 移除 join 表**之前**就从完整表列表构建 FROM → join 表同时出现在 FROM 与 JOIN → 污染 AGGREGATE/DISTINCT/GROUP_BY/HAVING/QUERY_PARTITIONING 的失配发现。改为事后从已移除列表构建（GaussDB-A 版本本就正确）
+  - **GaussDB-M 期望值机器空传播**：`BinaryComparison/BinaryLogical/UnaryPrefix/UnaryPostfix/Between/CaseWhen/Cast` 的 `getExpectedValue` 对不可预测子表达式（返回 null）直接解引用 → NPE；`asIntNotNull`/`sqlEquals`/`sqlLessThan` 终态 `AssertionError` → 拒预测（IgnoreMeException）；`GaussDBMSchema.getRandomRowValue` 兜底剩余类型（DOUBLE 等）；`GaussDBMPivotedQuerySynthesisOracle` rectification 空值守卫——PQS 的 NPE/UOE/AssertionError 崩溃清零
+  - **MySQLVisitor 分发链补全**：`MySQLManuelPredicate`/`MySQLWindowFunction`/`MySQLAggregateFunction`/`MySQLPostfixText` 无链分支（Sonar 测试 12 项与真实查询渲染从未走通）→ 补分支 + 渲染（`(expr) AS alias`、原生片段、`FUNC(expr) OVER (PARTITION BY ...)`）+ 期望值侧拒预测默认；终态未识别节点改拒预测（v2.7.9 PostgresSonar 同款）
+  - **MySQL FROM-less SELECT 渲染崩溃**：`SelectBase.getFromList()` 未设即抛 ISE，而 visitor 判空守卫本身触发它 → try/catch 安全访问
+  - **MySQL SONAR/PQS/EDC_RADAR/DQE/EET**：PQS 行值 switch 兜底（DECIMAL 等 10 类型）+ DATE null 守卫 + `Out of sort memory` 容忍；`MySQLTableGenerator` BIT 默认值 `1L<<63` 溢出；EDC_RADAR 等价态构造失败改跳过（MySQL/PG）+ PG money 字面量校验（`$0.56` 裸拼非法）；EET DML 三 oracle 目标过滤视图（`not updatable/not insertable-into`）；DQE update-specific 错误码补 3156/3170（级差假阳性族）+ 失配消息带错误详情
+  - **PG ALTER**：`SET STATISTICS / SET / RESET(属性)` 三分支补 `is an identity column`
+  - `run_all_tests.sh`：WRITE_CHECK_REPRODUCE 需前置 WRITE_CHECK case 文件的用法说明
+  - **测试债清理**：`GaussDBMOracleIsolationTest`（oracle 15→25、help 选项、impl 映射、need-rows 集合对齐 factory 实际值）、`MySQLToStringVisitor(Sonar)Test` 全部复活——单测 41 用例绿
+- 遗留（评估报告第五节）：FUCCI 连接生命周期（TxBase.reproduceDatabase 死连接，专项）、EET DML row-state mismatch（4 库，专项）、TX_INFER 终态（3 库）、GaussDB 驱动级错误（radix-16/类型缓存）、PG locale 环境项（建议 `lc_messages='C'`）、发现类研判（CERT 单调性/TLP 真失配/EDC_RADAR 失配等）
+- 验证结果：`mvn test`（MySQLToStringVisitorSonarTest/MySQLToStringVisitorTest/GaussDBMOracleIsolationTest/MySQLOracleRegressionTest/EETCoalesceToCaseRuleTest/两个 Aggregate 测试共 41 用例）通过；冒烟 mysql-PQS/SONAR、gaussdbm-PQS/HAVING/DISTINCT/QUERY_PARTITIONING、postgres-EDC_RADAR/SONAR 全部 0 报告；mysql-DQE/EDC_RADAR/EET 与 gaussdbm-AGGREGATE/GROUP_BY 剩余报告为 oracle 真发现或专项遗留（见遗留清单）
+
 ## v2.7.11 | 2026-10-28
 - 修复 [MySQL 侧存量 oracle/生成器缺陷]（v2.7.10 冒烟暴露、8 轮收敛至 0 报告后发布；GaussDB/PG 侧无改动，维持 v2.7.10 验证状态）：
   - **MySQL CODDTEST 空转 oracle 复活**（移植 GaussDB-M 修复版设计）：原 `getFoldedQuery()` 原样返回原查询（代码注释自认未实现折叠）、`executeFoldedQuery()` 重跑同一查询，所有 "Results mismatch" 均为非确定性误报（NOW()/CURDATE() 重跑变值）。现实现真折叠：可变 bag 注入 `(k <cmp> (SELECT COUNT(*) FROM t))` 谓词 → 执行 → `updateInnerExpr` 折叠为常量 → 再执行比对（严格等价）；ROW multiset 行比对（长度前缀+类型标签编码，NULL 与 "null" 字符串不碰撞）；失败 SQL 包进异常消息；良性运行时错误容忍（JSON 类型/内容/path、值域转换族 `Incorrect * value`/`Data truncated`/`out of range`、位运算等宽约束、二进制转 utf8 失败）→ `IgnoreMeException` 跳过回合

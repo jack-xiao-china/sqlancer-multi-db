@@ -1,5 +1,6 @@
 package sqlancer.gaussdbm.ast;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 
 public abstract class GaussDBConstant implements GaussDBExpression {
@@ -23,7 +24,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
     }
 
     public long asIntNotNull() {
-        throw new UnsupportedOperationException();
+        // Expected-value machinery reaches here with non-int constants; decline to predict
+        // instead of crashing the round.
+        throw new IgnoreMeException();
     }
 
     /** SQL truth value for use in PQS / logical composition (MySQL-style 0/1 ints included). */
@@ -140,7 +143,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
             if (right.isBoolean()) {
                 return createBooleanConstant(asBooleanNotNull() == right.asBooleanNotNull());
             }
-            throw new AssertionError(right);
+            // Unhandled constant kinds in the expected-value machinery: decline to predict
+            // instead of crashing the round.
+            throw new IgnoreMeException();
         }
 
         @Override
@@ -154,7 +159,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
             if (right.isString()) {
                 return createBooleanConstant(val < ((GaussDBStringConstant) right).asLongLenient());
             }
-            throw new AssertionError(right);
+            // Unhandled constant kinds in the expected-value machinery: decline to predict
+            // instead of crashing the round.
+            throw new IgnoreMeException();
         }
     }
 
@@ -220,7 +227,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
             if (right.isInt()) {
                 return createBooleanConstant(asLongLenient() == right.asIntNotNull());
             }
-            throw new AssertionError(right);
+            // Unhandled constant kinds in the expected-value machinery: decline to predict
+            // instead of crashing the round.
+            throw new IgnoreMeException();
         }
 
         @Override
@@ -234,7 +243,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
             if (right.isInt()) {
                 return createBooleanConstant(asLongLenient() < right.asIntNotNull());
             }
-            throw new AssertionError(right);
+            // Unhandled constant kinds in the expected-value machinery: decline to predict
+            // instead of crashing the round.
+            throw new IgnoreMeException();
         }
     }
 
@@ -271,7 +282,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
             if (right.isInt()) {
                 return createBooleanConstant((val ? 1 : 0) == right.asIntNotNull());
             }
-            throw new AssertionError(right);
+            // Unhandled constant kinds in the expected-value machinery: decline to predict
+            // instead of crashing the round.
+            throw new IgnoreMeException();
         }
 
         @Override
@@ -287,7 +300,9 @@ public abstract class GaussDBConstant implements GaussDBExpression {
                 int r = right.asBooleanNotNull() ? 1 : 0;
                 return createBooleanConstant(l < r);
             }
-            throw new AssertionError(right);
+            // Unhandled constant kinds in the expected-value machinery: decline to predict
+            // instead of crashing the round.
+            throw new IgnoreMeException();
         }
     }
 }

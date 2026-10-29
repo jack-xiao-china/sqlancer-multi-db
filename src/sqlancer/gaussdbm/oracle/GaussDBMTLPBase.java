@@ -44,10 +44,13 @@ public abstract class GaussDBMTLPBase extends TernaryLogicPartitioningOracleBase
         initializeTernaryPredicateVariants();
         select = new GaussDBSelect();
         select.setFetchColumns(generateFetchColumns());
-        List<GaussDBTable> tables = targetTables.getTables();
+        List<GaussDBTable> tables = new java.util.ArrayList<>(targetTables.getTables());
+        List<GaussDBJoin> joinStatements = GaussDBJoin.getRandomJoinClauses(tables, state);
+        // Build the FROM list from the post-removal tables: getRandomJoinClauses removes the
+        // picked join tables from the list, and listing them in FROM as well duplicates the
+        // table name ("Table name ... is specified more than once").
         List<GaussDBExpression> tableList = tables.stream().map(GaussDBTableReference::create)
                 .collect(Collectors.toList());
-        List<GaussDBJoin> joinStatements = GaussDBJoin.getRandomJoinClauses(new java.util.ArrayList<>(tables), state);
         select.setJoinList(joinStatements.stream().map(j -> (GaussDBExpression) j).collect(Collectors.toList()));
         select.setFromList(tableList);
         select.setWhereClause(null);

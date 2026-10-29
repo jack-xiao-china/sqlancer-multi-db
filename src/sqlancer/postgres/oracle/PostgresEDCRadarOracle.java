@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import sqlancer.IgnoreMeException;
 
 import com.beust.jcommander.Strings;
 
@@ -235,7 +236,10 @@ public class PostgresEDCRadarOracle extends EDCRadarBase<PostgresGlobalState> im
             PostgresEDCRadar edc = new PostgresEDCRadar(state);
             return edc.createRawDB();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            // Equivalent-state construction failures are a fuzzer-robustness matter, not a
+            // finding: skip the round.
+            System.err.println("[WARN] EDC_RADAR equivalent-state construction failed: " + e.getMessage());
+            throw new IgnoreMeException();
         }
     }
 

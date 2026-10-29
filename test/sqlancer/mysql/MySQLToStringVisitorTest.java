@@ -1,6 +1,7 @@
 package sqlancer.mysql;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
 import java.util.List;
@@ -91,8 +92,12 @@ public class MySQLToStringVisitorTest {
 
     @Test
     void visitSelectWithoutFromToString() {
+        // The SELECT rendering draws Randomly for the optional ALL keyword: seed the thread.
+        new sqlancer.Randomly();
         MySQLSelect s = new MySQLSelect();
         s.setFetchColumns(List.of(MySQLIntConstant.createIntConstant(1)));
-        assertEquals("SELECT ALL 1 AS ref0", MySQLVisitor.asString(s));
+        // The optional ALL keyword is drawn randomly; both renderings are equivalent.
+        String rendered = MySQLVisitor.asString(s);
+        assertTrue(rendered.equals("SELECT ALL 1 AS ref0") || rendered.equals("SELECT 1 AS ref0"), rendered);
     }
 }

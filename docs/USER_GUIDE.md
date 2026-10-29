@@ -1,6 +1,6 @@
 # SQLancer User Guide
 
-**Version**: v2.7.11 (2026-10-28)
+**Version**: v2.7.12 (2026-10-29)
 **Supported Databases**: MySQL, PostgreSQL, GaussDB-A, GaussDB-M
 
 ## Introduction
@@ -16,10 +16,11 @@ SQLancer is a tool for testing database management systems by generating random 
 
 ---
 
-## Version Highlights (v2.7.3–v2.7.11)
+## Version Highlights (v2.7.3–v2.7.12)
 
 | Version | Key Changes |
 |---------|-------------|
+| **v2.7.12** | Full-matrix assessment fixes — GaussDB-M/MySQL TLP-family FROM construction (join tables listed twice, contaminating metamorphic findings); GaussDB-M expected-value null propagation across 7 operator sites + decline-to-predict terminals (PQS crashes cleared); MySQLVisitor dispatch chain completed (ManuelPredicate/WindowFunction/AggregateFunction/PostfixText rendering — Sonar tests revived); FROM-less SELECT rendering ISE guard; MySQL PQS row-value fallback + BIT default overflow + sort-memory; EDC_RADAR construction-failure skip + PG money literal validation; EET DML view-target filtering; DQE update-specific codes 3156/3170; PG ALTER identity errors; 41 unit tests green |
 | **v2.7.11** | MySQL oracle revival + generator fixes — CODDTEST real scalar-subquery folding ported from the GaussDB-M design (the old oracle re-ran the same query: all mismatches were nondeterminism false positives); expected-value machinery AssertionErrors on binary/double/temporal constants now decline (IgnoreMeException); LPAD/RPAD huge-length OOM guard; visitor fixes (bag rendered as a synthetic ORACLE_EXPRESSION_BAG() call, select-list subqueries missing parentheses, TIMESTAMPADD wrong signature); bounded native arities fixed (SUBSTRING/LOCATE/JSON_CONTAINS/JSON_KEYS/WEEK); BIT(>=63) width long-overflow fix; NATURAL JOIN no longer renders an ON clause; ALTER/INSERT/INDEX expected-error coverage |
 | **v2.7.10** | PR #15 oracle correctness fixes (GaussDB-A NOREC/AGGREGATE aliases, PQS exact BigDecimal arithmetic, CODDTEST real scalar-subquery folding, EET MINUS→NOT EXISTS wiring; GaussDB-M CERT `explain_perf_mode`+`enable_pbe_optimization`; MySQL JIR Rule 2/5/6; PG EET row encoding) + verification-driven tool fixes: EET `CoalesceToCase` ≥3-arg bridge-method `ClassCastException` (`Arrays.copyOfRange`), CODDTEST correlated-subquery FROM scope aligned to upstream (GaussDB-M/A + MySQL), GaussDB-M join generation `tables.remove` + NATURAL guard + space-chained JOIN rendering, `BIT_*_DISTINCT` aggregate enum removal (GaussDB-M parser rejects), CODDTEST-M benign-error tolerance (JSON/strict-typing/join-scope families) |
 | **v2.7.9** | PostgreSQL non-superuser full-oracle sweep fix — `readFunctions` skips superuser/restricted builtins (`pg_replication_origin_*`/`pg_ls_*`/`pg_promote`/`pg_read_file`/etc.); EDC_DATA `func.txt` seed cleaned of 79 restricted functions; `COMMON_EXPECTED_SQLSTATES` extended with 8 states (`42701`/`42702`/`42710`/`23502`/`42830`/`42P04`/`55006`/`2BP01`) for non-English locale robustness; SONAR `getUnoptimizedQuery` handles `PostgresBinaryComparisonOperation`; unhandled types `IgnoreMeException`; disabled `FORCE ROW LEVEL SECURITY` (RLS 42501 root cause) |
@@ -46,24 +47,24 @@ cd sqlancer-multi-db
 mvn clean package -DskipTests
 
 # Output: ~4MB jar + target/lib/ dependencies
-ls -lh target/sqlancer-2.7.11.jar
+ls -lh target/sqlancer-2.7.12.jar
 ```
 
 ### Run
 
 **Recommended** (all dependencies included in jar):
 ```bash
-java -jar target/sqlancer-2.7.11.jar mysql --oracle QUERY_PARTITIONING
-java -jar target/sqlancer-2.7.11.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
+java -jar target/sqlancer-2.7.12.jar mysql --oracle QUERY_PARTITIONING
+java -jar target/sqlancer-2.7.12.jar gaussdb-m --host xxx --port xxx --username xxx --password xxx
 ```
 
 **Alternative** (use external classpath):
 ```bash
 # Linux/macOS
-java -cp "target/sqlancer-2.7.11.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.7.12.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
 
 # Windows
-java -cp "target/sqlancer-2.7.11.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.7.12.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
 ```
 
 ---
@@ -106,7 +107,7 @@ java -cp "target/sqlancer-2.7.11.jar;target/lib/*" sqlancer.Main mysql --oracle 
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --host localhost \
     --port 3306 \
     --username root \
@@ -186,7 +187,7 @@ mysql --engines InnoDB,MyISAM,MEMORY
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --host localhost \
     --port 5432 \
     --username postgres \
@@ -229,7 +230,7 @@ java -jar target/sqlancer-2.7.11.jar \
 PQS and CERT oracles require tables to contain rows for proper testing. Use these recommended parameters:
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --username postgres \
     --password your_password \
     --num-threads 20 \
@@ -317,7 +318,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO root;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -404,7 +405,7 @@ This follows Oracle's schema-based isolation pattern.
 # CREATE DATABASE gaussdb_a_test WITH dbcompatibility 'A';
 
 # 2. Run comprehensive test
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -437,7 +438,7 @@ SELECT datcompatibility FROM pg_database WHERE datname = 'gaussdb_pg_test';
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -491,7 +492,7 @@ GaussDB-PG has a smaller oracle set (11 oracles). CERT, DQP, and DQE are current
 # Create PG-compatible database first
 # CREATE DATABASE gaussdb_pg_test WITH dbcompatibility 'pg';
 
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -534,7 +535,7 @@ GRANT ALL PRIVILEGES ON DATABASE testm TO your_user;
 ## Basic Usage
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \
@@ -604,7 +605,7 @@ This approach is more reliable than auto-creating databases, which may fail due 
 ## Complete Example
 
 ```bash
-java -jar target/sqlancer-2.7.11.jar \
+java -jar target/sqlancer-2.7.12.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \

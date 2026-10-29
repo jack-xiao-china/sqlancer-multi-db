@@ -35,6 +35,9 @@ import sqlancer.mysql.ast.MySQLCteDefinition;
 import sqlancer.mysql.ast.MySQLCteTableReference;
 import sqlancer.mysql.ast.MySQLStringExpression;
 import sqlancer.mysql.ast.MySQLTableReference;
+import sqlancer.mysql.ast.MySQLPostfixText;
+import sqlancer.mysql.ast.MySQLWindowFunction;
+import sqlancer.mysql.ast.MySQLManuelPredicate;
 import sqlancer.mysql.ast.MySQLText;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation;
 import sqlancer.mysql.ast.MySQLOracleExpressionBag;
@@ -98,7 +101,15 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
                 }
             }
         }
-        if (s.getFromList() != null && !s.getFromList().isEmpty()) {
+        // SelectBase.getFromList() throws IllegalStateException while unset (SELECT without
+        // FROM); the guard itself must not trigger it.
+        List<MySQLExpression> fromList;
+        try {
+            fromList = s.getFromList();
+        } catch (IllegalStateException e) {
+            fromList = null;
+        }
+        if (fromList != null && !fromList.isEmpty()) {
             sb.append(" FROM ");
             for (int i = 0; i < s.getFromList().size(); i++) {
                 if (i != 0) {
@@ -381,6 +392,45 @@ public class MySQLToStringVisitor extends ToStringVisitor<MySQLExpression> imple
     @Override
     public void visit(MySQLText text) {
         sb.append(text.getText());
+    }
+
+    @Override
+    public void visit(MySQLPostfixText postfix) {
+        // SELECT-list alias wrapper: "(expr) AS alias".
+        sb.append("(");
+        visit(postfix.getExpr());
+        sb.append(") AS ");
+        sb.append(postfix.getText());
+    }
+
+    @Override
+    public void visit(MySQLManuelPredicate predicate) {
+        // Raw SQL fragment.
+        sb.append(predicate.getString());
+    }
+
+    @Override
+    public void visit(sqlancer.mysql.ast.MySQLAggregateFunction aggregateFunction) {
+        // Sonar-style aggregate node: FUNC(expr). (Fully qualified: MySQLAggregate has a
+        // same-named nested enum for the regular aggregate rendering.)
+        sb.append(aggregateFunction.getFunction());
+        sb.append("(");
+        visit(aggregateFunction.getExpr());
+        sb.append(")");
+    }
+
+    @Override
+    public void visit(MySQLWindowFunction windowFunction) {
+        sb.append(windowFunction.getFunction());
+        sb.append("(");
+        if (windowFunction.getExpr() != null) {
+            visit(windowFunction.getExpr());
+        }
+        sb.append(") OVER (PARTITION BY ");
+        if (windowFunction.getPartitionBy() != null) {
+            visit(windowFunction.getPartitionBy());
+        }
+        sb.append(")");
     }
 
     @Override
