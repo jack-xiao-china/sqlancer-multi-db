@@ -1,5 +1,6 @@
 package sqlancer.common.oracle;
 
+import sqlancer.IgnoreMeException;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,6 +90,11 @@ public class TLPWhereOracle<Z extends Select<J, E, T, C>, J extends Join<E, T, C
 
         String originalQueryString = select.asString();
         generatedQueryString = originalQueryString;
+        if (NondeterminismGuard.containsNondeterministicCall(originalQueryString)) {
+            // Nondeterministic projections differ between the original and the partitioned
+            // executions; the TLP comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
         List<String> firstResultSet = ComparatorHelper.getResultSetFirstColumnAsString(originalQueryString, errors,
                 state);
 

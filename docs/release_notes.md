@@ -1,5 +1,12 @@
 # SQLancer Release Notes
 
+## v2.7.13 | 2026-10-29
+- 新增 [TLP/CODDTEST 非确定性投影守卫]（发现类研判结论落地，见 docs/oracle-findings-triage-2026-10-29.md：GaussDB-M AGGREGATE 12 个失配中 10 个为 NOW()/CURTIME() 两次执行时点不同的假阳性）：
+  - 新增公共 `NondeterminismGuard.containsNondeterministicCall(sql)`（CURTIME/CURDATE/NOW/SYSDATE/RAND/UUID/UUID_SHORT/UNIX_TIMESTAMP/CURRENT_TIMESTAMP/SLEEP）
+  - 挂载五处：`GaussDBMTLPBase.check()` 与 `MySQLTLPBase.check()` 尾部（覆盖 AGGREGATE/DISTINCT/GROUP_BY/HAVING 等全部 TLP 变体的投影）、公共 `TLPWhereOracle.check()`（覆盖 MySQL/M 的 TLP_WHERE）、`GaussDBCODDTestOracle`（预防——同生成器会产 NOW()）、`MySQLCODDTestOracle`（原私有实现去重收敛到公共类）
+  - GaussDB-A TLP 未挂载（矩阵中无该类假阳性观测）
+- 验证结果：单测 41 用例通过；GaussDB-M AGGREGATE 失配 12→2（研判预测的 10 个非确定性假阳性精确消除）、HAVING 1→0、DISTINCT/CODDTEST 0 报告；三层守卫（基类投影 + 聚合投影替换后 + 聚合 WHERE 谓词）后剩余报告均为真发现候选（JSON/MIN 语义类）与 MYSQL-BUG-1 同源类（见 docs/oracle-findings-triage-2026-10-29.md）
+
 ## v2.7.12 | 2026-10-29
 - 修复 [全量 oracle 矩阵评估暴露的存量工具问题]（docs/oracle-full-matrix-assessment-2026-10-29.md，多轮冒烟收敛验证；详见评估报告第二节 12 项清单，本轮修复其中 10 项代码类 + 1 项脚本注释 + 1 项环境建议）：
   - **TLP 族 join 重复表**（GaussDB-M + MySQL）：`TLPBase` 在 `getRandomJoinClauses` 移除 join 表**之前**就从完整表列表构建 FROM → join 表同时出现在 FROM 与 JOIN → 污染 AGGREGATE/DISTINCT/GROUP_BY/HAVING/QUERY_PARTITIONING 的失配发现。改为事后从已移除列表构建（GaussDB-A 版本本就正确）

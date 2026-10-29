@@ -5,7 +5,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
+import sqlancer.common.oracle.NondeterminismGuard;
 import sqlancer.common.gen.ExpressionGenerator;
 import sqlancer.common.oracle.TernaryLogicPartitioningOracleBase;
 import sqlancer.common.oracle.TestOracle;
@@ -62,6 +64,11 @@ public abstract class MySQLTLPBase extends TernaryLogicPartitioningOracleBase<My
         select.setJoinList(joinStatements.stream().map(j -> (MySQLExpression) j).collect(Collectors.toList()));
         select.setFromList(tableList);
         select.setWhereClause(null);
+        if (NondeterminismGuard.containsNondeterministicCall(select.asString())) {
+            // Nondeterministic projections (NOW()/CURTIME()/...) differ between the original and
+            // the partitioned executions; the TLP comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
         // 不添加 ORDER BY：HAVING/GROUP_BY/DISTINCT 等会生成 UNION 查询，MySQL 对含 ORDER BY 的 UNION 语法有特殊限制
         select.setOrderByClauses(java.util.Collections.emptyList());
     }

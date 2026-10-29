@@ -1,5 +1,6 @@
 package sqlancer.mysql.oracle;
 
+import sqlancer.common.oracle.NondeterminismGuard;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -57,12 +58,21 @@ public class MySQLTLPAggregateOracle extends MySQLTLPBase implements TestOracle<
         select.setFetchColumns(Arrays.asList(aggregate));
         // 显式清空 ORDER BY：MySQL 将 ORDER BY <整数> 解释为列位置，会导致错误（同 NoREC）
         select.setOrderByClauses(List.of());
+        if (NondeterminismGuard.containsNondeterministicCall(MySQLVisitor.asString(select))) {
+            // The aggregate projection is swapped in after the base guard: re-check here.
+            throw new IgnoreMeException();
+        }
 
         String originalQuery = MySQLVisitor.asString(select);
         generatedQueryString = originalQuery;
         String firstResult = getAggregateResult(originalQuery);
 
         MySQLExpression whereClause = gen.generateExpression();
+        if (NondeterminismGuard.containsNondeterministicCall(MySQLVisitor.asString(whereClause))) {
+            // Nondeterministic partition predicates (e.g. CURTIME() in a CASE branch) differ
+            // between the three TLP branches; the comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
         MySQLExpression negatedClause = new MySQLUnaryPrefixOperation(whereClause, MySQLUnaryPrefixOperator.NOT);
         MySQLExpression isNullClause = new MySQLUnaryPostfixOperation(whereClause, UnaryPostfixOperator.IS_NULL,
                 false);
