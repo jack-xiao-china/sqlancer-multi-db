@@ -202,7 +202,8 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
             for (int i = 0; i < updateResult.getQueryErrors().size(); i++) {
                 SQLQueryError updateError = updateResult.getQueryErrors().get(i);
                 if (!isFound(selectErrors, updateError)) {
-                    return "SELECT has different errors from UPDATE.";
+                    return "SELECT has different errors from UPDATE. updateError=" + updateError
+                            + "; selectErrors=" + selectErrors;
                 }
             }
 
@@ -264,7 +265,8 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
             for (int i = 0; i < deleteResult.getQueryErrors().size(); i++) {
                 SQLQueryError deleteError = deleteResult.getQueryErrors().get(i);
                 if (!isFound(selectErrors, deleteError)) {
-                    return "SELECT has different errors from DELETE.";
+                    return "SELECT has different errors from DELETE. deleteError=" + deleteError
+                            + "; selectErrors=" + selectErrors;
                 }
             }
 
@@ -484,9 +486,13 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
             // 1062, Duplicate entry '2' for key 't1.i0
             // 3105, The value specified for generated column 'c1' in table 't1' is not allowed
             // 1292, Truncated incorrect DOUBLE value: '...'
+            // 3156, Invalid JSON value for CAST to INTEGER from column ... (WARNING in SELECT,
+            //       ERROR in UPDATE — same severity-divergence pattern as 1292)
+            // 3170, Memory capacity ... for 'range_optimizer_max_mem_size' exceeded (UPDATE-only
+            //       range-optimization resource warning, absent on the SELECT side)
             // In MySQL, this can be WARNING in SELECT but ERROR in UPDATE/DELETE
             // depending on statement context and sql_mode, leading to DQE false positives.
-            return Set.of(1048, 1062, 1292, 3105);
+            return Set.of(3156, 3170, 1048, 1062, 1292, 3105);
         }
 
         @Override

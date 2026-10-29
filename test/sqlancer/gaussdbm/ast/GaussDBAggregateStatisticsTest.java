@@ -216,8 +216,8 @@ class GaussDBAggregateStatisticsTest {
     @Test
     void testAllAggregateFunctionsCount() {
         // COUNT(2) + SUM(2) + MIN(2) + MAX(2) + AVG(2) +
-        // BIT_AND(2) + BIT_OR(2) + BIT_XOR(2) +
-        // STDDEV(4) + VARIANCE(3) = 23
-        assertEquals(23, GaussDBAggregateFunction.values().length);
+        // BIT_AND(1) + BIT_OR(1) + BIT_XOR(1) (no DISTINCT variants since v2.7.10) +
+        // STDDEV(4) + VARIANCE(3) = 20
+        assertEquals(20, GaussDBAggregateFunction.values().length);
     }
 }

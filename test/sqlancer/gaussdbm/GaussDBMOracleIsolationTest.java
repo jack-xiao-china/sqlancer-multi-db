@@ -34,9 +34,10 @@ import sqlancer.gaussdbm.oracle.eet.GaussDBMEETOracle;
 
 class GaussDBMOracleIsolationTest {
 
-    private static final Set<String> EXPECTED_ORACLE_NAMES = Set.of("AGGREGATE", "HAVING", "GROUP_BY", "DISTINCT",
-            "NOREC", "TLP_WHERE", "PQS", "CERT", "FUZZER", "DQP", "DQE", "EET", "CODDTEST", "SONAR",
-            "QUERY_PARTITIONING");
+    private static final Set<String> EXPECTED_ORACLE_NAMES = Set.of("AGGREGATE", "CERT", "CODDTEST", "DISTINCT", "DQE",
+            "DQP", "EDC_DATA", "EDC_RADAR", "EET", "EET_DELETE", "EET_INSERT_SELECT", "EET_UPDATE", "FUCCI", "FUZZER",
+            "GROUP_BY", "HAVING", "JIR", "NOREC", "PQS", "QUERY_PARTITIONING", "SONAR", "TLP_WHERE", "TX_INFER",
+            "WRITE_CHECK", "WRITE_CHECK_REPRODUCE");
 
     /**
      * Expected concrete oracle implementation per factory constant (kept in sync with {@link GaussDBMOracleFactory}).
@@ -72,7 +73,21 @@ class GaussDBMOracleIsolationTest {
             return GaussDBCODDTestOracle.class;
         case SONAR:
             return GaussDBMSonarOracle.class;
+        case EET_DELETE:
+            return sqlancer.gaussdbm.oracle.eet.GaussDBMEETDeleteOracle.class;
+        case EET_UPDATE:
+            return sqlancer.gaussdbm.oracle.eet.GaussDBMEETUpdateOracle.class;
+        case EET_INSERT_SELECT:
+            return sqlancer.gaussdbm.oracle.eet.GaussDBMEETInsertSelectOracle.class;
         case QUERY_PARTITIONING:
+        case JIR:
+        case TX_INFER:
+        case WRITE_CHECK:
+        case WRITE_CHECK_REPRODUCE:
+        case FUCCI:
+        case EDC_RADAR:
+        case EDC_DATA:
+            // composite / common-delegated oracles without a single GaussDBM impl class
             return null;
         default:
             throw new AssertionError(o);
@@ -89,7 +104,8 @@ class GaussDBMOracleIsolationTest {
             }
             visibleParameterNames.addAll(Arrays.asList(p.names()));
         }
-        assertEquals(Set.of("--oracle"), visibleParameterNames);
+        assertEquals(Set.of("--fucci-isolation-level", "--fucci-oracle-type", "--fucci-schedule-count", "--oracle",
+                "--target-database"), visibleParameterNames);
     }
 
     @Test
@@ -99,9 +115,9 @@ class GaussDBMOracleIsolationTest {
     }
 
     @Test
-    void oracleFactoryExposesFifteenIndependentOracles() {
+    void oracleFactoryExposesAllRegisteredOracles() {
         GaussDBMOracleFactory[] values = GaussDBMOracleFactory.values();
-        assertEquals(15, values.length);
+        assertEquals(25, values.length);
         Set<String> names = new TreeSet<>();
         for (GaussDBMOracleFactory v : values) {
             names.add(v.name());
@@ -114,8 +130,12 @@ class GaussDBMOracleIsolationTest {
         assertTrue(GaussDBMOracleFactory.PQS.requiresAllTablesToContainRows());
         assertTrue(GaussDBMOracleFactory.CERT.requiresAllTablesToContainRows());
         assertTrue(GaussDBMOracleFactory.CODDTEST.requiresAllTablesToContainRows());
+        // Kept in sync with GaussDBMOracleFactory.requiresAllTablesToContainRows().
         EnumSet<GaussDBMOracleFactory> needRows = EnumSet.of(GaussDBMOracleFactory.PQS, GaussDBMOracleFactory.CERT,
-                GaussDBMOracleFactory.CODDTEST);
+                GaussDBMOracleFactory.CODDTEST, GaussDBMOracleFactory.EET_INSERT_SELECT,
+                GaussDBMOracleFactory.EET_UPDATE, GaussDBMOracleFactory.EET_DELETE, GaussDBMOracleFactory.EDC_RADAR,
+                GaussDBMOracleFactory.WRITE_CHECK, GaussDBMOracleFactory.WRITE_CHECK_REPRODUCE,
+                GaussDBMOracleFactory.FUCCI, GaussDBMOracleFactory.TX_INFER);
         for (GaussDBMOracleFactory v : GaussDBMOracleFactory.values()) {
             if (needRows.contains(v)) {
                 continue;

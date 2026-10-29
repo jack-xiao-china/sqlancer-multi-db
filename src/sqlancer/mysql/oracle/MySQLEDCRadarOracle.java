@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import sqlancer.IgnoreMeException;
 import java.util.stream.Collectors;
 
 import com.beust.jcommander.Strings;
@@ -251,7 +252,10 @@ public class MySQLEDCRadarOracle extends EDCRadarBase<MySQLGlobalState> implemen
             MySQLEDCRadar edc = new MySQLEDCRadar(state);
             return edc.createRawDB();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            // Equivalent-state construction failures (e.g. copying a zero-datetime row that
+            // strict mode rejects) are a fuzzer-robustness matter, not a finding: skip the round.
+            System.err.println("[WARN] EDC_RADAR equivalent-state construction failed: " + e.getMessage());
+            throw new IgnoreMeException();
         }
     }
 

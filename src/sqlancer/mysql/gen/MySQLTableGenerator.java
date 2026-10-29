@@ -474,7 +474,14 @@ public class MySQLTableGenerator {
             sb.append("'");
             break;
         case BIT:
-            sb.append(r.getLong(0, (1L << Math.min(r.getInteger(1, 64), 63))));
+            int bitWidth = Math.min(r.getInteger(1, 64), 63);
+            if (bitWidth >= 63) {
+                // 1L << 63 overflows to Long.MIN_VALUE, which would make getLong(0, MIN)
+                // throw IllegalArgumentException.
+                sb.append(r.getLong(0, Long.MAX_VALUE));
+            } else {
+                sb.append(r.getLong(0, (1L << bitWidth)));
+            }
             break;
         case ENUM:
             // For ENUM, only use string value (numeric index not reliable)

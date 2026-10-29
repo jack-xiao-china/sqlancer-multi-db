@@ -38,6 +38,9 @@ public class GaussDBBetweenOperation implements GaussDBExpression {
         GaussDBConstant ev = expr.getExpectedValue();
         GaussDBConstant lv = left.getExpectedValue();
         GaussDBConstant rv = right.getExpectedValue();
+        if (ev == null || lv == null || rv == null) {
+            return null; // unpredictable operand: propagate
+        }
         if (!lv.isNull() && lv.isInt() && lv.asIntNotNull() < 0 || !rv.isNull() && rv.isInt() && rv.asIntNotNull() < 0
                 || !ev.isNull() && ev.isInt() && ev.asIntNotNull() < 0) {
             throw new IgnoreMeException();

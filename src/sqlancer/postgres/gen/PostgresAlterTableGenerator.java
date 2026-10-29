@@ -513,17 +513,21 @@ public class PostgresAlterTableGenerator {
             }
             break;
         case ALTER_COLUMN_SET_STATISTICS:
+            // Identity columns reject statistics/attribute-option ALTERs.
+            errors.add("is an identity column");
             alterColumn(randomTable, sb);
             sb.append("SET STATISTICS ");
             sb.append(r.getInteger(0, 10000));
             break;
         case ALTER_COLUMN_SET_ATTRIBUTE_OPTION:
+            errors.add("is an identity column");
             alterColumn(randomTable, sb);
             sb.append(" SET(");
             appendAttributes(sb, Randomly.nonEmptySubset(Attribute.values()), true);
             sb.append(")");
             break;
         case ALTER_COLUMN_RESET_ATTRIBUTE_OPTION:
+            errors.add("is an identity column");
             alterColumn(randomTable, sb);
             sb.append(" RESET(");
             appendAttributes(sb, Randomly.nonEmptySubset(Attribute.values()), false);

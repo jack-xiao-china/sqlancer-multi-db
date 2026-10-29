@@ -52,6 +52,9 @@ public class GaussDBCastOperation implements GaussDBExpression {
     @Override
     public GaussDBConstant getExpectedValue() {
         GaussDBConstant expectedValue = expr.getExpectedValue();
+        if (expectedValue == null) {
+            return null; // unpredictable operand: propagate
+        }
         if (expectedValue.isNull()) {
             return GaussDBConstant.createNullConstant();
         }

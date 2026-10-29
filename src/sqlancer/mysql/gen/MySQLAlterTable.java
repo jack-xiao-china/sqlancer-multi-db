@@ -104,6 +104,9 @@ public class MySQLAlterTable {
         errors.add("Cannot convert string");
         // Adding a UNIQUE/PRIMARY constraint over existing duplicate rows.
         errors.add("Duplicate entry");
+        // In-place/ALTER-COPY falls back to a temporary table, which rejects compressed
+        // row formats.
+        errors.add("CREATE TEMPORARY TABLE is not allowed with ROW_FORMAT");
         sb.append("ALTER TABLE ");
         MySQLTable table = schema.getRandomTableNoViewOrBailout();
         sb.append(table.getName());

@@ -93,6 +93,11 @@ public class GaussDBBinaryLogicalOperation implements GaussDBExpression {
 
     @Override
     public GaussDBConstant getExpectedValue() {
-        return op.apply(left.getExpectedValue(), right.getExpectedValue());
+        GaussDBConstant leftValue = left.getExpectedValue();
+        GaussDBConstant rightValue = right.getExpectedValue();
+        if (leftValue == null || rightValue == null) {
+            return null; // unpredictable operand: propagate
+        }
+        return op.apply(leftValue, rightValue);
     }
 }

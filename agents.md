@@ -12,7 +12,7 @@
 - **测试 Oracle（Oracles）**：25 种 Oracle 检测不同类别的逻辑 Bug
 - **实验日志与调试**：主要日志默认在 `target/logs/`
 
-### 当前版本：v2.7.11
+### 当前版本：v2.7.12
 
 ### 25 种 Oracle 完整列表
 
@@ -67,10 +67,11 @@ java -jar sqlancer-2.7.10.jar --host localhost --port 3306 --username root --pas
 
 > ⚠️ GaussDB-A 和 GaussDB-M 需要使用 `java -cp` 方式运行（system scope 依赖），详见 `lib/README.md`
 
-## 近期重要变更 (v2.7.3–v2.7.11)
+## 近期重要变更 (v2.7.3–v2.7.12)
 
 | 版本 | 变更 |
 |------|------|
+| v2.7.12 | 全量矩阵评估修复：TLP 族 FROM 构造顺序（M+MySQL）、M 期望值空传播×7+拒预测终态（PQS 清零）、MySQLVisitor 链补全（Sonar 测试 12 项复活）、FROM-less SELECT ISE 守卫、MySQL PQS 行值兜底/BIT 溢出/sort-memory、EDC_RADAR 跳过+money 字面量、EET 视图过滤、DQE 3156/3170、PG ALTER identity、测试债清理（41 用例绿）。遗留：FUCCI 连接/EET row-state/TX_INFER 专项 + 发现类研判 |
 | v2.7.11 | MySQL oracle 复活与生成器修复：CODDTEST 空转 oracle 移植 GaussDB-M 真折叠设计（旧版重跑同一查询，mismatch 全为非确定性误报）；期望值机器 AssertionError→拒预测；LPAD/RPAD OOM 守卫；visitor bag/子查询括号/TIMESTAMPADD 签名修复；有界原生函数参数数修正；BIT 宽度溢出修复；NATURAL JOIN 置空 ON；ALTER/INSERT/INDEX 预期错误覆盖。MySQL JIR/CODDTEST/EET 冒烟 0 bug（8 轮收敛 20→0） |
 | v2.7.10 | 合入并验证 PR #15（GaussDB-A/M、PG、MySQL oracle 正确性修复：NOREC/AGGREGATE 别名、PQS 精确算术、CODDTEST 真折叠、EET MINUS→NOT EXISTS、CERT explain 设置、JIR 规则、PG EET 行编码）+ 冒烟驱动的工具修复：EET CoalesceToCase ≥3 参桥接强转 CCE（copyOfRange+回归测试）；CODDTEST 相关子查询 FROM 作用域对齐上游（M/A/MySQL）；GaussDB-M JOIN 生成 tables.remove+NATURAL 守卫+空格链接渲染；BIT_*_DISTINCT 枚举移除；CODDTEST-M 良性错误容忍（JSON/强类型/JOIN 作用域族）。GaussDB 侧 9 oracle + PostgreSQL JIR/EET 冒烟 0 bug；MySQL 冒烟被本地实例 datadir 孤儿 schema 目录阻塞（环境问题，非代码；存量 isEquals/ALTER 断言问题待后续版本）；CERT-M 记录 1 个估计器单调性违反待研判 |
 | v2.7.9 | PostgreSQL 普通用户全量 oracle 测试修复 — `readFunctions` 跳过超管/受限内置函数（`pg_replication_origin_*`/`pg_ls_*`/`pg_promote`/`pg_read_file` 等）；EDC_DATA `func.txt` 清理 79 个受限函数；`COMMON_EXPECTED_SQLSTATES` 补 8 个状态码支持非英文 locale；SONAR 支持比较运算+IgnoreMeException；禁用 `FORCE ROW LEVEL SECURITY`（RLS 42501 根因，同时消除 EET row-state mismatch 假阳性） |

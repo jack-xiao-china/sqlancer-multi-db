@@ -30,6 +30,9 @@ public class GaussDBCaseWhen implements GaussDBExpression {
     @Override
     public GaussDBConstant getExpectedValue() {
         GaussDBConstant w = whenExpr.getExpectedValue();
+        if (w == null) {
+            return null; // unpredictable operand: propagate
+        }
         if (w.isNull()) {
             return GaussDBConstant.createNullConstant();
         }

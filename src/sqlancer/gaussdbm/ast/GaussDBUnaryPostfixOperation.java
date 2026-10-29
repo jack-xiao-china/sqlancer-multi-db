@@ -87,6 +87,9 @@ public class GaussDBUnaryPostfixOperation implements GaussDBExpression {
     @Override
     public GaussDBConstant getExpectedValue() {
         GaussDBConstant v = expr.getExpectedValue();
+        if (v == null) {
+            return null; // unpredictable operand: propagate
+        }
         if (v.isNull()) {
             // IS TRUE and IS FALSE return FALSE for NULL (SQL standard three-valued logic)
             // IS NOT TRUE returns TRUE for NULL

@@ -187,7 +187,8 @@ public class MySQLSchema extends AbstractSchema<MySQLGlobalState, MySQLTable> {
                             break;
                         case DATE: {
                             Date d = randomRowValues.getDate(columnIndex);
-                            constant = MySQLConstant.createStringConstant(d.toString());
+                            constant = d == null ? MySQLConstant.createNullConstant()
+                                    : MySQLConstant.createStringConstant(d.toString());
                             break;
                         }
                         case TIME: {
@@ -223,7 +224,12 @@ public class MySQLSchema extends AbstractSchema<MySQLGlobalState, MySQLTable> {
                             break;
                         }
                         default:
-                            throw new AssertionError(column.getType());
+                            // FLOAT/DOUBLE/DECIMAL/BIT/ENUM/SET/JSON/BINARY/VARBINARY/BLOB: read via
+                            // the JDBC string conversion; PQS only needs a comparable row value.
+                            String raw = randomRowValues.getString(columnIndex);
+                            constant = raw == null ? MySQLConstant.createNullConstant()
+                                    : MySQLConstant.createStringConstant(raw);
+                            break;
                         }
                     }
                     values.put(column, constant);

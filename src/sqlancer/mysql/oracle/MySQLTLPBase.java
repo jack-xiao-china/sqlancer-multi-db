@@ -52,8 +52,13 @@ public abstract class MySQLTLPBase extends TernaryLogicPartitioningOracleBase<My
             MySQLHintGenerator.generateHints(select, tables);
         }
 
-        List<MySQLExpression> tableList = tables.stream().map(MySQLTableReference::new).collect(Collectors.toList());
-        List<MySQLJoin> joinStatements = MySQLJoin.getRandomJoinClauses(new java.util.ArrayList<>(tables), state);
+        List<MySQLTable> tablesForJoins = new java.util.ArrayList<>(tables);
+        List<MySQLJoin> joinStatements = MySQLJoin.getRandomJoinClauses(tablesForJoins, state);
+        // Build the FROM list from the post-removal tables: getRandomJoinClauses removes the
+        // picked join tables from the list, and listing them in FROM as well duplicates the
+        // table name ("Not unique table/alias").
+        List<MySQLExpression> tableList = tablesForJoins.stream().map(MySQLTableReference::new)
+                .collect(Collectors.toList());
         select.setJoinList(joinStatements.stream().map(j -> (MySQLExpression) j).collect(Collectors.toList()));
         select.setFromList(tableList);
         select.setWhereClause(null);

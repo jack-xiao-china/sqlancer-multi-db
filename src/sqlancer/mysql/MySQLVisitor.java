@@ -22,7 +22,12 @@ import sqlancer.mysql.ast.MySQLScalarSubquery;
 import sqlancer.mysql.ast.MySQLSelect;
 import sqlancer.mysql.ast.MySQLStringExpression;
 import sqlancer.mysql.ast.MySQLTableReference;
+import sqlancer.mysql.ast.MySQLAggregateFunction;
+import sqlancer.mysql.ast.MySQLManuelPredicate;
+import sqlancer.mysql.ast.MySQLPostfixText;
+import sqlancer.mysql.ast.MySQLWindowFunction;
 import sqlancer.mysql.ast.MySQLText;
+import sqlancer.IgnoreMeException;
 import sqlancer.mysql.ast.MySQLPrintedExpression;
 import sqlancer.mysql.ast.MySQLUnaryPostfixOperation;
 import sqlancer.mysql.ast.MySQLUnionSelect;
@@ -187,9 +192,39 @@ public interface MySQLVisitor {
             visit((MySQLWildcard) expr);
         } else if (expr instanceof MySQLConstant.MySQLIntervalConstant) {
             visit((MySQLConstant) expr);
+        } else if (expr instanceof MySQLPostfixText) {
+            visit((MySQLPostfixText) expr);
+        } else if (expr instanceof MySQLManuelPredicate) {
+            visit((MySQLManuelPredicate) expr);
+        } else if (expr instanceof MySQLAggregateFunction) {
+            visit((MySQLAggregateFunction) expr);
+        } else if (expr instanceof MySQLWindowFunction) {
+            visit((MySQLWindowFunction) expr);
         } else {
-            throw new AssertionError(expr);
+            // Unhandled node kinds decline to predict (cf. the v2.7.9 PostgresSonar fix for the
+            // same crash class) instead of crashing the round.
+            throw new IgnoreMeException();
         }
+    }
+
+    default void visit(MySQLPostfixText postfix) {
+        // SELECT-list alias wrapper: the expected value is the inner expression's.
+        visit(postfix.getExpr());
+    }
+
+    default void visit(MySQLManuelPredicate predicate) {
+        // Raw SQL fragment: unpredictable, decline to predict.
+        throw new IgnoreMeException();
+    }
+
+    default void visit(MySQLWindowFunction windowFunction) {
+        // Window functions are unpredictable in the expected-value machinery.
+        throw new IgnoreMeException();
+    }
+
+    default void visit(MySQLAggregateFunction aggregateFunction) {
+        // Sonar-style aggregate node: unpredictable in the expected-value machinery.
+        throw new IgnoreMeException();
     }
 
     static String asString(MySQLExpression expr) {
