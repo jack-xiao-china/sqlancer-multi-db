@@ -10,6 +10,7 @@ import java.util.List;
 import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
+import sqlancer.common.oracle.NondeterminismGuard;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.gaussdbm.GaussDBMErrors;
 import sqlancer.gaussdbm.GaussDBMGlobalState;
@@ -89,6 +90,11 @@ public class GaussDBCODDTestOracle extends CODDTestBase<GaussDBMGlobalState>
             injectFoldCondition(originalQuery, foldBag);
         }
         String originalSql = originalQuery.asString();
+        if (NondeterminismGuard.containsNondeterministicCall(originalSql)) {
+            // Nondeterministic projections (NOW()/CURTIME()/...) differ between the original and
+            // the folded executions; the folding comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
         List<List<String>> originalResult;
         List<List<String>> foldedResult;
         String foldedSql;

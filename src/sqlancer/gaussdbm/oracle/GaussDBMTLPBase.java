@@ -1,5 +1,7 @@
 package sqlancer.gaussdbm.oracle;
 
+import sqlancer.common.oracle.NondeterminismGuard;
+import sqlancer.IgnoreMeException;
 import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
@@ -55,6 +57,11 @@ public abstract class GaussDBMTLPBase extends TernaryLogicPartitioningOracleBase
         select.setFromList(tableList);
         select.setWhereClause(null);
         select.setOrderByClauses(java.util.Collections.emptyList());
+        if (NondeterminismGuard.containsNondeterministicCall(select.asString())) {
+            // Nondeterministic projections (NOW()/CURTIME()/...) differ between the original and
+            // the partitioned executions; the TLP comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
     }
 
     List<GaussDBExpression> generateFetchColumns() {

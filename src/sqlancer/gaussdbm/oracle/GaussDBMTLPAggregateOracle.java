@@ -1,5 +1,6 @@
 package sqlancer.gaussdbm.oracle;
 
+import sqlancer.common.oracle.NondeterminismGuard;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -100,12 +101,21 @@ public class GaussDBMTLPAggregateOracle extends GaussDBMTLPBase implements TestO
 
         select.setFetchColumns(Arrays.asList(aggregate));
         select.setOrderByClauses(List.of());
+        if (NondeterminismGuard.containsNondeterministicCall(GaussDBToStringVisitor.asString(select))) {
+            // The aggregate projection is swapped in after the base guard: re-check here.
+            throw new IgnoreMeException();
+        }
 
         String originalQuery = GaussDBToStringVisitor.asString(select);
         generatedQueryString = originalQuery;
         String firstResult = getAggregateResult(originalQuery);
 
         GaussDBExpression whereClause = gen.generateExpression();
+        if (NondeterminismGuard.containsNondeterministicCall(GaussDBToStringVisitor.asString(whereClause))) {
+            // Nondeterministic partition predicates (e.g. CURTIME() in a CASE branch) differ
+            // between the three TLP branches; the comparison is meaningless for such rounds.
+            throw new IgnoreMeException();
+        }
         GaussDBExpression negatedClause = new GaussDBUnaryPrefixOperation(whereClause, UnaryPrefixOperator.NOT);
         GaussDBExpression isNullClause = new GaussDBUnaryPostfixOperation(whereClause, UnaryPostfixOperator.IS_NULL);
 

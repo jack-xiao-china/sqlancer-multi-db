@@ -10,6 +10,7 @@ import java.util.List;
 import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.common.oracle.CODDTestBase;
+import sqlancer.common.oracle.NondeterminismGuard;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.mysql.MySQLErrors;
 import sqlancer.mysql.MySQLGlobalState;
@@ -91,7 +92,7 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
             injectFoldCondition(originalQuery, foldBag);
         }
         String originalSql = originalQuery.asString();
-        if (containsNondeterministicCall(originalSql)) {
+        if (NondeterminismGuard.containsNondeterministicCall(originalSql)) {
             // Non-deterministic projections (CURTIME()/NOW()/RAND()/...) legitimately differ
             // between the two executions; the folding comparison is meaningless for such rounds.
             throw new IgnoreMeException();
@@ -419,17 +420,6 @@ public class MySQLCODDTestOracle extends CODDTestBase<MySQLGlobalState> implemen
         }
     }
 
-    private static boolean containsNondeterministicCall(String sql) {
-        // The visitor renders function names canonically (upper case), so a plain contains() is
-        // sufficient; SLEEP also perturbs run-to-run timing semantics.
-        for (String fn : new String[] { "CURTIME(", "CURDATE(", "NOW(", "SYSDATE(", "RAND(", "UUID(",
-                "UUID_SHORT(", "UNIX_TIMESTAMP(", "CURRENT_TIMESTAMP", "SLEEP(" }) {
-            if (sql.contains(fn)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     /**
      * Known-benign execution errors, skipped by retrying the round (the folded query fails

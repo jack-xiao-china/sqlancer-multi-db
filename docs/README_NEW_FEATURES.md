@@ -305,10 +305,11 @@ Contributions welcome! Please ensure:
 
 ---
 
-## Recent Feature Highlights (v2.7.3–v2.7.12)
+## Recent Feature Highlights (v2.7.3–v2.7.13)
 
 | Version | Feature | Description |
 |---------|---------|-------------|
+| **v2.7.13** | NondeterminismGuard | Common guard against nondeterministic calls in metamorphic comparisons; TLP/CODDTEST rounds with NOW()/CURTIME() projections or predicates are skipped |
 | **v2.7.12** | MySQLVisitor dispatch chain completed | ManuelPredicate/WindowFunction/AggregateFunction/PostfixText branches + rendering; expected-value decline defaults; terminal unhandled kinds decline instead of crashing |
 | **v2.7.11** | MySQL CODDTEST real-folding revival | Scalar-subquery constant folding via a mutable bag (ported from the GaussDB-M design); ROW multiset comparison; benign-error tolerance (JSON/value-domain/bit-width/charset families) |
 | **v2.7.10** | PR #15 oracle correctness fixes (merged + verified) | GaussDB-A NOREC/AGGREGATE projection aliases + `COALESCE(SUM(agg0),0)`; PQS exact BigDecimal arithmetic; CODDTEST real scalar-subquery constant folding + ROW multiset comparison; EET `MINUS→NOT EXISTS` wiring; GaussDB-M CERT `explain_perf_mode=normal` + `enable_pbe_optimization=off`; MySQL JIR Rule 2/5/6; PG EET length-prefixed row encoding |
