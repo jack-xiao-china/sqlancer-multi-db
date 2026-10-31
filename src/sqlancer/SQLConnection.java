@@ -19,6 +19,11 @@ public class SQLConnection implements SQLancerDBConnection {
         return meta.getDatabaseProductVersion();
     }
 
+    /** The JDBC URL of the underlying connection (used to open dedicated FUCCI connections). */
+    public String getURL() throws SQLException {
+        return connection.getMetaData().getURL();
+    }
+
     @Override
     public void close() throws SQLException {
         connection.close();

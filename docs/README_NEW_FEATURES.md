@@ -305,10 +305,11 @@ Contributions welcome! Please ensure:
 
 ---
 
-## Recent Feature Highlights (v2.7.3–v2.7.13)
+## Recent Feature Highlights (v2.7.3–v2.7.14)
 
 | Version | Feature | Description |
 |---------|---------|-------------|
+| **v2.7.14** | FUCCI per-transaction connections | DBMSFucciAdapter.createTransactionConnection() default factory + SQLConnection.getURL(); verified clean on MySQL/GaussDB-M/GaussDB-A/PG |
 | **v2.7.13** | NondeterminismGuard | Common guard against nondeterministic calls in metamorphic comparisons; TLP/CODDTEST rounds with NOW()/CURTIME() projections or predicates are skipped |
 | **v2.7.12** | MySQLVisitor dispatch chain completed | ManuelPredicate/WindowFunction/AggregateFunction/PostfixText branches + rendering; expected-value decline defaults; terminal unhandled kinds decline instead of crashing |
 | **v2.7.11** | MySQL CODDTEST real-folding revival | Scalar-subquery constant folding via a mutable bag (ported from the GaussDB-M design); ROW multiset comparison; benign-error tolerance (JSON/value-domain/bit-width/charset families) |

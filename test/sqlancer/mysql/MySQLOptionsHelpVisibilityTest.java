@@ -23,7 +23,10 @@ class MySQLOptionsHelpVisibilityTest {
             }
             visibleParameterNames.addAll(Arrays.asList(p.names()));
         }
-        assertEquals(Set.of("--engines", "--oracle"), visibleParameterNames);
+        // Kept in sync with MySQLOptions: the FUCCI parameters are exposed since the TX oracle
+        // integration.
+        assertEquals(Set.of("--engines", "--fucci-isolation-level", "--fucci-oracle-type",
+                "--fucci-schedule-count", "--oracle"), visibleParameterNames);
     }
 }
 

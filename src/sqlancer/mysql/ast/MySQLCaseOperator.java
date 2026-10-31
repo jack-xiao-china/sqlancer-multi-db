@@ -22,7 +22,10 @@ public class MySQLCaseOperator extends NewCaseOperatorNode<MySQLExpression> impl
 
         if (switchCondition != null) {
             MySQLConstant switchValue = switchCondition.getExpectedValue();
-            if (switchValue == null || switchValue.isNull()) {
+            // A NULL switch value does not short-circuit to NULL: NULL = WHEN-value is never
+            // TRUE, so no WHEN matches and the ELSE branch applies (SQL simple-CASE semantics,
+            // verified on MySQL: CASE NULL WHEN 1 THEN 11 ELSE 0 END -> 0).
+            if (switchValue == null) {
                 return MySQLConstant.createNullConstant();
             }
 

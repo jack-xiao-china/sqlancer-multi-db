@@ -95,9 +95,8 @@ class MySQLEDCRadarOracleTest {
         // Verify total oracle count including EDC_RADAR
         MySQLOracleFactory[] factories = MySQLOracleFactory.values();
 
-        // Should have: AGGREGATE, HAVING, GROUP_BY, DISTINCT, NOREC, TLP_WHERE, PQS,
-        // CERT, FUZZER, DQP, DQE, EET, CODDTEST, EDC_RADAR, QUERY_PARTITIONING = 15
-        assertEquals(15, factories.length, "Total oracle count should be 15 including EDC_RADAR");
+        // 25 oracles since the EET DML variants, TX family, EDC_DATA, SONAR and JIR were added.
+        assertEquals(25, factories.length, "Total oracle count should be 25 including EDC_RADAR");
     }
 
     // ==================== Error Handling Tests ====================

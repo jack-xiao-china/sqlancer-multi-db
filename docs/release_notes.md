@@ -1,5 +1,12 @@
 # SQLancer Release Notes
 
+## v2.7.14 | 2026-10-31
+- **修复 [FUCCI 连接生命周期]（评估报告专项 A1，四库验证）**：四个 Fucci 适配器（MySQL/GaussDB-M/GaussDB-A/PG）的 `generateTransaction` 均把**主连接**传给每个事务——所有"并发"事务共享单一会话（隔离性测试在语义上不成立），且 `tx.closeConnection()` 关闭主连接导致下一轮 `TxBase.reproduceDatabase` 抛 `ConnectionIsClosedException`（MySQL 11 秒即崩，M/A 同款）。现在每事务经 `DBMSFucciAdapter.createTransactionConnection()`（基于当前连接 JDBC URL + 选项凭证）开**独立连接**；`SQLConnection` 新增 `getURL()` 访问器。验证：MySQL/GaussDB-M/GaussDB-A/PG 四库 FUCCI 冒烟全部 0 报告（修复前 MySQL 11s 崩、M/A connection closed、PG 10 报告）
+- **修复 [MySQL CASE 空值语义]（单测债清理中发现的真实缺陷）**：`MySQLCaseOperator.getExpectedValue` 对空 switch 值短路返回 NULL——但 SQL 简单 CASE 语义是 `CASE NULL WHEN ... ELSE` 走 ELSE 分支（MySQL 实测 `CASE NULL WHEN 1 THEN 11 ELSE 0` → 0）。移除短路；PQS 对空 switch 的 CASE 预测此前系统性错误
+- **单测债清零（in-scope 12 失败 → 0）**：`GaussDBExistsTest`（构造器已宽容 null，断言同步）、`MySQLOptionsHelpVisibilityTest`（fucci 参数）、`EETMultisetComparatorTest`（PR#15 rowKey 编码同步）、`MySQLEDCRadarOracleTest`/`PostgresEDCRadarOracleTest`（oracle 计数 25）、`MySQLExpressionGeneratorSonarTest`（生成器演进后的类型集/IgnoreMe 容忍/partitionBy 可空/ManuelPredicate contains）
+- **新增 [MySQL bug 上报材料]**：`docs/mysql-bug-report-json-zero-timestamp-is-null.md`（MYSQL-BUG-1 正式草稿：JSON×LEAST 零 TIMESTAMP 的三值逻辑矛盾，含最小复现与边界矩阵，触发面经实测锁定为函数包装类型化值）
+- 验证结果：in-scope 单测 14 类全绿；FUCCI 四库冒烟 0 报告；`target/sqlancer-2.7.14.jar` 构建
+
 ## v2.7.13 | 2026-10-29
 - 新增 [TLP/CODDTEST 非确定性投影守卫]（发现类研判结论落地，见 docs/oracle-findings-triage-2026-10-29.md：GaussDB-M AGGREGATE 12 个失配中 10 个为 NOW()/CURTIME() 两次执行时点不同的假阳性）：
   - 新增公共 `NondeterminismGuard.containsNondeterministicCall(sql)`（CURTIME/CURDATE/NOW/SYSDATE/RAND/UUID/UUID_SHORT/UNIX_TIMESTAMP/CURRENT_TIMESTAMP/SLEEP）

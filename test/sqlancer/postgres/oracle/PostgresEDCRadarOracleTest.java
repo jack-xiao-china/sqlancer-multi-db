@@ -41,9 +41,8 @@ public class PostgresEDCRadarOracleTest {
     @Test
     public void testOracleCount() {
         int count = PostgresOracleFactory.values().length;
-        // Expected: NOREC, PQS, TLP_WHERE, HAVING, AGGREGATE, DISTINCT, GROUP_BY,
-        // QUERY_PARTITIONING, CERT, FUZZER, DQP, DQE, EET, CODDTEST, SONAR, EDC_RADAR
-        assertEquals(16, count, "PostgreSQL should have 16 oracles registered (including EDC_RADAR)");
+        // 25 oracles since the EET DML variants, TX family, EDC_DATA and JIR were added.
+        assertEquals(25, count, "PostgreSQL should have 25 oracles registered (including EDC_RADAR)");
     }
 
     /**
