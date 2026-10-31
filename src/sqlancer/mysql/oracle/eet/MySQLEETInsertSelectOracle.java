@@ -192,10 +192,14 @@ public class MySQLEETInsertSelectOracle
                     insertSb.append(", ");
                 }
                 String val = row.get(i);
-                if (val == null || val.equals("null")) {
+                // Java null is the SQL NULL marker (JDBC getString); the literal string "null"
+                // is a regular value and must be restored as such. Backslashes are escape
+                // characters in MySQL string literals and must be doubled.
+                if (val == null) {
                     insertSb.append("NULL");
                 } else {
-                    insertSb.append("'").append(val.replace("'", "''")).append("'");
+                    String escaped = val.replace("\\", "\\\\").replace("'", "''");
+                    insertSb.append("'").append(escaped).append("'");
                 }
             }
             insertSb.append(")");

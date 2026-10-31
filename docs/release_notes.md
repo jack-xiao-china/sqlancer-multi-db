@@ -5,7 +5,9 @@
 - **修复 [MySQL CASE 空值语义]（单测债清理中发现的真实缺陷）**：`MySQLCaseOperator.getExpectedValue` 对空 switch 值短路返回 NULL——但 SQL 简单 CASE 语义是 `CASE NULL WHEN ... ELSE` 走 ELSE 分支（MySQL 实测 `CASE NULL WHEN 1 THEN 11 ELSE 0` → 0）。移除短路；PQS 对空 switch 的 CASE 预测此前系统性错误
 - **单测债清零（in-scope 12 失败 → 0）**：`GaussDBExistsTest`（构造器已宽容 null，断言同步）、`MySQLOptionsHelpVisibilityTest`（fucci 参数）、`EETMultisetComparatorTest`（PR#15 rowKey 编码同步）、`MySQLEDCRadarOracleTest`/`PostgresEDCRadarOracleTest`（oracle 计数 25）、`MySQLExpressionGeneratorSonarTest`（生成器演进后的类型集/IgnoreMe 容忍/partitionBy 可空/ManuelPredicate contains）
 - **新增 [MySQL bug 上报材料]**：`docs/mysql-bug-report-json-zero-timestamp-is-null.md`（MYSQL-BUG-1 正式草稿：JSON×LEAST 零 TIMESTAMP 的三值逻辑矛盾，含最小复现与边界矩阵，触发面经实测锁定为函数包装类型化值）
-- 验证结果：in-scope 单测 14 类全绿；FUCCI 四库冒烟 0 报告；`target/sqlancer-2.7.14.jar` 构建
+- **EET DML 还原保真修复（A2 专项第一轮，12 文件 × 4 库）**：`restoreTable` 的 `val.equals("null")` 把真实字符串 'null' 还原成 SQL NULL（Java null 才是 JDBC getString 的 NULL 标记）——修复 12 个 EET DML oracle；MySQL 侧补反斜杠转义（`\` → `\\`，PG/GaussDB 在 `standard_conforming_strings` 下反斜杠是字面量不需转义）
+- **A2/A3 专项定界结论**：EET DML 变换语义**健全性活体验证通过**（矛盾守卫 CASE ≡ 原谓词，MySQL 8.4.8 实测双 DELETE 各删 8 行等价）——剩余 row-state 失配的根因不在变换而在逐例归因项（大表达式超时/单侧错误/二进制列往返有损）; TX_INFER 失败定界：MySQL = 死锁重试后 warning 集不一致（重试语义未建模），GaussDB/PG = 版本表模拟的行可见性 vs 真实执行不一致（MVCC 模拟设计级）
+- 验证结果：in-scope 单测 14 类全绿；FUCCI 四库冒烟 0 报告；MySQL EET_DELETE 修复后 9 报告（还原保真修复贡献有限，与变换无关的逐例项为主）
 
 ## v2.7.13 | 2026-10-29
 - 新增 [TLP/CODDTEST 非确定性投影守卫]（发现类研判结论落地，见 docs/oracle-findings-triage-2026-10-29.md：GaussDB-M AGGREGATE 12 个失配中 10 个为 NOW()/CURTIME() 两次执行时点不同的假阳性）：

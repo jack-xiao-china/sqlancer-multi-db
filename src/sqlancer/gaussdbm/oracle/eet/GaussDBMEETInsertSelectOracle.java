@@ -170,7 +170,9 @@ public class GaussDBMEETInsertSelectOracle
                     insertSb.append(", ");
                 }
                 String val = row.get(i);
-                if (val == null || val.equals("null")) {
+                // Java null is the SQL NULL marker (JDBC getString); the literal string "null"
+                // is a regular value and must be restored as such.
+                if (val == null) {
                     insertSb.append("NULL");
                 } else {
                     insertSb.append("'").append(val.replace("'", "''")).append("'");
