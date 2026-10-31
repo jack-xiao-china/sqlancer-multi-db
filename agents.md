@@ -12,7 +12,7 @@
 - **测试 Oracle（Oracles）**：25 种 Oracle 检测不同类别的逻辑 Bug
 - **实验日志与调试**：主要日志默认在 `target/logs/`
 
-### 当前版本：v2.7.13
+### 当前版本：v2.7.14
 
 ### 25 种 Oracle 完整列表
 
@@ -67,10 +67,11 @@ java -jar sqlancer-2.7.10.jar --host localhost --port 3306 --username root --pas
 
 > ⚠️ GaussDB-A 和 GaussDB-M 需要使用 `java -cp` 方式运行（system scope 依赖），详见 `lib/README.md`
 
-## 近期重要变更 (v2.7.3–v2.7.13)
+## 近期重要变更 (v2.7.3–v2.7.14)
 
 | 版本 | 变更 |
 |------|------|
+| v2.7.14 | FUCCI 连接专项修复: 四适配器事务独立连接(原共享主连接, 语义+生命周期双缺陷), 四库 FUCCI 冒烟 0 报告; MySQL CASE 空 switch ELSE 语义修复(PQS 预测纠错); 单测债清零(12→0); MYSQL-BUG-1 上报材料入库 |
 | v2.7.13 | TLP/CODDTEST 非确定性守卫: 公共 NondeterminismGuard + 三层挂载(基类投影/聚合投影替换后/聚合 WHERE) + TLPWhereOracle + M CODDTEST; M AGGREGATE 12→2(假阳性精确消除); 剩余为真发现候选(JSON/MIN 语义 + MYSQL-BUG-1 类) |
 | v2.7.12 | 全量矩阵评估修复：TLP 族 FROM 构造顺序（M+MySQL）、M 期望值空传播×7+拒预测终态（PQS 清零）、MySQLVisitor 链补全（Sonar 测试 12 项复活）、FROM-less SELECT ISE 守卫、MySQL PQS 行值兜底/BIT 溢出/sort-memory、EDC_RADAR 跳过+money 字面量、EET 视图过滤、DQE 3156/3170、PG ALTER identity、测试债清理（41 用例绿）。遗留：FUCCI 连接/EET row-state/TX_INFER 专项 + 发现类研判 |
 | v2.7.11 | MySQL oracle 复活与生成器修复：CODDTEST 空转 oracle 移植 GaussDB-M 真折叠设计（旧版重跑同一查询，mismatch 全为非确定性误报）；期望值机器 AssertionError→拒预测；LPAD/RPAD OOM 守卫；visitor bag/子查询括号/TIMESTAMPADD 签名修复；有界原生函数参数数修正；BIT 宽度溢出修复；NATURAL JOIN 置空 ON；ALTER/INSERT/INDEX 预期错误覆盖。MySQL JIR/CODDTEST/EET 冒烟 0 bug（8 轮收敛 20→0） |

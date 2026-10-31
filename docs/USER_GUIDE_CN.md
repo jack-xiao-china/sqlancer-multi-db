@@ -1,6 +1,6 @@
 # SQLancer 中文用户指南
 
-**版本**: v2.7.13 (2026-10-29)  
+**版本**: v2.7.14 (2026-10-31)  
 **支持的数据库**: MySQL, PostgreSQL, GaussDB-A, GaussDB-M
 
 ## 简介
@@ -17,10 +17,11 @@ SQLancer 是一款通过生成随机 SQL 查询来测试数据库管理系统并
 
 ---
 
-## 版本亮点 (v2.7.3–v2.7.13)
+## 版本亮点 (v2.7.3–v2.7.14)
 
 | 版本 | 关键变更 |
 |------|----------|
+| **v2.7.14** | FUCCI 独立事务连接（四适配器原共享主连接——事务间无隔离且 closeConnection 杀死主连接；现每事务经适配器默认工厂开独立连接）+ MySQL CASE 空 switch ELSE 语义修复 + in-scope 单测债清零（12 失败→0）+ 已验证的 JSON×零 TIMESTAMP 三值逻辑 bug 上报材料 |
 | **v2.7.13** | TLP/CODDTEST 非确定性守卫 — 新增公共 NondeterminismGuard（CURTIME/CURDATE/NOW/SYSDATE/RAND/UUID/UNIX_TIMESTAMP/CURRENT_TIMESTAMP/SLEEP）；三层挂载（TLP 基类投影、聚合投影替换后、聚合 WHERE 谓词）+ 公共 TLPWhereOracle + GaussDB-M CODDTEST；GaussDB-M AGGREGATE 失配 12→2（研判预测的 10 个非确定性假阳性精确消除） |
 | **v2.7.12** | 全量矩阵评估修复 — GaussDB-M/MySQL TLP 族 FROM 构造顺序（join 表重复列出，污染变形发现）；GaussDB-M 期望值机器 7 处空传播 + 终态拒预测（PQS 崩溃清零）；MySQLVisitor 分发链补全（ManuelPredicate/WindowFunction/AggregateFunction/PostfixText 渲染——Sonar 测试复活）；FROM-less SELECT 渲染 ISE 守卫；MySQL PQS 行值兜底 + BIT 默认值溢出 + sort-memory；EDC_RADAR 构造失败跳过 + PG money 字面量校验；EET DML 视图目标过滤；DQE update-specific 3156/3170；PG ALTER identity 错误；单测 41 用例绿 |
 | **v2.7.11** | MySQL oracle 复活与生成器修复 — CODDTEST 移植 GaussDB-M 真折叠设计（旧 oracle 重跑同一查询，全部 mismatch 均为非确定性误报）；期望值机器对 binary/double/时间戳常量的 AssertionError 改为拒预测（IgnoreMeException）；LPAD/RPAD 巨长 OOM 守卫；visitor 修复（bag 伪函数渲染、select 列表子查询括号、TIMESTAMPADD 签名）；有界原生函数参数数修正（SUBSTRING/LOCATE/JSON_CONTAINS/JSON_KEYS/WEEK）；BIT(≥63) 宽度整数溢出修复；NATURAL JOIN 不再渲染 ON；ALTER/INSERT/INDEX 预期错误覆盖 |
@@ -49,7 +50,7 @@ cd sqlancer-multi-db
 mvn clean package -DskipTests
 
 # 输出：约 4MB 的轻量 Jar + target/lib/ 依赖目录
-ls -lh target/sqlancer-2.7.13.jar
+ls -lh target/sqlancer-2.7.14.jar
 ```
 
 ### 运行测试
@@ -59,22 +60,22 @@ CLI 格式：**全局选项在 DBMS 命令之前，DBMS 选项在命令之后**�
 **推荐方式**（所有依赖通过 manifest Class-Path 加载）：
 ```bash
 # MySQL
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost --port 3306 --username root --password your_password \
     mysql --oracle QUERY_PARTITIONING
 
 # PostgreSQL
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost --port 5432 --username postgres --password your_password \
     postgres --oracle TLP_WHERE
 
 # GaussDB-M（必须指定 --target-database）
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host your_host --port 19995 --username your_user --password your_password \
     gaussdb-m --target-database testm --oracle QUERY_PARTITIONING
 
 # GaussDB-A（必须指定 --target-database）
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host your_host --port 8000 --username your_user --password your_password \
     gaussdb-a --target-database testa --oracle QUERY_PARTITIONING
 ```
@@ -82,10 +83,10 @@ java -jar target/sqlancer-2.7.13.jar \
 **备选方式**（使用外部 classpath）：
 ```bash
 # Linux/macOS
-java -cp "target/sqlancer-2.7.13.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.7.14.jar:target/lib/*" sqlancer.Main mysql --oracle NOREC
 
 # Windows
-java -cp "target/sqlancer-2.7.13.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
+java -cp "target/sqlancer-2.7.14.jar;target/lib/*" sqlancer.Main mysql --oracle NOREC
 ```
 
 ---
@@ -128,7 +129,7 @@ java -cp "target/sqlancer-2.7.13.jar;target/lib/*" sqlancer.Main mysql --oracle 
 ## 基本用法
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost \
     --port 3306 \
     --username root \
@@ -211,7 +212,7 @@ mysql --engines InnoDB,MyISAM,MEMORY
 ## 基本用法
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost \
     --port 5432 \
     --username postgres \
@@ -254,7 +255,7 @@ java -jar target/sqlancer-2.7.13.jar \
 PQS 和 CERT Oracle 需要表中包含数据才能正确测试。推荐使用以下参数：
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --username postgres \
     --password your_password \
     --num-threads 20 \
@@ -345,7 +346,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_a_test TO your_user;
 ## 基本用法
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -452,7 +453,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_pg_test TO your_user;
 ## 基本用法
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost \
     --port 8000 \
     --username root --password your_password \
@@ -526,7 +527,7 @@ GRANT ALL PRIVILEGES ON DATABASE gaussdb_m_test TO your_user;
 ## 基本用法
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --host localhost \
     --port 19995 \
     --username root --password your_password \
@@ -591,7 +592,7 @@ GaussDB-M 使用 **模式隔离**（与 GaussDB-A 一致）：
 ## GaussDB-M 完整示例
 
 ```bash
-java -jar target/sqlancer-2.7.13.jar \
+java -jar target/sqlancer-2.7.14.jar \
     --username your_user \
     --password your_password \
     --connection-url "jdbc:opengauss://your_host:19995/testm" \

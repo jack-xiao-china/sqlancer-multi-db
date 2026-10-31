@@ -2,7 +2,7 @@ package sqlancer.gaussdbm.ast;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -47,19 +47,18 @@ class GaussDBExistsTest {
     }
 
     @Test
-    void testConstructorWithNullExpectedValueThrowsAssertionError() {
-        // Test that constructor throws AssertionError when expression's expectedValue is null
-        // This is the expected behavior since GaussDBSelect.getExpectedValue() returns null
+    void testConstructorWithNullExpectedValueIsTolerated() {
+        // The constructor tolerates expressions whose expected value cannot be predicted
+        // (GaussDBSelect.getExpectedValue() returns null): no exception is thrown.
         GaussDBSelect select = createSelectWithConstant(1);
 
-        assertThrows(AssertionError.class, () -> {
-            new GaussDBExists(select);
-        });
+        GaussDBExists exists = new GaussDBExists(select);
+        assertNull(exists.getExpectedValue());
     }
 
     @Test
-    void testConstructorWithNullExprExpectedValueThrowsAssertionError() {
-        // Test that constructor throws AssertionError when a custom expression returns null
+    void testConstructorWithNullExprExpectedValueIsTolerated() {
+        // The constructor tolerates custom expressions returning a null expected value.
         GaussDBExpression nullExpr = new GaussDBExpression() {
             @Override
             public GaussDBConstant getExpectedValue() {
@@ -67,9 +66,8 @@ class GaussDBExistsTest {
             }
         };
 
-        assertThrows(AssertionError.class, () -> {
-            new GaussDBExists(nullExpr);
-        });
+        GaussDBExists exists = new GaussDBExists(nullExpr);
+        assertNull(exists.getExpectedValue());
     }
 
     @Test

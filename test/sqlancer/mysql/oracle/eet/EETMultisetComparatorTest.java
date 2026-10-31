@@ -36,7 +36,10 @@ class EETMultisetComparatorTest {
 
     @Test
     void rowKey_nullCell() {
-        assertEquals("null\tb", EETMultisetComparator.rowKey(Arrays.asList(null, "b")));
+        // Length-prefixed, type-tagged encoding since PR #15: NULL (tag N) never collides with
+        // the string "null", and cell values are self-delimiting.
+        List<String> row = Arrays.asList(null, "b");
+        assertEquals("N;S1;b", EETMultisetComparator.rowKey(row));
     }
 
     @Test

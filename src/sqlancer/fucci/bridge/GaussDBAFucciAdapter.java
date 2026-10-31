@@ -24,7 +24,8 @@ public class GaussDBAFucciAdapter implements DBMSFucciAdapter {
 
     @Override
     public FucciTransaction generateTransaction(FucciGlobalState globalState, FucciIsolationLevel isolationLevel) throws SQLException {
-        FucciTransaction tx = new FucciTransaction(globalState.getConnection(), isolationLevel);
+        FucciTransaction tx = new FucciTransaction(createTransactionConnection(globalState),
+                isolationLevel);
         tx.addStatement(new FucciTxStatement(tx, new SQLQueryAdapter("BEGIN")));
         return tx;
     }
