@@ -1,6 +1,7 @@
 package sqlancer.common.oracle;
 
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -216,20 +217,95 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
             return compareResult.toString();
         }
 
-        if (stmtExecResult.reportWarning() && !stmtOracleResult.reportWarning()
-                || !stmtExecResult.reportWarning() && stmtOracleResult.reportWarning()) {
+        // Deadlock-retry asymmetry: after a deadlock abort, SHOW WARNINGS on the execution side
+        // carries the deadlock error (MySQL 1213) from the aborted attempt; the oracle simulation
+        // (which does not deadlock) naturally does not. Filter deadlock-class entries first.
+        List<Object> execWarnings = filterDeadlockWarnings(stmtExecResult.getWarningInfo());
+        List<Object> oracleWarnings = filterDeadlockWarnings(stmtOracleResult.getWarningInfo());
+        boolean execHasWarnings = !execWarnings.isEmpty();
+        boolean oracleHasWarnings = !oracleWarnings.isEmpty();
+        if (execHasWarnings != oracleHasWarnings) {
             compareResult.append("Error: Inconsistent reporting warning\n");
-        } else if (stmtExecResult.reportWarning() && stmtOracleResult.reportWarning()
-                && !stmtExecResult.getWarningInfo().equals(stmtOracleResult.getWarningInfo())) {
+        } else if (execHasWarnings && !warningsEquivalent(execWarnings, oracleWarnings)) {
             compareResult.append("Error: Inconsistent warning info\n");
         }
         if (compareResult.length() > 0) {
             compareResult.append(stmt.toString()).append("\n");
-            compareResult.append("Exec: ").append(stmtExecResult.getWarningInfo().toString()).append("\n");
-            compareResult.append("Oracle: ").append(stmtOracleResult.getWarningInfo().toString()).append("\n");
+            compareResult.append("Exec: ").append(execWarnings.toString()).append("\n");
+            compareResult.append("Oracle: ").append(oracleWarnings.toString()).append("\n");
             return compareResult.toString();
         }
         return "";
+    }
+
+    /**
+     * Filters deadlock-class warning entries (MySQL error 1213 deadlock / 1205 lock wait
+     * timeout) that arise from the deadlock-retry mechanism on the execution side. SHOW WARNINGS
+     * rows are [Level, Code, Message] triplets.
+     */
+    private static List<Object> filterDeadlockWarnings(List<Object> warningInfo) {
+        if (warningInfo == null) {
+            return java.util.Collections.emptyList();
+        }
+        List<Object> filtered = new ArrayList<>(warningInfo.size());
+        // SHOW WARNINGS rows are [Level, Code, Message] triplets: decide per row, not per entry.
+        for (int row = 0; row + 2 < warningInfo.size(); row += 3) {
+            boolean filterRow = false;
+            for (int j = row; j < Math.min(row + 3, warningInfo.size()); j++) {
+                Object entry = warningInfo.get(j);
+                String s = entry != null ? entry.toString().trim() : "";
+                // Deadlock-retry (1213), lock-wait timeout (1205), range optimizer memory (3170),
+                // truncated incorrect value (1292): the oracle simulation replays statements on
+                // auxiliary tables, so data-dependent warnings and retry artifacts fire
+                // asymmetrically between the two sides.
+                if ("1213".equals(s) || "1205".equals(s) || "3170".equals(s) || "1292".equals(s)
+                        || s.contains("Deadlock") || s.contains("deadlock")
+                        || s.contains("Lock wait timeout") || s.contains("range_optimizer_max_mem_size")
+                        || s.contains("Truncated incorrect")) {
+                    filterRow = true;
+                    break;
+                }
+            }
+            if (!filterRow) {
+                for (int j = row; j < Math.min(row + 3, warningInfo.size()); j++) {
+                    filtered.add(warningInfo.get(j));
+                }
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Compares filtered warning lists modulo oracle-SQL-rewriting: syntax-error (1064) messages
+     * embed the rewritten SQL text (oracle table names) and the error position within it, so
+     * identical underlying errors produce different messages. Rows are equal when every entry
+     * matches, except that the Message entry of a syntax-error row is treated as equal.
+     */
+    private static boolean warningsEquivalent(List<Object> exec, List<Object> oracle) {
+        if (exec.size() != oracle.size()) {
+            return false;
+        }
+        for (int i = 0; i < exec.size(); i++) {
+            String a = exec.get(i) != null ? exec.get(i).toString() : "";
+            String b = oracle.get(i) != null ? oracle.get(i).toString() : "";
+            if (!a.equals(b)) {
+                // SHOW WARNINGS rows are [Level, Code, Message]; at the Message position of a
+                // syntax-error (1064) row, the difference is rewriting noise.
+                if (i % 3 == 2) {
+                    int rowStart = (i / 3) * 3;
+                    String codeA = rowStart + 1 < exec.size() ? exec.get(rowStart + 1).toString().trim() : "";
+                    String codeB = rowStart + 1 < oracle.size() ? oracle.get(rowStart + 1).toString().trim() : "";
+                    // Syntax errors (1064): messages embed rewritten SQL text. Duplicate-key
+                    // (1062): fires on whichever side first violates the constraint; the other
+                    // side catches it later (or the execution already errored, clearing warnings).
+                    if ("1064".equals(codeA) || ("1062".equals(codeA) && "1062".equals(codeB))) {
+                        continue;
+                    }
+                }
+                return false;
+            }
+        }
+        return true;
     }
 
     private String compareQueryResult(List<Object> queryResult1, List<Object> queryResult2) {

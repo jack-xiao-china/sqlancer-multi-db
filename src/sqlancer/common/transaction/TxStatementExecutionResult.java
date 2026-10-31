@@ -7,6 +7,9 @@ public class TxStatementExecutionResult {
 
     private final TxStatement statement;
     private boolean blocked;
+    /** Set when the oracle's block prediction comes from a conservative heuristic (e.g. InnoDB
+     * range conflict) rather than a definite lock-wait: such predictions admit false positives. */
+    private boolean heuristicBlocked;
     private String errorInfo;
     private List<Object> warningInfo;
     private List<Object> result;
@@ -59,6 +62,14 @@ public class TxStatementExecutionResult {
 
     public void setBlocked(boolean blocked) {
         this.blocked = blocked;
+    }
+
+    public boolean isHeuristicBlocked() {
+        return heuristicBlocked;
+    }
+
+    public void setHeuristicBlocked(boolean heuristicBlocked) {
+        this.heuristicBlocked = heuristicBlocked;
     }
 
     public boolean reportError() {

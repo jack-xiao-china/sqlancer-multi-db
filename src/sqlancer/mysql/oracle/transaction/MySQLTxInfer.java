@@ -243,7 +243,12 @@ public class MySQLTxInfer {
                     if (InnoDBRangeConflictDetector.hasRangeConflict(
                             (sqlancer.common.transaction.TxStatementType) stmtType,
                             targetTable.getName(), lockedTable, lockType)) {
+                        // The range conflict detector is a conservative heuristic: it flags any
+                        // write to a table with an active range lock, but InnoDB gap locks only
+                        // block writes overlapping the locked range. Mark as heuristic so the
+                        // discrepancy classifier treats a non-blocking execution as UNDECIDED.
                         stmtResult.setBlocked(true);
+                        stmtResult.setHeuristicBlocked(true);
                         return;
                     }
                 }

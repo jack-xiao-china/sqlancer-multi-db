@@ -7,7 +7,8 @@
 - **新增 [MySQL bug 上报材料]**：`docs/mysql-bug-report-json-zero-timestamp-is-null.md`（MYSQL-BUG-1 正式草稿：JSON×LEAST 零 TIMESTAMP 的三值逻辑矛盾，含最小复现与边界矩阵，触发面经实测锁定为函数包装类型化值）
 - **EET DML 还原保真修复（A2 专项第一轮，12 文件 × 4 库）**：`restoreTable` 的 `val.equals("null")` 把真实字符串 'null' 还原成 SQL NULL（Java null 才是 JDBC getString 的 NULL 标记）——修复 12 个 EET DML oracle；MySQL 侧补反斜杠转义（`\` → `\\`，PG/GaussDB 在 `standard_conforming_strings` 下反斜杠是字面量不需转义）
 - **A2/A3 专项定界结论**：EET DML 变换语义**健全性活体验证通过**（矛盾守卫 CASE ≡ 原谓词，MySQL 8.4.8 实测双 DELETE 各删 8 行等价）——剩余 row-state 失配的根因不在变换而在逐例归因项（大表达式超时/单侧错误/二进制列往返有损）; TX_INFER 失败定界：MySQL = 死锁重试后 warning 集不一致（重试语义未建模），GaussDB/PG = 版本表模拟的行可见性 vs 真实执行不一致（MVCC 模拟设计级）
-- 验证结果：in-scope 单测 14 类全绿；FUCCI 四库冒烟 0 报告；MySQL EET_DELETE 修复后 9 报告（还原保真修复贡献有限，与变换无关的逐例项为主）
+- **TX_INFER MySQL 侧假阳性清零（A3 专项，9→3）**：`TxBase.compareErrors` 的 warning 比较按 SHOW WARNINGS 行（Level/Code/Message 三元组）过滤死锁重试（1213/1205）、范围优化内存（3170）、截断值（1292）类不对称警告；语法错误（1064）消息因 oracle 侧 SQL 重写表名而文本不同→等价处理；重复键（1062）因约束违反在模拟和真实两侧时序不同→同码等价；`InnoDBRangeConflictDetector` 的保守启发式（同表写 + 活动范围锁 = 潜在冲突）产生的"Missing lock"误报改为 UNDECIDED_BLOCK（新增 `heuristicBlocked` 标记）。剩余 3 报告为 oracle 辅助表操作自身失败（NOT NULL 约束 + 辅助表不存在），属 MVCC 版本表模拟设计级局限
+- 验证结果：in-scope 单测 14 类全绿；FUCCI 四库冒烟 0 报告；MySQL EET_DELETE 修复后 9 报告（还原保真修复贡献有限，与变换无关的逐例项为主）；MySQL TX_INFER 9→3（假阳性清零，剩余为设计级）
 
 ## v2.7.13 | 2026-10-29
 - 新增 [TLP/CODDTEST 非确定性投影守卫]（发现类研判结论落地，见 docs/oracle-findings-triage-2026-10-29.md：GaussDB-M AGGREGATE 12 个失配中 10 个为 NOW()/CURTIME() 两次执行时点不同的假阳性）：

@@ -78,6 +78,12 @@ public final class TxDiscrepancyClassifier {
             return null;
         }
         if (!execBlocked && oracleBlocked) {
+            if (oracleResult.isHeuristicBlocked()) {
+                // Conservative range-conflict heuristic: the oracle predicted a block that the
+                // InnoDB gap lock did not actually enforce (the write did not overlap the
+                // locked range). Not a definite bug.
+                return TxBugType.UNDECIDED_BLOCK;
+            }
             return TxBugType.MISSING_LOCK;
         }
         // execBlocked && !oracleBlocked
