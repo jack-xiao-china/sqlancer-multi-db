@@ -124,7 +124,15 @@ public class FucciMTOracle extends TxBase<FucciGlobalState> {
                     int columnCount = rs.getMetaData().getColumnCount();
                     Object[] rowData = new Object[columnCount];
                     for (int i = 0; i < columnCount; i++) {
-                        rowData[i] = rs.getObject(i + 1);
+                        Object val = rs.getObject(i + 1);
+                        // Normalize byte[] to hex string: the execution-side result uses
+                        // QueryResultUtil.byteArrToHexStr() for the same encoding; without this,
+                        // bytea/BLOB columns compare as raw byte[] references vs hex strings
+                        // and always mismatch (spurious "MVCC visibility violation").
+                        if (val instanceof byte[]) {
+                            val = sqlancer.common.transaction.QueryResultUtil.byteArrToHexStr((byte[]) val);
+                        }
+                        rowData[i] = val;
                     }
 
                     Version initVersion = new Version(rowData, "initial", false);

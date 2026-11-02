@@ -46,7 +46,7 @@ public class QueryResultUtil {
         return resList;
     }
 
-    private static String byteArrToHexStr(byte[] bytes) {
+    public static String byteArrToHexStr(byte[] bytes) {
         if (bytes.length == 0) {
             return "0";
         }
