@@ -259,9 +259,11 @@ public abstract class TxBase<S extends SQLGlobalState<?, ?>> implements TestOrac
                 // auxiliary tables, so data-dependent warnings and retry artifacts fire
                 // asymmetrically between the two sides.
                 if ("1213".equals(s) || "1205".equals(s) || "3170".equals(s) || "1292".equals(s)
+                        || "1196".equals(s)
                         || s.contains("Deadlock") || s.contains("deadlock")
                         || s.contains("Lock wait timeout") || s.contains("range_optimizer_max_mem_size")
-                        || s.contains("Truncated incorrect")) {
+                        || s.contains("Truncated incorrect")
+                        || s.contains("non-transactional changed tables")) {
                     filterRow = true;
                     break;
                 }

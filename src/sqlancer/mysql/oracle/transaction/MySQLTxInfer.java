@@ -63,7 +63,10 @@ public class MySQLTxInfer {
         for (Transaction tx : transactions) {
             snapshotTxs.put(tx, new ArrayList<>());
         }
-        this.tables = globalState.getSchema().getDatabaseTables();
+        // Filter views: the MVCC version-table simulation runs ALTER/CREATE on these tables,
+        // which fails on views ("is not BASE TABLE").
+        this.tables = globalState.getSchema().getDatabaseTables().stream()
+                .filter(t -> !t.isView()).collect(java.util.stream.Collectors.toList());
     }
 
     public TxTestExecutionResult inferOracle() throws SQLException {
@@ -162,12 +165,16 @@ public class MySQLTxInfer {
     /**
      * MySQL supports CREATE TABLE ... AS SELECT syntax (simpler than TiDB).
      */
-    private void createVersionTable(String tableName) throws SQLException {
+        private void createVersionTable(String tableName) throws SQLException {
         String auxiliaryVersionTable = TABLE_PREFIX + tableName + VERSION_TABLE;
-        // MySQL supports "CREATE TABLE ... AS SELECT"
-        SQLQueryAdapter createVTAdapter = new SQLQueryAdapter(
-                String.format("CREATE TABLE %s AS SELECT * FROM %s", auxiliaryVersionTable, tableName), true);
-        createVTAdapter.execute(globalState);
+        dropTable(auxiliaryVersionTable);
+        // CREATE TABLE LIKE copies NOT NULL constraints; existing NULL rows (produced by
+        // ALTER CHANGE COLUMN on populated tables) violate them on INSERT SELECT. Create
+        // without constraints: the auxiliary table is only a data mirror for version tracking.
+        SQLQueryAdapter createTable = new SQLQueryAdapter(
+                String.format("CREATE TABLE %s AS SELECT * FROM %s WHERE 1=0", auxiliaryVersionTable,
+                        tableName), true);
+        createTable.execute(globalState);
     }
 
     private void analyzeStmt(TxStatementExecutionResult stmtResult, Transaction curTx, int stmtId) throws SQLException {

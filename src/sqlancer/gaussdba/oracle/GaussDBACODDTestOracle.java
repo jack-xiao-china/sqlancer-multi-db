@@ -423,6 +423,9 @@ public class GaussDBACODDTestOracle extends CODDTestBase<GaussDBAGlobalState>
         int nrJoinClauses = (int) Randomly.getNotCachedInteger(0, tables.size());
         for (int i = 0; i < nrJoinClauses; i++) {
             GaussDBATable table = Randomly.fromList(tables);
+            // Remove the picked table so it is provided by the JOIN clause only (upstream SQLite3
+            // construction); leaving it in the FROM list as well duplicates the table name.
+            tables.remove(table);
             GaussDBAExpression randomOnCondition = gen.generateExpression(0);
             GaussDBAExpression onCondition = randomOnCondition;
             if (specificCondition != null) {

@@ -79,6 +79,7 @@ public class MySQLEETDeleteOracle
         ExpectedErrors errors = new ExpectedErrors();
         MySQLErrors.addExpressionErrors(errors);
         errors.add("doesn't have this option");
+        errors.add("Truncated incorrect");
         return new SQLQueryAdapter(sb.toString(), errors);
     }
 

@@ -8,6 +8,11 @@
 - **EET DML 还原保真修复（A2 专项第一轮，12 文件 × 4 库）**：`restoreTable` 的 `val.equals("null")` 把真实字符串 'null' 还原成 SQL NULL（Java null 才是 JDBC getString 的 NULL 标记）——修复 12 个 EET DML oracle；MySQL 侧补反斜杠转义（`\` → `\\`，PG/GaussDB 在 `standard_conforming_strings` 下反斜杠是字面量不需转义）
 - **A2/A3 专项定界结论**：EET DML 变换语义**健全性活体验证通过**（矛盾守卫 CASE ≡ 原谓词，MySQL 8.4.8 实测双 DELETE 各删 8 行等价）——剩余 row-state 失配的根因不在变换而在逐例归因项（大表达式超时/单侧错误/二进制列往返有损）; TX_INFER 失败定界：MySQL = 死锁重试后 warning 集不一致（重试语义未建模），GaussDB/PG = 版本表模拟的行可见性 vs 真实执行不一致（MVCC 模拟设计级）
 - **TX_INFER MySQL 侧假阳性清零（A3 专项，9→3）**：`TxBase.compareErrors` 的 warning 比较按 SHOW WARNINGS 行（Level/Code/Message 三元组）过滤死锁重试（1213/1205）、范围优化内存（3170）、截断值（1292）类不对称警告；语法错误（1064）消息因 oracle 侧 SQL 重写表名而文本不同→等价处理；重复键（1062）因约束违反在模拟和真实两侧时序不同→同码等价；`InnoDBRangeConflictDetector` 的保守启发式（同表写 + 活动范围锁 = 潜在冲突）产生的"Missing lock"误报改为 UNDECIDED_BLOCK（新增 `heuristicBlocked` 标记）。剩余 3 报告为 oracle 辅助表操作自身失败（NOT NULL 约束 + 辅助表不存在），属 MVCC 版本表模拟设计级局限
+- **v2.7.14 补丁集（同日追加，共 3 项）**：
+  - GaussDB-A `genJoinExpression` 补 `tables.remove(table)`（同 v2.7.10 GaussDB-M 修复的移植——消除潜伏的 JOIN 表重复列出）
+  - EET DELETE 补 `Truncated incorrect` 预期错误（变换后大表达式在更严格路径下触发 MySQL 1292 但未被容忍）
+  - MySQL `TxInfer.createVersionTable` 改 `CREATE AS SELECT WHERE 1=0`（不继承 NOT NULL 约束——ALTER CHANGE 产生的存量 NULL 行在 INSERT SELECT 时违反约束导致工具崩溃）+ `tables` 列表过滤视图（`is not BASE TABLE`） + `TxBase` 过滤 1196（非事务表回滚警告——oracle 不建模隐式提交）
+- **GaussDB-M 数值真值完备性定论（②专项）**：三分区真值完备（truthy+falsy+nullish=total），GROUP_BY 失配非谓词不完备性（需逐例归因）
 - 验证结果：in-scope 单测 14 类全绿；FUCCI 四库冒烟 0 报告；MySQL EET_DELETE 修复后 9 报告（还原保真修复贡献有限，与变换无关的逐例项为主）；MySQL TX_INFER 9→3（假阳性清零，剩余为设计级）
 
 ## v2.7.13 | 2026-10-29
