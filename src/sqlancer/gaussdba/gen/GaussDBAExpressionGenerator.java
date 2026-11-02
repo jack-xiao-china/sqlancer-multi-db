@@ -344,11 +344,11 @@ public class GaussDBAExpressionGenerator
         GaussDBAExpression whereClause = select.getWhereClause();
         if (whereClause == null) {
             select.setWhereClause(generateBooleanExpression());
-            return true;
+            return false; // Adding a WHERE clause restricts rows: the estimate should decrease.
         }
-        // 移除WHERE clause
+        // Removing the WHERE clause lifts the restriction: the estimate should increase.
         select.setWhereClause(null);
-        return false;
+        return true;
     }
 
     private boolean mutateGroupBy(GaussDBASelect select) {
@@ -366,12 +366,12 @@ public class GaussDBAExpressionGenerator
         if (havingClause == null) {
             if (!select.getGroupByClause().isEmpty()) {
                 select.setHavingClause(generateBooleanExpression());
-                return true;
+                return false; // Adding a HAVING filter restricts groups: the estimate should decrease.
             }
             return false;
         }
         select.clearHavingClause();
-        return false;
+        return true; // Removing the HAVING filter lifts the restriction: the estimate should increase.
     }
 
     private boolean mutateDistinct(GaussDBASelect select) {

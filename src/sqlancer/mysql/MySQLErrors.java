@@ -47,6 +47,8 @@ public final class MySQLErrors {
         errors.add("Deadlock found when trying to get lock");
         // Server-side sort buffer limit on generated ORDER BY queries.
         errors.add("Out of sort memory");
+        // SPACE() on large values can exceed max_allowed_packet.
+        errors.add("was larger than max_allowed_packet");
 
         if (MySQLBugs.bug111471) {
             errors.add("Memory capacity exceeded");
