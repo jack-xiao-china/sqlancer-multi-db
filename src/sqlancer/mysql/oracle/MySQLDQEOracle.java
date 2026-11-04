@@ -189,7 +189,14 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
             }
         } else { // update has errors
             if (hasUpdateSpecificErrors(updateResult)) {
-                if (updateResult.hasAccessedRows()) {
+                // WARNING-level specific errors (e.g. 4095 deprecated delimiter, 1292 truncated)
+                // do not prevent row modification: the UPDATE still executes and accesses rows.
+                // Only flag when ERROR-level specific errors coexist with accessed rows.
+                boolean hasErrorLevelSpecific = updateResult.getQueryErrors().stream()
+                        .anyMatch(e -> e.getLevel() == SQLQueryError.ErrorLevel.ERROR
+                                && new MySQLErrorCodeStrategy().getUpdateSpecificErrorCodes()
+                                        .contains(e.getCode()));
+                if (hasErrorLevelSpecific && updateResult.hasAccessedRows()) {
                     return "UPDATE accessed non-empty rows when specific errors happen.";
                 } else {
                     // we do not compare update with select when update has specific errors
@@ -233,13 +240,43 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
         boolean found = false;
         for (int i = 0; i < selectErrors.size(); i++) {
             SQLQueryError selectError = selectErrors.get(i);
-            if (selectError.hasSameCodeAndMessage(targetError)) {
+            if (selectError.hasSameCodeAndMessage(targetError)
+                    || hasEquivalentMessage(selectError, targetError)) {
                 selectErrors.remove(i);
                 found = true;
                 break;
             }
         }
         return found;
+    }
+
+    /**
+     * MySQL's optimizer renders cached constants as {@code <cache>(expr)} in some statement
+     * contexts (UPDATE/DELETE) but as plain {@code expr} in others (SELECT). Two errors with
+     * the same code whose messages differ only by this wrapper are the same underlying error.
+     */
+    private static boolean hasEquivalentMessage(SQLQueryError a, SQLQueryError b) {
+        if (a.getCode() != b.getCode()) {
+            return false;
+        }
+        String msgA = normalizeOptimizerRendering(a.getMessage());
+        String msgB = normalizeOptimizerRendering(b.getMessage());
+        return msgA.equals(msgB);
+    }
+
+    private static String normalizeOptimizerRendering(String message) {
+        if (message == null) {
+            return "";
+        }
+        // Strip <cache>(...) wrappers and backtick-quoted database qualifiers (they differ
+        // by schema name between the SELECT and UPDATE/DELETE execution contexts).
+        String result = message.replace("<cache>(", "").replace(")`", "`");
+        // Remove matching closing paren left by the <cache> strip: the pattern is
+        // "<cache>(expr)" -> "expr)" when the expr itself ends with a paren.
+        // Simplest correct approach: remove "<cache>(" and its matching ")" via regex.
+        result = message.replaceAll("<cache>\\(([^)]*)\\)", "$1");
+        result = result.replaceAll("`\\w+`\\.`", "`");
+        return result;
     }
 
     public String compareSelectAndDelete(SQLQueryResult selectResult, SQLQueryResult deleteResult) {
@@ -252,7 +289,12 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
             }
         } else { // delete has errors
             if (hasDeleteSpecificErrors(deleteResult)) {
-                if (deleteResult.hasAccessedRows()) {
+                // WARNING-level specific errors do not prevent row access (same as UPDATE).
+                boolean hasErrorLevelSpecific = deleteResult.getQueryErrors().stream()
+                        .anyMatch(e -> e.getLevel() == SQLQueryError.ErrorLevel.ERROR
+                                && new MySQLErrorCodeStrategy().getDeleteSpecificErrorCodes()
+                                        .contains(e.getCode()));
+                if (hasErrorLevelSpecific && deleteResult.hasAccessedRows()) {
                     return "DELETE accessed non-empty rows when specific errors happen.";
                 } else {
                     // we do not compare delete with select when delete has specific errors
@@ -492,14 +534,25 @@ public class MySQLDQEOracle extends DQEBase<MySQLGlobalState> implements TestOra
             //       range-optimization resource warning, absent on the SELECT side)
             // In MySQL, this can be WARNING in SELECT but ERROR in UPDATE/DELETE
             // depending on statement context and sql_mode, leading to DQE false positives.
-            return Set.of(3156, 3170, 1048, 1062, 1292, 3105);
+            // 4095: deprecated datetime delimiter — fires at different row numbers
+            //       between SELECT (row-by-row) and UPDATE (batched) processing.
+            // 1030: storage engine errors from UPDATE that don't affect SELECT.
+            // 3146: Invalid data type for JSON (ERROR in UPDATE, code-paired with 3141
+            //       in SELECT — same class, different code by statement context).
+            // 1690: BIGINT UNSIGNED overflow — the optimizer renders now() as
+            //       <cache>(now()) in one context, producing message-text noise.
+            return Set.of(1690, 3146, 4095, 1030, 3156, 3170, 1048, 1062, 1292, 3105);
         }
 
         @Override
         public Set<Integer> getDeleteSpecificErrorCodes() {
             // 1451, Cannot delete or update a parent row: a foreign key constraint fails
             // 1292, Truncated incorrect DOUBLE value: '...'
-            return Set.of(1292, 1451);
+            // 3156, Invalid JSON value for CAST (ERROR in DELETE, WARNING in SELECT)
+            // 4095, deprecated datetime delimiter (fires on DELETE but not SELECT)
+            // 1030: storage engine errors (same as UPDATE-specific).
+            // 3146: Invalid JSON type (code-paired with 3141 in SELECT).
+            return Set.of(1030, 3146, 3156, 4095, 1292, 1451);
         }
     }
 }
